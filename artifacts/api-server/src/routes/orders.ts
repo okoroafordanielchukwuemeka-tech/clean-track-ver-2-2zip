@@ -1,0 +1,264 @@
+import { Router } from "express";
+import { db } from "@workspace/db";
+import { orders, paymentRecords, orderItems } from "@workspace/db/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
+import { z } from "zod";
+
+export const ordersRouter = Router();
+
+function generateOrderId() {
+  const now = new Date();
+  const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+  return `${datePart}${rand}`;
+}
+
+const orderInputSchema = z.object({
+  customerName: z.string().min(1),
+  phone: z.string().min(1),
+  address: z.string().optional(),
+  serviceType: z.enum(["standard", "express", "premium"]).default("standard"),
+  shirts: z.number().int().min(0),
+  trousers: z.number().int().min(0),
+  additionalNotes: z.string().optional(),
+  price: z.number().optional(),
+  extraCharge: z.number().optional(),
+  discount: z.number().optional(),
+});
+
+const orderUpdateSchema = z.object({
+  status: z.enum(["pending", "processing", "ready"]).optional(),
+  paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),
+  price: z.number().optional(),
+  extraCharge: z.number().optional(),
+  discount: z.number().optional(),
+  verifiedShirts: z.number().int().optional(),
+  verifiedTrousers: z.number().int().optional(),
+  isVerified: z.boolean().optional(),
+  additionalNotes: z.string().optional(),
+  assignedWorkerId: z.number().int().nullable().optional(),
+});
+
+ordersRouter.get("/", async (req, res) => {
+  try {
+    const { status, paymentStatus, limit = "50", offset = "0" } = req.query;
+    const conditions = [];
+    if (status) conditions.push(eq(orders.status, status as string));
+    if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
+
+    const result = await db.select().from(orders)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(orders.createdAt))
+      .limit(parseInt(limit as string))
+      .offset(parseInt(offset as string));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to list orders" });
+  }
+});
+
+ordersRouter.get("/summary", async (_req, res) => {
+  try {
+    const result = await db.select().from(orders);
+    const summary = {
+      total: result.length,
+      pending: result.filter(o => o.status === "pending").length,
+      processing: result.filter(o => o.status === "processing").length,
+      ready: result.filter(o => o.status === "ready").length,
+      unpaid: result.filter(o => o.paymentStatus === "unpaid").length,
+      partial: result.filter(o => o.paymentStatus === "partial").length,
+      paid: result.filter(o => o.paymentStatus === "paid").length,
+      totalRevenue: result.reduce((sum, o) => sum + parseFloat(o.price || "0"), 0),
+      pendingRevenue: result.filter(o => o.paymentStatus !== "paid")
+        .reduce((sum, o) => sum + parseFloat(o.price || "0") - parseFloat(o.amountPaid || "0"), 0),
+      collectedRevenue: result.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0),
+    };
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get summary" });
+  }
+});
+
+ordersRouter.get("/recent", async (_req, res) => {
+  try {
+    const result = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(10);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get recent orders" });
+  }
+});
+
+ordersRouter.get("/:id", async (req, res) => {
+  try {
+    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get order" });
+  }
+});
+
+ordersRouter.post("/", async (req, res) => {
+  try {
+    const data = orderInputSchema.parse(req.body);
+    const orderId = generateOrderId();
+    const [order] = await db.insert(orders).values({
+      ...data,
+      orderId,
+      price: data.price?.toString(),
+      extraCharge: data.extraCharge?.toString(),
+      discount: data.discount?.toString(),
+    }).returning();
+    res.status(201).json(order);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
+ordersRouter.patch("/:id", async (req, res) => {
+  try {
+    const data = orderUpdateSchema.parse(req.body);
+    const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
+    if (data.price !== undefined) updateData.price = data.price?.toString();
+    if (data.extraCharge !== undefined) updateData.extraCharge = data.extraCharge?.toString();
+    if (data.discount !== undefined) updateData.discount = data.discount?.toString();
+
+    const [order] = await db.update(orders).set(updateData)
+      .where(eq(orders.id, parseInt(req.params.id))).returning();
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    res.json(order);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+ordersRouter.delete("/:id", async (req, res) => {
+  try {
+    const [deleted] = await db.delete(orders).where(eq(orders.id, parseInt(req.params.id))).returning();
+    if (!deleted) return res.status(404).json({ error: "Order not found" });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete order" });
+  }
+});
+
+ordersRouter.get("/:id/payments", async (req, res) => {
+  try {
+    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const payments = await db.select().from(paymentRecords)
+      .where(eq(paymentRecords.orderId, order.id))
+      .orderBy(desc(paymentRecords.recordedAt));
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to list payments" });
+  }
+});
+
+ordersRouter.post("/:id/payments", async (req, res) => {
+  try {
+    const paymentSchema = z.object({
+      amount: z.number().min(0.01),
+      method: z.enum(["cash", "transfer", "pos"]).default("cash"),
+      notes: z.string().optional(),
+    });
+    const data = paymentSchema.parse(req.body);
+    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const price = parseFloat(order.price || "0");
+    const extraCharge = parseFloat(order.extraCharge || "0");
+    const discount = parseFloat(order.discount || "0");
+    const totalDue = price + extraCharge - discount;
+    const amountPaid = parseFloat(order.amountPaid || "0") + data.amount;
+    const remainingBalance = Math.max(0, totalDue - amountPaid);
+
+    const paymentStatus = remainingBalance <= 0 ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
+
+    const [payment] = await db.insert(paymentRecords).values({
+      orderId: order.id,
+      amount: data.amount.toString(),
+      method: data.method,
+      notes: data.notes,
+      remainingBalance: remainingBalance.toString(),
+    }).returning();
+
+    await db.update(orders).set({
+      amountPaid: amountPaid.toString(),
+      paymentStatus,
+      updatedAt: new Date(),
+    }).where(eq(orders.id, order.id));
+
+    res.status(201).json(payment);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    res.status(500).json({ error: "Failed to record payment" });
+  }
+});
+
+ordersRouter.delete("/:id/payments/:paymentId", async (req, res) => {
+  try {
+    const [deleted] = await db.delete(paymentRecords)
+      .where(eq(paymentRecords.id, parseInt(req.params.paymentId)))
+      .returning();
+    if (!deleted) return res.status(404).json({ error: "Payment not found" });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete payment" });
+  }
+});
+
+ordersRouter.get("/:id/items", async (req, res) => {
+  try {
+    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to list order items" });
+  }
+});
+
+ordersRouter.post("/:id/items", async (req, res) => {
+  try {
+    const itemsSchema = z.object({
+      items: z.array(z.object({
+        serviceId: z.number().int().optional(),
+        serviceType: z.enum(["standard", "express", "premium"]),
+        name: z.string().min(1),
+        quantity: z.number().int().min(1),
+        unitPrice: z.number().min(0),
+      })).min(1),
+    });
+    const data = itemsSchema.parse(req.body);
+    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    await db.delete(orderItems).where(eq(orderItems.orderId, order.id));
+
+    const newItems = data.items.map(item => ({
+      orderId: order.id,
+      serviceId: item.serviceId,
+      serviceType: item.serviceType,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice.toString(),
+      totalPrice: (item.quantity * item.unitPrice).toString(),
+    }));
+
+    await db.insert(orderItems).values(newItems);
+
+    const totalPrice = newItems.reduce((sum, i) => sum + parseFloat(i.totalPrice), 0);
+    const [updated] = await db.update(orders).set({
+      price: totalPrice.toString(),
+      updatedAt: new Date(),
+    }).where(eq(orders.id, order.id)).returning();
+
+    res.json(updated);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    res.status(500).json({ error: "Failed to add order items" });
+  }
+});

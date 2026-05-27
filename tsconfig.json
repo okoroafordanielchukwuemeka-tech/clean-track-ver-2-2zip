@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./lib/db" },
+    { "path": "./lib/api-spec" },
+    { "path": "./lib/api-zod" },
+    { "path": "./lib/api-client-react" },
+    { "path": "./artifacts/api-server" },
+    { "path": "./artifacts/clean-track" }
+  ]
+}

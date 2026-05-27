@@ -1,0 +1,24 @@
+{
+  "name": "clean-track-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter @workspace/api-server dev\" \"pnpm --filter @workspace/clean-track dev\"",
+    "build": "pnpm --filter @workspace/api-server build && pnpm --filter @workspace/clean-track build",
+    "db:push": "pnpm --filter @workspace/db push",
+    "db:push-force": "pnpm --filter @workspace/db push-force"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "catalog": {
+      "drizzle-orm": "^0.42.0",
+      "zod": "^3.24.4",
+      "@types/node": "^22.15.21"
+    }
+  },
+  "dependencies": {
+    "pnpm": "^10.34.0"
+  }
+}
