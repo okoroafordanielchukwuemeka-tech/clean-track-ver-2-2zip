@@ -1,0 +1,110 @@
+Add a partial pickup and remaining-items tracking system to Clean Track.
+
+IMPORTANT:
+Real laundries often allow customers to:
+
+* pick up only part of an order
+* pay partially
+* return later for remaining clothes
+
+Clean Track must now support this operational workflow properly.
+
+GOAL:
+Track:
+
+* received item quantities
+* picked-up quantities
+* remaining quantities
+* partial payments
+* outstanding balances
+
+REQUIREMENTS:
+
+1. Item Quantity Tracking
+    Each order item should support:
+
+* quantity received
+* quantity picked up
+* quantity remaining
+
+IMPORTANT:
+Do NOT build individual cloth inventory tracking.
+Track quantities by service/item category only.
+
+Example:
+
+* Shirts × 5
+* Trousers × 3
+* Duvet × 1
+
+2. Partial Pickup Workflow
+    Allow owners/workers to:
+
+* mark some quantities as picked up
+* leave remaining quantities active
+* continue tracking remaining items
+
+3. New Operational Status
+    Add:
+
+* Partially Picked Up
+
+Order should become:
+
+* Partially Picked Up if some items remain
+* Completed only when ALL items are picked up AND balances are cleared
+
+4. Payment Integration
+    Support:
+
+* partial payment tracking
+* outstanding balance updates
+* pickup/payment relationship
+
+5. Pickup History
+    Track:
+
+* pickup date
+* quantity picked
+* who processed the pickup
+* remaining quantity after pickup
+
+6. Customer Visibility
+    Customer profile should show:
+
+* remaining pickups
+* unpaid balances
+* partially completed orders
+
+7. Operational Simplicity
+    The workflow must remain:
+
+* fast
+* mobile-friendly
+* easy for busy workers
+
+8. SaaS UI
+    Build:
+
+* pickup modal
+* remaining quantity indicators
+* pickup summary cards
+* outstanding balance display
+
+9. Database Architecture
+    Design scalable tables/relations for:
+
+* pickup records
+* item quantity tracking
+* payment reconciliation
+
+10. Technical Audit
+    After implementation, explain:
+
+* how partial pickup logic works
+* how completion logic is calculated
+* how balances synchronize with pickups
+* future recommendations
+
+IMPORTANT:
+Focus on practical real-world laundry operations, not warehouse-level inventory complexity.

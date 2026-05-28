@@ -18,16 +18,18 @@ function statusBadge(status: string) {
     pending: "warning",
     processing: "info",
     ready: "success",
+    partial_pickup: "warning",
+    completed: "success",
   };
-  return <Badge variant={map[status] || "outline"}>{status}</Badge>;
+  const label: Record<string, string> = {
+    partial_pickup: "Partial Pickup",
+    completed: "Completed",
+  };
+  return <Badge variant={map[status] || "outline"}>{label[status] ?? status}</Badge>;
 }
 
 function paymentBadge(status: string) {
-  const map: Record<string, any> = {
-    unpaid: "destructive",
-    partial: "warning",
-    paid: "success",
-  };
+  const map: Record<string, any> = { unpaid: "destructive", partial: "warning", paid: "success" };
   return <Badge variant={map[status] || "outline"}>{status}</Badge>;
 }
 
@@ -98,7 +100,7 @@ export default function Orders() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -106,6 +108,8 @@ export default function Orders() {
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="processing">Processing</SelectItem>
                 <SelectItem value="ready">Ready</SelectItem>
+                <SelectItem value="partial_pickup">Partial Pickup</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
             <Select value={paymentFilter} onValueChange={setPaymentFilter}>
@@ -140,8 +144,8 @@ export default function Orders() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Shirts</TableHead>
-                  <TableHead>Trousers</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead>Remaining</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Price</TableHead>
@@ -150,29 +154,40 @@ export default function Orders() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
-                    <TableCell className="font-medium">{order.customerName}</TableCell>
-                    <TableCell>{order.phone}</TableCell>
-                    <TableCell className="capitalize">{order.serviceType}</TableCell>
-                    <TableCell>{order.shirts}</TableCell>
-                    <TableCell>{order.trousers}</TableCell>
-                    <TableCell>{statusBadge(order.status)}</TableCell>
-                    <TableCell>{paymentBadge(order.paymentStatus)}</TableCell>
-                    <TableCell>{formatCurrency(order.price as any)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link to={`/orders/${order.id}`}>
-                          <Eye className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filtered.map((order) => {
+                  const remainingShirts = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
+                  const remainingTrousers = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
+                  const hasRemaining = remainingShirts > 0 || remainingTrousers > 0;
+                  return (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
+                      <TableCell className="font-medium">{order.customerName}</TableCell>
+                      <TableCell>{order.phone}</TableCell>
+                      <TableCell className="capitalize">{order.serviceType}</TableCell>
+                      <TableCell className="text-sm">{order.shirts}S / {order.trousers}T</TableCell>
+                      <TableCell>
+                        {(order.status === "partial_pickup" || (order.shirtsPickedUp ?? 0) > 0 || (order.trousersPickedUp ?? 0) > 0) && hasRemaining ? (
+                          <span className="text-xs text-orange-600 font-medium">{remainingShirts}S / {remainingTrousers}T left</span>
+                        ) : order.status === "completed" ? (
+                          <span className="text-xs text-green-600 font-medium">All done</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{statusBadge(order.status)}</TableCell>
+                      <TableCell>{paymentBadge(order.paymentStatus)}</TableCell>
+                      <TableCell>{formatCurrency(order.price as any)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" asChild>
+                          <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {!filtered.length && (
                   <TableRow>
                     <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
@@ -218,13 +233,8 @@ export default function Orders() {
             </div>
             <div>
               <Label>Service Type</Label>
-              <Select
-                value={form.serviceType ?? "standard"}
-                onValueChange={(v) => setForm({ ...form, serviceType: v as any })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={form.serviceType ?? "standard"} onValueChange={(v) => setForm({ ...form, serviceType: v as any })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="standard">Standard</SelectItem>
                   <SelectItem value="express">Express</SelectItem>
@@ -275,10 +285,7 @@ export default function Orders() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                if (!form.customerName || !form.phone) {
-                  toast.error("Name and phone are required");
-                  return;
-                }
+                if (!form.customerName || !form.phone) { toast.error("Name and phone are required"); return; }
                 createMutation.mutate(form as OrderInput);
               }}
               disabled={createMutation.isPending}

@@ -9,6 +9,7 @@ export const orderItems = pgTable("order_items", {
   serviceType: text("service_type", { enum: ["standard", "express", "premium"] }).notNull(),
   name: text("name").notNull(),
   quantity: integer("quantity").notNull().default(1),
+  quantityPickedUp: integer("quantity_picked_up").notNull().default(0),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
   totalPrice: numeric("total_price", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),

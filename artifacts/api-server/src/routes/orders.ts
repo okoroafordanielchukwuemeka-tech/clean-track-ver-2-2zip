@@ -68,6 +68,8 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
       pending: result.filter(o => o.status === "pending").length,
       processing: result.filter(o => o.status === "processing").length,
       ready: result.filter(o => o.status === "ready").length,
+      partialPickup: result.filter(o => o.status === "partial_pickup").length,
+      completed: result.filter(o => o.status === "completed").length,
       unpaid: result.filter(o => o.paymentStatus === "unpaid").length,
       partial: result.filter(o => o.paymentStatus === "partial").length,
       paid: result.filter(o => o.paymentStatus === "paid").length,

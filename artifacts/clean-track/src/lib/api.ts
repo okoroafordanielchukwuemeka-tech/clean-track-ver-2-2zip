@@ -79,6 +79,10 @@ export const api = {
     update: (id: number, data: Partial<WorkerInput>) => request<Worker>("PATCH", `/workers/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/workers/${id}`),
   },
+  pickups: {
+    list: (orderId: number) => request<PickupRecord[]>("GET", `/orders/${orderId}/pickups`),
+    record: (orderId: number, data: PickupInput) => request<{ pickup: PickupRecord; order: { status: string; shirtsPickedUp: number; trousersPickedUp: number; remainingShirts: number; remainingTrousers: number; allPickedUp: boolean; fullyPaid: boolean } }>("POST", `/orders/${orderId}/pickups`, data),
+  },
 };
 
 export interface AuthUser {
@@ -137,8 +141,10 @@ export interface Order {
   serviceType: "standard" | "express" | "premium";
   shirts: number;
   trousers: number;
+  shirtsPickedUp: number;
+  trousersPickedUp: number;
   additionalNotes?: string | null;
-  status: "pending" | "processing" | "ready";
+  status: "pending" | "processing" | "ready" | "partial_pickup" | "completed";
   paymentStatus: "unpaid" | "partial" | "paid";
   price?: number | null;
   extraCharge?: number | null;
@@ -220,12 +226,31 @@ export interface OrdersSummary {
   pending: number;
   processing: number;
   ready: number;
+  partialPickup: number;
+  completed: number;
   unpaid: number;
   partial: number;
   paid: number;
   totalRevenue: number;
   pendingRevenue: number;
   collectedRevenue: number;
+}
+
+export interface PickupRecord {
+  id: number;
+  laundryId?: number | null;
+  orderId: number;
+  shirtsPickedUp: number;
+  trousersPickedUp: number;
+  notes?: string | null;
+  processedBy?: number | null;
+  createdAt: string;
+}
+
+export interface PickupInput {
+  shirtsPickedUp: number;
+  trousersPickedUp: number;
+  notes?: string;
 }
 
 export interface Service {

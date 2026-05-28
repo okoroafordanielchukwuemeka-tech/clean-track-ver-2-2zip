@@ -15,9 +15,7 @@ import {
 } from "recharts";
 import {
   ShoppingCart,
-  TrendingUp,
   DollarSign,
-  Clock,
   Package,
   AlertTriangle,
   ArrowUpRight,
@@ -33,10 +31,22 @@ function formatCurrency(amount: number) {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function statusBadgeVariant(status: string) {
+  const map: Record<string, string> = {
+    ready: "success",
+    processing: "info",
+    partial_pickup: "warning",
+    completed: "success",
+  };
+  return (map[status] ?? "warning") as any;
+}
+
+function statusLabel(status: string) {
+  const map: Record<string, string> = { partial_pickup: "Partial Pickup" };
+  return map[status] ?? status;
 }
 
 export default function Dashboard() {
@@ -166,13 +176,15 @@ export default function Dashboard() {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Pending", value: summary.pending, color: "warning" },
             { label: "Processing", value: summary.processing, color: "info" },
             { label: "Ready", value: summary.ready, color: "success" },
+            { label: "Partial Pickup", value: summary.partialPickup ?? 0, color: "warning" },
+            { label: "Completed", value: summary.completed ?? 0, color: "success" },
             { label: "Unpaid", value: summary.unpaid, color: "destructive" },
-            { label: "Partial", value: summary.partial, color: "warning" },
+            { label: "Partial Pay", value: summary.partial, color: "warning" },
             { label: "Paid", value: summary.paid, color: "success" },
           ].map(({ label, value, color }) => (
             <Card key={label}>
@@ -209,35 +221,32 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
-              {(recent ?? []).slice(0, 6).map((order) => (
-                <Link
-                  key={order.id}
-                  to={`/orders/${order.id}`}
-                  className="flex items-center justify-between px-6 py-3 hover:bg-muted/50 transition-colors"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{order.customerName}</p>
-                    <p className="text-xs text-muted-foreground">{order.orderId}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        order.status === "ready"
-                          ? "success"
-                          : order.status === "processing"
-                          ? "info"
-                          : "warning"
-                      }
-                    >
-                      {order.status}
-                    </Badge>
-                  </div>
-                </Link>
-              ))}
+              {(recent ?? []).slice(0, 6).map((order) => {
+                const remainingShirts = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
+                const remainingTrousers = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
+                return (
+                  <Link
+                    key={order.id}
+                    to={`/orders/${order.id}`}
+                    className="flex items-center justify-between px-6 py-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{order.customerName}</p>
+                      <p className="text-xs text-muted-foreground">{order.orderId}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {order.status === "partial_pickup" && (
+                        <span className="text-xs text-orange-600">{remainingShirts}S/{remainingTrousers}T left</span>
+                      )}
+                      <Badge variant={statusBadgeVariant(order.status)}>
+                        {statusLabel(order.status)}
+                      </Badge>
+                    </div>
+                  </Link>
+                );
+              })}
               {!recent?.length && (
-                <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-                  No orders yet
-                </p>
+                <p className="px-6 py-8 text-center text-sm text-muted-foreground">No orders yet</p>
               )}
             </div>
           </CardContent>
