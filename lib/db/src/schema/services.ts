@@ -1,7 +1,9 @@
-import { pgTable, serial, text, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
+import { laundries } from "./laundries.js";
 
 export const services = pgTable("services", {
   id: serial("id").primaryKey(),
+  laundryId: integer("laundry_id").references(() => laundries.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: text("category").notNull(),
   standardPrice: numeric("standard_price", { precision: 10, scale: 2 }).notNull(),

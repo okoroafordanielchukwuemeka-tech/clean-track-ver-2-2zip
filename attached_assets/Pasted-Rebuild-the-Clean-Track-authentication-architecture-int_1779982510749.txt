@@ -1,0 +1,140 @@
+Rebuild the Clean Track authentication architecture into a true multi-tenant SaaS authentication system.
+
+IMPORTANT:
+Clean Track is NOT a single internal dashboard.
+It is a real multi-tenant SaaS platform for laundries.
+
+The current implementation appears to support worker PIN access, but the owner/business authentication and workspace architecture must now become the primary system foundation.
+
+GOAL:
+Each laundry business should have:
+
+* its own secure workspace
+* its own owner account
+* its own workers
+* its own customers
+* its own orders
+* fully isolated business data
+
+ARCHITECTURE REQUIREMENTS:
+
+1. Laundry Workspace System
+    Create a laundries/businesses table.
+
+Each laundry should have:
+
+* business name
+* owner email
+* password
+* business phone
+* created date
+* subscription-ready structure
+
+2. Owner Authentication (PRIMARY AUTH SYSTEM)
+    Implement:
+
+* owner signup
+* owner login
+* secure logout
+* password reset structure
+* session persistence
+
+Owners must authenticate using:
+
+* email
+* password
+
+IMPORTANT:
+Owner authentication is the primary SaaS login system.
+
+3. Secure Password Storage
+    IMPORTANT:
+
+* passwords must be hashed securely
+* credentials must NEVER be stored in plaintext
+* authentication must be production-ready
+
+4. Multi-Tenant Data Isolation
+    Ensure:
+
+* each laundry only sees its own data
+* workers belong to one laundry
+* customers belong to one laundry
+* orders belong to one laundry
+* payments belong to one laundry
+
+IMPORTANT:
+No cross-laundry data leakage.
+
+5. Worker Authentication (SECONDARY OPERATIONAL ACCESS)
+    Workers should:
+
+* belong to a laundry workspace
+* login using phone number + PIN
+* only access worker operational tools
+
+Workers must NOT self-register.
+
+Only owners can:
+
+* create workers
+* reset worker PINs
+* deactivate workers
+
+6. Authentication Sessions
+    Implement:
+
+* persistent sessions
+* protected routes
+* protected APIs
+* role-aware authentication middleware
+
+7. SaaS Login Flow
+    Build:
+
+* owner signup page
+* owner login page
+* worker login page
+* workspace-aware authentication
+
+8. Replace Prototype Role Switching
+    Remove or phase out:
+
+* localStorage-only role simulation
+* fake role switching architecture
+
+Replace with:
+
+* real backend-authenticated identity system
+
+9. Technical Architecture
+    Build scalable SaaS-ready structure for:
+
+* future subscriptions
+* billing
+* WhatsApp integration
+* analytics
+* multiple laundries
+* future mobile apps
+
+10. UX Requirements
+    The authentication flow should feel:
+
+* professional
+* simple
+* fast
+* mobile-first
+* operationally practical for Nigerian laundries
+
+11. Technical Audit
+    After implementation, explain clearly:
+
+* how the new multi-tenant architecture works
+* how tenant isolation is enforced
+* how sessions are stored
+* how authentication works internally
+* what still needs improvement before production launch
+
+IMPORTANT:
+This is now real SaaS infrastructure architecture.
+The owner authentication and laundry workspace system should become the foundation of the entire platform.

@@ -5,12 +5,15 @@ import { servicesRouter } from "./services.js";
 import { batchesRouter } from "./batches.js";
 import { analyticsRouter } from "./analytics.js";
 import { workersRouter } from "./workers.js";
+import { authRouter } from "./auth.js";
+import { requireAuth } from "../middleware/auth.js";
 
 export const router = Router();
 
 router.use(healthRouter);
-router.use("/orders", ordersRouter);
-router.use("/services", servicesRouter);
-router.use("/batches", batchesRouter);
-router.use("/analytics", analyticsRouter);
-router.use("/workers", workersRouter);
+router.use("/auth", authRouter);
+router.use("/orders", requireAuth, ordersRouter);
+router.use("/services", requireAuth, servicesRouter);
+router.use("/batches", requireAuth, batchesRouter);
+router.use("/analytics", requireAuth, analyticsRouter);
+router.use("/workers", requireAuth, workersRouter);

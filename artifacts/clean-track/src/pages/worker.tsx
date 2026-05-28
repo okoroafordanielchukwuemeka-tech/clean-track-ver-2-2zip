@@ -1,15 +1,12 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useRole } from "@/context/role-context";
-import { CheckCircle, Eye, LogIn, LogOut } from "lucide-react";
+import { useAuth } from "@/context/auth-context";
+import { CheckCircle, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -19,30 +16,12 @@ function statusBadge(status: string) {
 }
 
 export default function WorkerStation() {
-  const { currentWorker, role, login, logout, isAdmin } = useRole();
+  const { user } = useAuth();
   const qc = useQueryClient();
-  const [pin, setPin] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
-
-  const handleLogin = async () => {
-    if (!pin) { toast.error("Enter your PIN"); return; }
-    setLoginLoading(true);
-    try {
-      const res = await api.workers.login(pin);
-      login(res.worker, res.role as "admin" | "worker");
-      setPin("");
-      toast.success(`Welcome, ${res.worker.name}!`);
-    } catch (e: any) {
-      toast.error(e.message || "Invalid PIN");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
 
   const { data: orders = [] } = useQuery({
     queryKey: ["orders"],
     queryFn: () => api.orders.list(),
-    enabled: !!currentWorker,
     refetchInterval: 30_000,
   });
 
@@ -55,37 +34,7 @@ export default function WorkerStation() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!currentWorker) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="w-full max-w-sm">
-          <CardHeader>
-            <CardTitle className="text-center">Worker Login</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>PIN</Label>
-              <Input
-                type="password"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                placeholder="Enter your PIN"
-                className="text-center text-2xl tracking-widest"
-              />
-            </div>
-            <Button onClick={handleLogin} disabled={loginLoading} className="w-full">
-              <LogIn className="h-4 w-4" />
-              {loginLoading ? "Logging in..." : "Login"}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const myOrders = orders.filter((o) => o.assignedWorkerId === currentWorker.id);
+  const myOrders = orders.filter((o) => o.assignedWorkerId === user?.id);
   const sharedQueue = orders.filter((o) => o.status === "pending" && !o.assignedWorkerId);
   const verifyQueue = orders.filter((o) => o.status === "processing" && !o.isVerified);
   const readyOrders = orders.filter((o) => o.status === "ready");
@@ -93,11 +42,7 @@ export default function WorkerStation() {
   const markVerified = (id: number, o: any) => {
     updateMutation.mutate({
       id,
-      data: {
-        isVerified: true,
-        verifiedShirts: o.shirts,
-        verifiedTrousers: o.trousers,
-      },
+      data: { isVerified: true, verifiedShirts: o.shirts, verifiedTrousers: o.trousers },
     });
   };
 
@@ -106,7 +51,7 @@ export default function WorkerStation() {
   };
 
   const claimOrder = (id: number) => {
-    updateMutation.mutate({ id, data: { assignedWorkerId: currentWorker.id, status: "processing" } });
+    updateMutation.mutate({ id, data: { assignedWorkerId: user?.id, status: "processing" } });
   };
 
   const OrderTable = ({ items, showActions = true }: { items: typeof orders; showActions?: boolean }) => (
@@ -168,16 +113,12 @@ export default function WorkerStation() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Worker Station</h1>
-          <p className="text-sm text-muted-foreground">
-            Logged in as <strong>{currentWorker.name}</strong> ({role})
-          </p>
-        </div>
-        <Button variant="outline" onClick={logout}>
-          <LogOut className="h-4 w-4" /> Logout
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold">Worker Station</h1>
+        <p className="text-sm text-muted-foreground">
+          Logged in as <strong>{user?.name}</strong>
+          {user?.role && <span className="ml-1 capitalize">({user.role})</span>}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -215,32 +156,16 @@ export default function WorkerStation() {
           <TabsTrigger value="ready">Ready ({readyOrders.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="my-orders">
-          <Card>
-            <CardContent className="p-0">
-              <OrderTable items={myOrders} />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-0"><OrderTable items={myOrders} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="shared">
-          <Card>
-            <CardContent className="p-0">
-              <OrderTable items={sharedQueue} />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-0"><OrderTable items={sharedQueue} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="verify">
-          <Card>
-            <CardContent className="p-0">
-              <OrderTable items={verifyQueue} />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-0"><OrderTable items={verifyQueue} /></CardContent></Card>
         </TabsContent>
         <TabsContent value="ready">
-          <Card>
-            <CardContent className="p-0">
-              <OrderTable items={readyOrders} showActions={false} />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-0"><OrderTable items={readyOrders} showActions={false} /></CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>

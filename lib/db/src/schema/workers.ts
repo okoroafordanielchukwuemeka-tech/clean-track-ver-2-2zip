@@ -1,7 +1,9 @@
-import { pgTable, serial, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { laundries } from "./laundries.js";
 
 export const workers = pgTable("workers", {
   id: serial("id").primaryKey(),
+  laundryId: integer("laundry_id").references(() => laundries.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   phone: text("phone"),
   role: text("role", { enum: ["admin", "worker"] }).notNull().default("worker"),

@@ -1,3 +1,4 @@
+export * from "./laundries.js";
 export * from "./orders.js";
 export * from "./order-items.js";
 export * from "./payment-records.js";

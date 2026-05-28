@@ -1,14 +1,16 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { orders, batches } from "@workspace/db/schema";
-import { sql, gte, and } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { AuthRequest } from "../middleware/auth.js";
 
 export const analyticsRouter = Router();
 
-analyticsRouter.get("/overview", async (_req, res) => {
+analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
   try {
-    const allOrders = await db.select().from(orders);
-    const allBatches = await db.select().from(batches);
+    const laundryId = req.auth!.laundryId;
+    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const allBatches = await db.select().from(batches).where(eq(batches.laundryId, laundryId));
 
     const now = new Date();
     const startOfWeek = new Date(now);
@@ -38,7 +40,7 @@ analyticsRouter.get("/overview", async (_req, res) => {
       o.status !== "ready" && new Date(o.createdAt) < sevenDaysAgo
     ).length;
 
-    const overview = {
+    res.json({
       totalOrders: allOrders.length,
       totalRevenue: allOrders.reduce((sum, o) => sum + parseFloat(o.price || "0"), 0),
       collectedRevenue: allOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0),
@@ -53,17 +55,16 @@ analyticsRouter.get("/overview", async (_req, res) => {
       ordersThisMonth: allOrders.filter(o => new Date(o.createdAt) >= startOfMonth).length,
       activeBatches,
       delayedOrders,
-    };
-
-    res.json(overview);
+    });
   } catch (err) {
     res.status(500).json({ error: "Failed to get analytics overview" });
   }
 });
 
-analyticsRouter.get("/daily", async (_req, res) => {
+analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
   try {
-    const allOrders = await db.select().from(orders);
+    const laundryId = req.auth!.laundryId;
+    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
     const dailyMap: Record<string, { count: number; revenue: number }> = {};
 
     const now = new Date();

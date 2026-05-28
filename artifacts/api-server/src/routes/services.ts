@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { services } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { AuthRequest, requireOwner } from "../middleware/auth.js";
 
 export const servicesRouter = Router();
 
@@ -24,15 +25,12 @@ const serviceUpdateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-servicesRouter.get("/", async (req, res) => {
+servicesRouter.get("/", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const { category, activeOnly = "true" } = req.query;
-    let query = db.select().from(services);
-    const conditions = [];
-    if (activeOnly === "true") conditions.push(eq(services.isActive, true));
-    if (category) conditions.push(eq(services.category, category as string));
-
-    const result = await db.select().from(services);
+    const result = await db.select().from(services)
+      .where(eq(services.laundryId, laundryId));
     const filtered = result.filter(s => {
       if (activeOnly === "true" && !s.isActive) return false;
       if (category && s.category !== category) return false;
@@ -44,9 +42,11 @@ servicesRouter.get("/", async (req, res) => {
   }
 });
 
-servicesRouter.get("/:id", async (req, res) => {
+servicesRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
-    const [service] = await db.select().from(services).where(eq(services.id, parseInt(req.params.id)));
+    const laundryId = req.auth!.laundryId;
+    const [service] = await db.select().from(services)
+      .where(and(eq(services.id, parseInt(req.params.id)), eq(services.laundryId, laundryId)));
     if (!service) return res.status(404).json({ error: "Service not found" });
     res.json(service);
   } catch (err) {
@@ -54,11 +54,13 @@ servicesRouter.get("/:id", async (req, res) => {
   }
 });
 
-servicesRouter.post("/", async (req, res) => {
+servicesRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = serviceInputSchema.parse(req.body);
     const [service] = await db.insert(services).values({
       ...data,
+      laundryId,
       standardPrice: data.standardPrice.toString(),
       expressPrice: data.expressPrice?.toString(),
       premiumPrice: data.premiumPrice?.toString(),
@@ -70,8 +72,9 @@ servicesRouter.post("/", async (req, res) => {
   }
 });
 
-servicesRouter.patch("/:id", async (req, res) => {
+servicesRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = serviceUpdateSchema.parse(req.body);
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
     if (data.standardPrice !== undefined) updateData.standardPrice = data.standardPrice.toString();
@@ -79,7 +82,8 @@ servicesRouter.patch("/:id", async (req, res) => {
     if (data.premiumPrice !== undefined) updateData.premiumPrice = data.premiumPrice.toString();
 
     const [service] = await db.update(services).set(updateData)
-      .where(eq(services.id, parseInt(req.params.id))).returning();
+      .where(and(eq(services.id, parseInt(req.params.id)), eq(services.laundryId, laundryId)))
+      .returning();
     if (!service) return res.status(404).json({ error: "Service not found" });
     res.json(service);
   } catch (err) {
@@ -88,9 +92,12 @@ servicesRouter.patch("/:id", async (req, res) => {
   }
 });
 
-servicesRouter.delete("/:id", async (req, res) => {
+servicesRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
-    const [deleted] = await db.delete(services).where(eq(services.id, parseInt(req.params.id))).returning();
+    const laundryId = req.auth!.laundryId;
+    const [deleted] = await db.delete(services)
+      .where(and(eq(services.id, parseInt(req.params.id)), eq(services.laundryId, laundryId)))
+      .returning();
     if (!deleted) return res.status(404).json({ error: "Service not found" });
     res.status(204).send();
   } catch (err) {

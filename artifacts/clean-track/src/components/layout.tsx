@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -10,12 +10,14 @@ import {
   WashingMachine,
   Menu,
   X,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
-import { useRole } from "@/context/role-context";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
-const navItems = [
+const ownerNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/orders", label: "Orders", icon: ShoppingCart },
   { to: "/batches", label: "Batches", icon: Package },
@@ -24,10 +26,23 @@ const navItems = [
   { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
 ];
 
+const workerNavItems = [
+  { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+];
+
 export function Layout() {
   const location = useLocation();
-  const { currentWorker, logout, role } = useRole();
+  const navigate = useNavigate();
+  const { user, isOwner, isWorker, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navItems = isOwner ? ownerNavItems : workerNavItems;
+
+  const handleLogout = () => {
+    logout();
+    toast.success("Signed out successfully");
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -46,9 +61,13 @@ export function Layout() {
       >
         <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
           <WashingMachine className="h-7 w-7 text-sidebar-primary" />
-          <div>
-            <h1 className="text-lg font-bold text-white">Clean Track</h1>
-            <p className="text-xs text-sidebar-foreground/60">Laundry Operations</p>
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-white truncate">
+              {isOwner ? user?.name : "Clean Track"}
+            </h1>
+            <p className="text-xs text-sidebar-foreground/60">
+              {isOwner ? "Owner Dashboard" : "Worker Station"}
+            </p>
           </div>
         </div>
 
@@ -72,24 +91,23 @@ export function Layout() {
         </nav>
 
         <div className="px-3 py-4 border-t border-sidebar-border">
-          {currentWorker ? (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{currentWorker.name}</p>
-                <p className="text-xs text-sidebar-foreground/60 capitalize">{role}</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={logout}
-                className="text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+              <p className="text-xs text-sidebar-foreground/60 capitalize">
+                {isOwner ? "Owner" : user?.role === "admin" ? "Admin Worker" : "Worker"}
+              </p>
             </div>
-          ) : (
-            <p className="text-xs text-sidebar-foreground/60 px-3">Not logged in</p>
-          )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </aside>
 

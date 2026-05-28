@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { orders, paymentRecords, orderItems } from "@workspace/db/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
+import { AuthRequest } from "../middleware/auth.js";
 
 export const ordersRouter = Router();
 
@@ -39,15 +40,16 @@ const orderUpdateSchema = z.object({
   assignedWorkerId: z.number().int().nullable().optional(),
 });
 
-ordersRouter.get("/", async (req, res) => {
+ordersRouter.get("/", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const { status, paymentStatus, limit = "50", offset = "0" } = req.query;
-    const conditions = [];
+    const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
 
     const result = await db.select().from(orders)
-      .where(conditions.length ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(desc(orders.createdAt))
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
@@ -57,9 +59,10 @@ ordersRouter.get("/", async (req, res) => {
   }
 });
 
-ordersRouter.get("/summary", async (_req, res) => {
+ordersRouter.get("/summary", async (req: AuthRequest, res) => {
   try {
-    const result = await db.select().from(orders);
+    const laundryId = req.auth!.laundryId;
+    const result = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
     const summary = {
       total: result.length,
       pending: result.filter(o => o.status === "pending").length,
@@ -79,18 +82,24 @@ ordersRouter.get("/summary", async (_req, res) => {
   }
 });
 
-ordersRouter.get("/recent", async (_req, res) => {
+ordersRouter.get("/recent", async (req: AuthRequest, res) => {
   try {
-    const result = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(10);
+    const laundryId = req.auth!.laundryId;
+    const result = await db.select().from(orders)
+      .where(eq(orders.laundryId, laundryId))
+      .orderBy(desc(orders.createdAt))
+      .limit(10);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to get recent orders" });
   }
 });
 
-ordersRouter.get("/:id", async (req, res) => {
+ordersRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
-    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
     res.json(order);
   } catch (err) {
@@ -98,12 +107,14 @@ ordersRouter.get("/:id", async (req, res) => {
   }
 });
 
-ordersRouter.post("/", async (req, res) => {
+ordersRouter.post("/", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = orderInputSchema.parse(req.body);
     const orderId = generateOrderId();
     const [order] = await db.insert(orders).values({
       ...data,
+      laundryId,
       orderId,
       price: data.price?.toString(),
       extraCharge: data.extraCharge?.toString(),
@@ -116,8 +127,9 @@ ordersRouter.post("/", async (req, res) => {
   }
 });
 
-ordersRouter.patch("/:id", async (req, res) => {
+ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = orderUpdateSchema.parse(req.body);
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
     if (data.price !== undefined) updateData.price = data.price?.toString();
@@ -125,7 +137,8 @@ ordersRouter.patch("/:id", async (req, res) => {
     if (data.discount !== undefined) updateData.discount = data.discount?.toString();
 
     const [order] = await db.update(orders).set(updateData)
-      .where(eq(orders.id, parseInt(req.params.id))).returning();
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)))
+      .returning();
     if (!order) return res.status(404).json({ error: "Order not found" });
     res.json(order);
   } catch (err) {
@@ -134,9 +147,12 @@ ordersRouter.patch("/:id", async (req, res) => {
   }
 });
 
-ordersRouter.delete("/:id", async (req, res) => {
+ordersRouter.delete("/:id", async (req: AuthRequest, res) => {
   try {
-    const [deleted] = await db.delete(orders).where(eq(orders.id, parseInt(req.params.id))).returning();
+    const laundryId = req.auth!.laundryId;
+    const [deleted] = await db.delete(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)))
+      .returning();
     if (!deleted) return res.status(404).json({ error: "Order not found" });
     res.status(204).send();
   } catch (err) {
@@ -144,9 +160,11 @@ ordersRouter.delete("/:id", async (req, res) => {
   }
 });
 
-ordersRouter.get("/:id/payments", async (req, res) => {
+ordersRouter.get("/:id/payments", async (req: AuthRequest, res) => {
   try {
-    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const payments = await db.select().from(paymentRecords)
       .where(eq(paymentRecords.orderId, order.id))
@@ -157,15 +175,17 @@ ordersRouter.get("/:id/payments", async (req, res) => {
   }
 });
 
-ordersRouter.post("/:id/payments", async (req, res) => {
+ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const paymentSchema = z.object({
       amount: z.number().min(0.01),
       method: z.enum(["cash", "transfer", "pos"]).default("cash"),
       notes: z.string().optional(),
     });
     const data = paymentSchema.parse(req.body);
-    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     const price = parseFloat(order.price || "0");
@@ -174,7 +194,6 @@ ordersRouter.post("/:id/payments", async (req, res) => {
     const totalDue = price + extraCharge - discount;
     const amountPaid = parseFloat(order.amountPaid || "0") + data.amount;
     const remainingBalance = Math.max(0, totalDue - amountPaid);
-
     const paymentStatus = remainingBalance <= 0 ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
 
     const [payment] = await db.insert(paymentRecords).values({
@@ -198,8 +217,12 @@ ordersRouter.post("/:id/payments", async (req, res) => {
   }
 });
 
-ordersRouter.delete("/:id/payments/:paymentId", async (req, res) => {
+ordersRouter.delete("/:id/payments/:paymentId", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
     const [deleted] = await db.delete(paymentRecords)
       .where(eq(paymentRecords.id, parseInt(req.params.paymentId)))
       .returning();
@@ -210,9 +233,11 @@ ordersRouter.delete("/:id/payments/:paymentId", async (req, res) => {
   }
 });
 
-ordersRouter.get("/:id/items", async (req, res) => {
+ordersRouter.get("/:id/items", async (req: AuthRequest, res) => {
   try {
-    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
     res.json(items);
@@ -221,8 +246,9 @@ ordersRouter.get("/:id/items", async (req, res) => {
   }
 });
 
-ordersRouter.post("/:id/items", async (req, res) => {
+ordersRouter.post("/:id/items", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const itemsSchema = z.object({
       items: z.array(z.object({
         serviceId: z.number().int().optional(),
@@ -233,7 +259,8 @@ ordersRouter.post("/:id/items", async (req, res) => {
       })).min(1),
     });
     const data = itemsSchema.parse(req.body);
-    const [order] = await db.select().from(orders).where(eq(orders.id, parseInt(req.params.id)));
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     await db.delete(orderItems).where(eq(orderItems.orderId, order.id));

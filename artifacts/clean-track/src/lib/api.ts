@@ -1,11 +1,25 @@
 const BASE_URL = "/api";
+const TOKEN_KEY = "ct_token";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers: Record<string, string> = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("ct_user");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -15,6 +29,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
+  auth: {
+    signup: (data: SignupInput) => request<AuthResponse>("POST", "/auth/signup", data),
+    ownerLogin: (data: OwnerLoginInput) => request<AuthResponse>("POST", "/auth/owner-login", data),
+    workerLogin: (data: WorkerLoginInput) => request<WorkerAuthResponse>("POST", "/auth/worker-login", data),
+    me: () => request<AuthUser>("GET", "/auth/me"),
+  },
   orders: {
     list: (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : "";
@@ -58,12 +78,58 @@ export const api = {
     create: (data: WorkerInput) => request<Worker>("POST", "/workers", data),
     update: (id: number, data: Partial<WorkerInput>) => request<Worker>("PATCH", `/workers/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/workers/${id}`),
-    login: (pin: string) => request<{ worker: Worker; role: string }>("POST", "/workers/login", { pin }),
   },
 };
 
+export interface AuthUser {
+  type: "owner" | "worker";
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string | null;
+  role?: "admin" | "worker";
+  laundryId?: number;
+}
+
+export interface SignupInput {
+  businessName: string;
+  ownerEmail: string;
+  password: string;
+  phone?: string;
+}
+
+export interface OwnerLoginInput {
+  email: string;
+  password: string;
+}
+
+export interface WorkerLoginInput {
+  phone: string;
+  pin: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+  laundry: {
+    id: number;
+    businessName: string;
+    ownerEmail: string;
+    phone?: string | null;
+    subscriptionTier: string;
+    createdAt: string;
+  };
+}
+
+export interface WorkerAuthResponse {
+  token: string;
+  user: AuthUser;
+  worker: Worker;
+}
+
 export interface Order {
   id: number;
+  laundryId?: number | null;
   orderId: string;
   customerName: string;
   phone: string;
@@ -164,6 +230,7 @@ export interface OrdersSummary {
 
 export interface Service {
   id: number;
+  laundryId?: number | null;
   name: string;
   category: string;
   standardPrice: number;
@@ -185,6 +252,7 @@ export interface ServiceInput {
 
 export interface Batch {
   id: number;
+  laundryId?: number | null;
   batchCode: string;
   status: "active" | "completed";
   orderCount: number;
@@ -221,10 +289,10 @@ export interface DailyStats {
 
 export interface Worker {
   id: number;
+  laundryId?: number | null;
   name: string;
   phone?: string | null;
   role: "admin" | "worker";
-  pin?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -232,8 +300,8 @@ export interface Worker {
 
 export interface WorkerInput {
   name: string;
-  phone?: string;
+  phone: string;
   role?: "admin" | "worker";
-  pin?: string;
+  pin: string;
   isActive?: boolean;
 }

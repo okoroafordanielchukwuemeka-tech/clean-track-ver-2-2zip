@@ -1,16 +1,17 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { workers, orders } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { workers } from "@workspace/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
+import { AuthRequest, requireOwner } from "../middleware/auth.js";
 
 export const workersRouter = Router();
 
 const workerInputSchema = z.object({
   name: z.string().min(1),
-  phone: z.string().optional(),
+  phone: z.string().min(1, "Phone number required for worker login"),
   role: z.enum(["admin", "worker"]).default("worker"),
-  pin: z.string().optional(),
+  pin: z.string().min(4, "PIN must be at least 4 digits"),
   isActive: z.boolean().default(true),
 });
 
@@ -18,22 +19,45 @@ const workerUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
   role: z.enum(["admin", "worker"]).optional(),
-  pin: z.string().optional(),
+  pin: z.string().min(4).optional(),
   isActive: z.boolean().optional(),
 });
 
-workersRouter.get("/", async (_req, res) => {
+workersRouter.get("/", async (req: AuthRequest, res) => {
   try {
-    const result = await db.select().from(workers).orderBy(desc(workers.createdAt));
+    const laundryId = req.auth!.laundryId;
+    const result = await db.select({
+      id: workers.id,
+      laundryId: workers.laundryId,
+      name: workers.name,
+      phone: workers.phone,
+      role: workers.role,
+      isActive: workers.isActive,
+      createdAt: workers.createdAt,
+      updatedAt: workers.updatedAt,
+    }).from(workers)
+      .where(eq(workers.laundryId, laundryId))
+      .orderBy(desc(workers.createdAt));
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to list workers" });
   }
 });
 
-workersRouter.get("/:id", async (req, res) => {
+workersRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
-    const [worker] = await db.select().from(workers).where(eq(workers.id, parseInt(req.params.id)));
+    const laundryId = req.auth!.laundryId;
+    const [worker] = await db.select({
+      id: workers.id,
+      laundryId: workers.laundryId,
+      name: workers.name,
+      phone: workers.phone,
+      role: workers.role,
+      isActive: workers.isActive,
+      createdAt: workers.createdAt,
+      updatedAt: workers.updatedAt,
+    }).from(workers)
+      .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)));
     if (!worker) return res.status(404).json({ error: "Worker not found" });
     res.json(worker);
   } catch (err) {
@@ -41,48 +65,45 @@ workersRouter.get("/:id", async (req, res) => {
   }
 });
 
-workersRouter.post("/", async (req, res) => {
+workersRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = workerInputSchema.parse(req.body);
-    const [worker] = await db.insert(workers).values(data).returning();
-    res.status(201).json(worker);
+    const [worker] = await db.insert(workers).values({ ...data, laundryId }).returning();
+    const { pin: _pin, ...safeWorker } = worker;
+    res.status(201).json(safeWorker);
   } catch (err) {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to create worker" });
   }
 });
 
-workersRouter.patch("/:id", async (req, res) => {
+workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = workerUpdateSchema.parse(req.body);
-    const [worker] = await db.update(workers).set({ ...data, updatedAt: new Date() })
-      .where(eq(workers.id, parseInt(req.params.id))).returning();
+    const [worker] = await db.update(workers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)))
+      .returning();
     if (!worker) return res.status(404).json({ error: "Worker not found" });
-    res.json(worker);
+    const { pin: _pin, ...safeWorker } = worker;
+    res.json(safeWorker);
   } catch (err) {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to update worker" });
   }
 });
 
-workersRouter.delete("/:id", async (req, res) => {
+workersRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
-    const [deleted] = await db.delete(workers).where(eq(workers.id, parseInt(req.params.id))).returning();
+    const laundryId = req.auth!.laundryId;
+    const [deleted] = await db.delete(workers)
+      .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)))
+      .returning();
     if (!deleted) return res.status(404).json({ error: "Worker not found" });
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: "Failed to delete worker" });
-  }
-});
-
-workersRouter.post("/login", async (req, res) => {
-  try {
-    const { pin } = z.object({ pin: z.string() }).parse(req.body);
-    const allWorkers = await db.select().from(workers);
-    const worker = allWorkers.find(w => w.pin === pin && w.isActive);
-    if (!worker) return res.status(401).json({ error: "Invalid PIN" });
-    res.json({ worker, role: worker.role });
-  } catch (err) {
-    res.status(500).json({ error: "Login failed" });
   }
 });

@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { batches, orders } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
+import { AuthRequest } from "../middleware/auth.js";
 
 export const batchesRouter = Router();
 
@@ -20,33 +21,41 @@ const batchUpdateSchema = z.object({
   status: z.enum(["active", "completed"]).optional(),
 });
 
-batchesRouter.get("/", async (_req, res) => {
+batchesRouter.get("/", async (req: AuthRequest, res) => {
   try {
-    const result = await db.select().from(batches).orderBy(desc(batches.createdAt));
+    const laundryId = req.auth!.laundryId;
+    const result = await db.select().from(batches)
+      .where(eq(batches.laundryId, laundryId))
+      .orderBy(desc(batches.createdAt));
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to list batches" });
   }
 });
 
-batchesRouter.get("/:id", async (req, res) => {
+batchesRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
-    const [batch] = await db.select().from(batches).where(eq(batches.id, parseInt(req.params.id)));
+    const laundryId = req.auth!.laundryId;
+    const [batch] = await db.select().from(batches)
+      .where(and(eq(batches.id, parseInt(req.params.id)), eq(batches.laundryId, laundryId)));
     if (!batch) return res.status(404).json({ error: "Batch not found" });
-    const batchOrders = await db.select().from(orders).where(eq(orders.batchId, batch.id));
+    const batchOrders = await db.select().from(orders)
+      .where(and(eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)));
     res.json({ ...batch, orders: batchOrders });
   } catch (err) {
     res.status(500).json({ error: "Failed to get batch" });
   }
 });
 
-batchesRouter.post("/", async (req, res) => {
+batchesRouter.post("/", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = batchInputSchema.parse(req.body);
     const batchCode = generateBatchCode();
 
     const [batch] = await db.insert(batches).values({
       batchCode,
+      laundryId,
       orderCount: data.orderIds.length,
     }).returning();
 
@@ -56,7 +65,7 @@ batchesRouter.post("/", async (req, res) => {
         status: "processing",
         assignedWorkerId: data.assignedWorkerId || null,
         updatedAt: new Date(),
-      }).where(eq(orders.id, orderId));
+      }).where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
     }
 
     res.status(201).json(batch);
@@ -66,16 +75,18 @@ batchesRouter.post("/", async (req, res) => {
   }
 });
 
-batchesRouter.patch("/:id", async (req, res) => {
+batchesRouter.patch("/:id", async (req: AuthRequest, res) => {
   try {
+    const laundryId = req.auth!.laundryId;
     const data = batchUpdateSchema.parse(req.body);
     const [batch] = await db.update(batches).set(data)
-      .where(eq(batches.id, parseInt(req.params.id))).returning();
+      .where(and(eq(batches.id, parseInt(req.params.id)), eq(batches.laundryId, laundryId)))
+      .returning();
     if (!batch) return res.status(404).json({ error: "Batch not found" });
 
     if (data.status === "completed") {
       await db.update(orders).set({ status: "ready", updatedAt: new Date() })
-        .where(eq(orders.batchId, batch.id));
+        .where(and(eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)));
     }
     res.json(batch);
   } catch (err) {
