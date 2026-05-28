@@ -71,6 +71,9 @@ export const api = {
   analytics: {
     overview: () => request<AnalyticsOverview>("GET", "/analytics/overview"),
     daily: () => request<DailyStats[]>("GET", "/analytics/daily"),
+    full: (period: AnalyticsPeriod) => request<FullAnalytics>("GET", `/analytics/full?period=${period}`),
+    customerAnalytics: () => request<CustomerAnalytics>("GET", "/analytics/customers"),
+    workerAnalytics: () => request<WorkerAnalytics>("GET", "/analytics/workers"),
   },
   workers: {
     list: () => request<Worker[]>("GET", "/workers"),
@@ -321,6 +324,71 @@ export interface DailyStats {
   date: string;
   count: number;
   revenue: number;
+}
+
+export type AnalyticsPeriod = "today" | "7d" | "30d" | "90d";
+
+export interface FullAnalytics {
+  period: AnalyticsPeriod;
+  overview: {
+    totalRevenue: number;
+    collectedRevenue: number;
+    outstandingBalance: number;
+    avgOrderValue: number;
+    totalOrders: number;
+    activeOrders: number;
+    completedOrders: number;
+    partialPickup: number;
+    delayedOrders: number;
+    totalRemainingItems: number;
+  };
+  growth: { revenue: number; orders: number; collected: number };
+  statusCounts: { pending: number; processing: number; ready: number; partial_pickup: number; completed: number };
+  paymentCounts: { unpaid: number; partial: number; paid: number };
+  trends: { date: string; revenue: number; collected: number; orders: number }[];
+  alerts: {
+    delayedOrders: { id: number; orderId: string; customerName: string; status: string; daysOld: number }[];
+    unpaidCount: number;
+    partialPickupCount: number;
+  };
+}
+
+export interface CustomerAnalytics {
+  segments: {
+    total: number;
+    vip: number;
+    repeat: number;
+    inactive: number;
+    newThisMonth: number;
+    withBalance: number;
+    totalOutstanding: number;
+  };
+  topSpenders: {
+    id: number;
+    fullName: string;
+    phone: string;
+    totalOrders: number;
+    totalSpending: number;
+    outstandingBalance: number;
+    isVip: boolean;
+    isRepeat: boolean;
+  }[];
+}
+
+export interface WorkerAnalytics {
+  workers: {
+    id: number;
+    name: string;
+    role: string;
+    isActive: boolean;
+    totalAssigned: number;
+    recentAssigned: number;
+    completed: number;
+    active: number;
+    pickupsProcessed: number;
+    recentPickups: number;
+  }[];
+  unassignedOrders: number;
 }
 
 export interface Customer {

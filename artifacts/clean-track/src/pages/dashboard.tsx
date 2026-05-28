@@ -1,63 +1,114 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { Link } from "react-router-dom";
+import { api, type AnalyticsPeriod } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  ShoppingCart,
-  DollarSign,
-  Package,
-  AlertTriangle,
-  ArrowUpRight,
-  ArrowDownRight,
+  DollarSign, ShoppingCart, Users, AlertTriangle, TrendingUp,
+  TrendingDown, Clock, CheckCircle, ShoppingBag, Package,
+  Crown, RefreshCw, ArrowUpRight, ArrowDownRight, Minus,
+  Activity, UserCheck, Zap,
 } from "lucide-react";
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-  }).format(amount);
+const fmt = (v: number) =>
+  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
+
+const fmtShort = (v: number) => {
+  if (v >= 1_000_000) return `₦${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `₦${(v / 1_000).toFixed(0)}K`;
+  return fmt(v);
+};
+
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+function GrowthBadge({ pct }: { pct: number }) {
+  if (pct > 0) return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-green-600 font-medium">
+      <ArrowUpRight className="h-3 w-3" />{pct.toFixed(1)}%
+    </span>
+  );
+  if (pct < 0) return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-red-600 font-medium">
+      <ArrowDownRight className="h-3 w-3" />{Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+  return <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground"><Minus className="h-3 w-3" />0%</span>;
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+function KpiCard({
+  label, value, sub, icon: Icon, iconBg, iconColor, growth,
+}: {
+  label: string; value: string; sub?: string; icon: any;
+  iconBg: string; iconColor: string; growth?: number;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <p className="text-2xl font-bold truncate">{value}</p>
+            {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+            {growth !== undefined && <div className="mt-1"><GrowthBadge pct={growth} /></div>}
+          </div>
+          <div className={`h-10 w-10 rounded-xl ${iconBg} flex items-center justify-center shrink-0 ml-3`}>
+            <Icon className={`h-5 w-5 ${iconColor}`} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-function statusBadgeVariant(status: string) {
-  const map: Record<string, string> = {
-    ready: "success",
-    processing: "info",
-    partial_pickup: "warning",
-    completed: "success",
-  };
-  return (map[status] ?? "warning") as any;
-}
+const PERIOD_LABELS: Record<AnalyticsPeriod, string> = {
+  today: "Today",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+};
 
-function statusLabel(status: string) {
-  const map: Record<string, string> = { partial_pickup: "Partial Pickup" };
-  return map[status] ?? status;
-}
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background border rounded-lg p-3 shadow-lg text-xs">
+      <p className="font-medium mb-1">{fmtDate(label)}</p>
+      {payload.map((p: any) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span style={{ color: p.color }}>●</span>
+          <span className="text-muted-foreground capitalize">{p.name}:</span>
+          <span className="font-medium">
+            {p.name === "orders" ? p.value : fmtShort(p.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export default function Dashboard() {
-  const { data: overview, isLoading: overviewLoading } = useQuery({
-    queryKey: ["analytics", "overview"],
-    queryFn: () => api.analytics.overview(),
+  const [period, setPeriod] = useState<AnalyticsPeriod>("7d");
+
+  const { data: full, isLoading } = useQuery({
+    queryKey: ["analytics", "full", period],
+    queryFn: () => api.analytics.full(period),
   });
 
-  const { data: daily } = useQuery({
-    queryKey: ["analytics", "daily"],
-    queryFn: () => api.analytics.daily(),
+  const { data: custData } = useQuery({
+    queryKey: ["analytics", "customers"],
+    queryFn: () => api.analytics.customerAnalytics(),
+  });
+
+  const { data: workerData } = useQuery({
+    queryKey: ["analytics", "workers"],
+    queryFn: () => api.analytics.workerAnalytics(),
   });
 
   const { data: recent } = useQuery({
@@ -65,192 +116,430 @@ export default function Dashboard() {
     queryFn: () => api.orders.recent(),
   });
 
-  const { data: summary } = useQuery({
-    queryKey: ["orders", "summary"],
-    queryFn: () => api.orders.summary(),
-  });
-
-  if (overviewLoading) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="h-16 bg-muted animate-pulse rounded" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const growthPositive = (overview?.weeklyGrowthPercent ?? 0) >= 0;
+  const ov = full?.overview;
+  const gr = full?.growth;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button asChild>
-          <Link to="/orders">View All Orders</Link>
-        </Button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Analytics</h1>
+          <p className="text-sm text-muted-foreground">Business intelligence for your laundry</p>
+        </div>
+        <Tabs value={period} onValueChange={(v) => setPeriod(v as AnalyticsPeriod)}>
+          <TabsList>
+            <TabsTrigger value="today">Today</TabsTrigger>
+            <TabsTrigger value="7d">7 Days</TabsTrigger>
+            <TabsTrigger value="30d">30 Days</TabsTrigger>
+            <TabsTrigger value="90d">90 Days</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Orders</p>
-                <p className="text-2xl font-bold">{overview?.totalOrders ?? 0}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <ShoppingCart className="h-5 w-5 text-blue-600" />
-              </div>
-            </div>
-            <div className="flex items-center gap-1 mt-2 text-xs">
-              {growthPositive ? (
-                <ArrowUpRight className="h-3 w-3 text-green-600" />
-              ) : (
-                <ArrowDownRight className="h-3 w-3 text-red-600" />
-              )}
-              <span className={growthPositive ? "text-green-600" : "text-red-600"}>
-                {Math.abs(overview?.weeklyGrowthPercent ?? 0).toFixed(1)}% this week
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">{formatCurrency(overview?.totalRevenue ?? 0)}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-green-600" />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Collected: {formatCurrency(overview?.collectedRevenue ?? 0)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Active Batches</p>
-                <p className="text-2xl font-bold">{overview?.activeBatches ?? 0}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                <Package className="h-5 w-5 text-purple-600" />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {overview?.ordersThisMonth ?? 0} orders this month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Delayed Orders</p>
-                <p className="text-2xl font-bold">{overview?.delayedOrders ?? 0}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Pending revenue: {formatCurrency(overview?.pendingRevenue ?? 0)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: "Pending", value: summary.pending, color: "warning" },
-            { label: "Processing", value: summary.processing, color: "info" },
-            { label: "Ready", value: summary.ready, color: "success" },
-            { label: "Partial Pickup", value: summary.partialPickup ?? 0, color: "warning" },
-            { label: "Completed", value: summary.completed ?? 0, color: "success" },
-            { label: "Unpaid", value: summary.unpaid, color: "destructive" },
-            { label: "Partial Pay", value: summary.partial, color: "warning" },
-            { label: "Paid", value: summary.paid, color: "success" },
-          ].map(({ label, value, color }) => (
-            <Card key={label}>
-              <CardContent className="p-4 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{label}</span>
-                <Badge variant={color as any}>{value}</Badge>
-              </CardContent>
-            </Card>
+      {isLoading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => (
+            <Card key={i}><CardContent className="p-5"><div className="h-16 bg-muted animate-pulse rounded" /></CardContent></Card>
           ))}
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+              label="Total Revenue"
+              value={fmtShort(ov?.totalRevenue ?? 0)}
+              sub={`${PERIOD_LABELS[period]}`}
+              icon={DollarSign}
+              iconBg="bg-green-100 dark:bg-green-950/40"
+              iconColor="text-green-600"
+              growth={gr?.revenue}
+            />
+            <KpiCard
+              label="Collected"
+              value={fmtShort(ov?.collectedRevenue ?? 0)}
+              sub={`${fmtShort(ov?.outstandingBalance ?? 0)} outstanding`}
+              icon={TrendingUp}
+              iconBg="bg-blue-100 dark:bg-blue-950/40"
+              iconColor="text-blue-600"
+              growth={gr?.collected}
+            />
+            <KpiCard
+              label="Total Orders"
+              value={String(ov?.totalOrders ?? 0)}
+              sub={`Avg ${fmt(ov?.avgOrderValue ?? 0)}/order`}
+              icon={ShoppingCart}
+              iconBg="bg-purple-100 dark:bg-purple-950/40"
+              iconColor="text-purple-600"
+              growth={gr?.orders}
+            />
+            <KpiCard
+              label="Outstanding Balance"
+              value={fmtShort(ov?.outstandingBalance ?? 0)}
+              sub={`${full?.paymentCounts.unpaid ?? 0} unpaid orders`}
+              icon={AlertTriangle}
+              iconBg="bg-red-100 dark:bg-red-950/40"
+              iconColor="text-red-600"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+              label="Active Orders"
+              value={String(ov?.activeOrders ?? 0)}
+              sub="In progress"
+              icon={Activity}
+              iconBg="bg-orange-100 dark:bg-orange-950/40"
+              iconColor="text-orange-600"
+            />
+            <KpiCard
+              label="Completed"
+              value={String(ov?.completedOrders ?? 0)}
+              sub="All time"
+              icon={CheckCircle}
+              iconBg="bg-emerald-100 dark:bg-emerald-950/40"
+              iconColor="text-emerald-600"
+            />
+            <KpiCard
+              label="Partial Pickups"
+              value={String(ov?.partialPickup ?? 0)}
+              sub={`${ov?.totalRemainingItems ?? 0} items remaining`}
+              icon={ShoppingBag}
+              iconBg="bg-amber-100 dark:bg-amber-950/40"
+              iconColor="text-amber-600"
+            />
+            <KpiCard
+              label="Delayed Orders"
+              value={String(ov?.delayedOrders ?? 0)}
+              sub=">7 days not ready"
+              icon={Clock}
+              iconBg="bg-rose-100 dark:bg-rose-950/40"
+              iconColor="text-rose-600"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  Revenue Trend — {PERIOD_LABELS[period]}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={full?.trends ?? []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize: 10 }} />
+                    <YAxis tickFormatter={(v) => fmtShort(v)} tick={{ fontSize: 10 }} width={50} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                    <Area type="monotone" dataKey="revenue" name="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="collected" name="collected" stroke="#22c55e" fill="url(#colGrad)" strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  Order Pipeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                {full && [
+                  { label: "Pending", count: full.statusCounts.pending, color: "bg-yellow-400", max: full.overview.totalOrders },
+                  { label: "Processing", count: full.statusCounts.processing, color: "bg-blue-400", max: full.overview.totalOrders },
+                  { label: "Ready", count: full.statusCounts.ready, color: "bg-emerald-400", max: full.overview.totalOrders },
+                  { label: "Partial Pickup", count: full.statusCounts.partial_pickup, color: "bg-orange-400", max: full.overview.totalOrders },
+                  { label: "Completed", count: full.statusCounts.completed, color: "bg-green-500", max: full.overview.totalOrders },
+                ].map(({ label, count, color, max }) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${color} rounded-full transition-all`}
+                        style={{ width: max > 0 ? `${(count / max) * 100}%` : "0%" }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <div className="pt-2 border-t mt-3 space-y-1">
+                  {full && [
+                    { label: "Unpaid", count: full.paymentCounts.unpaid, variant: "destructive" },
+                    { label: "Partial Pay", count: full.paymentCounts.partial, variant: "warning" },
+                    { label: "Paid", count: full.paymentCounts.paid, variant: "success" },
+                  ].map(({ label, count, variant }) => (
+                    <div key={label} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{label}</span>
+                      <Badge variant={variant as any} className="text-xs">{count}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  Daily Orders — {PERIOD_LABELS[period]}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={full?.trends ?? []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} width={25} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="orders" name="orders" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  Operational Alerts
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(full?.alerts.delayedOrders.length ?? 0) === 0 &&
+                  (full?.alerts.unpaidCount ?? 0) === 0 &&
+                  (full?.alerts.partialPickupCount ?? 0) === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-emerald-600 py-4 justify-center">
+                    <CheckCircle className="h-4 w-4" />
+                    All clear — no active alerts
+                  </div>
+                ) : (
+                  <>
+                    {(full?.alerts.unpaidCount ?? 0) > 0 && (
+                      <Link to="/orders?paymentStatus=unpaid" className="flex items-center gap-3 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors">
+                        <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-red-800 dark:text-red-400">{full?.alerts.unpaidCount} unpaid orders</p>
+                          <p className="text-xs text-red-600 dark:text-red-500">Outstanding balance needs collection</p>
+                        </div>
+                        <ArrowUpRight className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                      </Link>
+                    )}
+                    {(full?.alerts.partialPickupCount ?? 0) > 0 && (
+                      <Link to="/orders?status=partial_pickup" className="flex items-center gap-3 p-2.5 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors">
+                        <ShoppingBag className="h-4 w-4 text-orange-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-orange-800 dark:text-orange-400">{full?.alerts.partialPickupCount} partial pickups</p>
+                          <p className="text-xs text-orange-600 dark:text-orange-500">{ov?.totalRemainingItems} items still waiting</p>
+                        </div>
+                        <ArrowUpRight className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                      </Link>
+                    )}
+                    {full?.alerts.delayedOrders.slice(0, 3).map((o) => (
+                      <Link key={o.id} to={`/orders/${o.id}`} className="flex items-center gap-3 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors">
+                        <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-400 truncate">{o.customerName}</p>
+                          <p className="text-xs text-amber-600 dark:text-amber-500">{o.orderId} · {o.daysOld}d old · {o.status}</p>
+                        </div>
+                        <ArrowUpRight className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                      </Link>
+                    ))}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Orders – Last 14 Days</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              Customer Intelligence
+            </CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/customers">View all</Link>
+            </Button>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={daily ?? []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickFormatter={(v) => formatDate(v)} tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip labelFormatter={(v) => formatDate(v as string)} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="space-y-4">
+            {custData ? (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Total", value: custData.segments.total, icon: Users, color: "text-blue-600" },
+                    { label: "VIP", value: custData.segments.vip, icon: Crown, color: "text-yellow-600" },
+                    { label: "Repeat", value: custData.segments.repeat, icon: RefreshCw, color: "text-purple-600" },
+                    { label: "New (30d)", value: custData.segments.newThisMonth, icon: UserCheck, color: "text-green-600" },
+                    { label: "Inactive", value: custData.segments.inactive, icon: Zap, color: "text-gray-500" },
+                    { label: "With Balance", value: custData.segments.withBalance, icon: AlertTriangle, color: "text-red-600" },
+                  ].map(({ label, value, icon: Icon, color }) => (
+                    <div key={label} className="text-center p-2 bg-muted/40 rounded-lg">
+                      <Icon className={`h-4 w-4 ${color} mx-auto mb-1`} />
+                      <p className="text-lg font-bold">{value}</p>
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                {custData.segments.totalOutstanding > 0 && (
+                  <div className="flex items-center justify-between p-2.5 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-900 text-sm">
+                    <span className="text-red-700 dark:text-red-400">Total outstanding from customers</span>
+                    <span className="font-bold text-red-600">{fmt(custData.segments.totalOutstanding)}</span>
+                  </div>
+                )}
+                {custData.topSpenders.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Top Spenders</p>
+                    <div className="space-y-1.5">
+                      {custData.topSpenders.slice(0, 5).map((c, i) => (
+                        <div key={c.id} className="flex items-center gap-2.5">
+                          <span className="text-xs text-muted-foreground w-4 shrink-0">#{i + 1}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-medium truncate">{c.fullName}</p>
+                              {c.isVip && <Crown className="h-3 w-3 text-yellow-500 shrink-0" />}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{c.totalOrders} orders</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold">{fmtShort(c.totalSpending)}</p>
+                            {c.outstandingBalance > 0 && (
+                              <p className="text-xs text-red-500">-{fmtShort(c.outstandingBalance)} owed</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent Orders</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {(recent ?? []).slice(0, 6).map((order) => {
-                const remainingShirts = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
-                const remainingTrousers = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
-                return (
-                  <Link
-                    key={order.id}
-                    to={`/orders/${order.id}`}
-                    className="flex items-center justify-between px-6 py-3 hover:bg-muted/50 transition-colors"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{order.customerName}</p>
-                      <p className="text-xs text-muted-foreground">{order.orderId}</p>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-primary" />
+                Worker Performance
+              </CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/workers">View all</Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {workerData ? (
+                <>
+                  {workerData.workers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No workers configured yet</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {workerData.workers.filter(w => w.isActive).map((w) => (
+                        <div key={w.id} className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <p className="text-sm font-medium truncate">{w.name}</p>
+                              <Badge variant={w.role === "admin" ? "info" : "outline"} className="text-xs">{w.role}</Badge>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full"
+                                style={{ width: workerData.workers[0]?.totalAssigned > 0 ? `${(w.totalAssigned / Math.max(...workerData.workers.map(x => x.totalAssigned), 1)) * 100}%` : "0%" }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold">{w.totalAssigned}</p>
+                            <p className="text-xs text-muted-foreground">{w.recentPickups} pickups</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {order.status === "partial_pickup" && (
-                        <span className="text-xs text-orange-600">{remainingShirts}S/{remainingTrousers}T left</span>
-                      )}
-                      <Badge variant={statusBadgeVariant(order.status)}>
-                        {statusLabel(order.status)}
-                      </Badge>
+                  )}
+                  {workerData.unassignedOrders > 0 && (
+                    <div className="mt-3 pt-3 border-t flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Unassigned active orders</span>
+                      <Badge variant="warning">{workerData.unassignedOrders}</Badge>
                     </div>
-                  </Link>
-                );
-              })}
-              {!recent?.length && (
-                <p className="px-6 py-8 text-center text-sm text-muted-foreground">No orders yet</p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" />
+                Recent Orders
+              </CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/orders">View all</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {(recent ?? []).slice(0, 5).map((order) => {
+                  const remainingS = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
+                  const remainingT = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
+                  const statusVariant: Record<string, any> = {
+                    pending: "warning", processing: "info", ready: "success",
+                    partial_pickup: "warning", completed: "success",
+                  };
+                  const statusLabel: Record<string, string> = { partial_pickup: "Partial" };
+                  return (
+                    <Link key={order.id} to={`/orders/${order.id}`}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{order.customerName}</p>
+                        <p className="text-xs text-muted-foreground">{order.orderId} · {order.shirts}S/{order.trousers}T</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        {order.status === "partial_pickup" && (
+                          <span className="text-xs text-orange-500">{remainingS}S/{remainingT}T</span>
+                        )}
+                        <Badge variant={statusVariant[order.status] ?? "outline"} className="text-xs">
+                          {statusLabel[order.status] ?? order.status}
+                        </Badge>
+                      </div>
+                    </Link>
+                  );
+                })}
+                {!recent?.length && (
+                  <p className="px-4 py-8 text-center text-sm text-muted-foreground">No orders yet</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

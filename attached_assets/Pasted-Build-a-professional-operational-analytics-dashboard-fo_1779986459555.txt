@@ -1,0 +1,117 @@
+Build a professional operational analytics dashboard for Clean Track.
+
+IMPORTANT:
+Clean Track is a B2B operational laundry SaaS platform.
+The analytics system should help laundry owners understand business performance, customer behavior, worker productivity, revenue trends, and operational bottlenecks.
+
+GOAL:
+Transform Clean Track from an operational tool into a business intelligence platform for laundries.
+
+REQUIREMENTS:
+
+1. Business Overview Analytics
+    Display:
+
+* total revenue
+* outstanding balances
+* total orders
+* active orders
+* completed orders
+* partial pickups
+* average order value
+
+2. Revenue Analytics
+    Build charts/cards for:
+
+* daily revenue
+* weekly revenue
+* monthly revenue
+* payment trends
+* unpaid balances
+* revenue growth trends
+
+3. Customer Analytics
+    Display:
+
+* repeat customers
+* VIP customers
+* inactive customers
+* top spending customers
+* customers with balances
+* customer retention indicators
+
+4. Worker Analytics
+    Track:
+
+* orders handled per worker
+* completed orders
+* active assignments
+* pickup processing activity
+* operational productivity
+
+5. Operational Analytics
+    Display:
+
+* pending workload
+* processing bottlenecks
+* ready orders awaiting pickup
+* partially picked up orders
+* pickup completion trends
+
+6. Dashboard Widgets
+    Build:
+
+* analytics cards
+* charts
+* trend indicators
+* activity feeds
+* operational alerts
+* quick insight sections
+
+7. Mobile Optimization
+    Ensure analytics work beautifully on phones.
+8. SaaS UI Quality
+    The dashboard should feel:
+
+* premium
+* modern
+* fast
+* clean
+* highly visual
+
+9. Time Filtering
+    Support:
+
+* today
+* 7 days
+* 30 days
+* custom ranges
+
+10. Multi-Tenant Isolation
+    All analytics must remain isolated per laundry workspace.
+11. Backend Architecture
+    Build:
+
+* optimized analytics queries
+* scalable aggregation logic
+* tenant-aware analytics endpoints
+
+12. Future-Ready Analytics
+    Design the structure to support future:
+
+* WhatsApp analytics
+* marketing analytics
+* subscription analytics
+* branch analytics
+* AI operational insights
+
+13. Technical Audit
+    After implementation, explain:
+
+* how analytics are calculated
+* any performance considerations
+* future scaling recommendations
+* any areas needing optimization later
+
+IMPORTANT:
+Focus on operational clarity and actionable business intelligence for real laundries.
