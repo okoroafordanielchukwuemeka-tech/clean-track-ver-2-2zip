@@ -1,0 +1,137 @@
+Build a professional multi-tenant Customer Management System for Clean Track.
+
+IMPORTANT:
+Clean Track is an operational B2B laundry SaaS platform.
+Customers are NOT direct users of the software.
+The customer system exists to help laundry owners manage customer relationships, balances, order history, and operational intelligence.
+
+GOAL:
+Transform customers from simple order entries into full business profiles with operational history and analytics.
+
+REQUIREMENTS:
+
+1. Multi-Tenant Customer Architecture
+    Every customer must belong to:
+
+* a specific laundry workspace
+* isolated by laundry_id
+
+IMPORTANT:
+No cross-laundry customer visibility.
+
+2. Professional Customer Profiles
+    Each customer should support:
+
+* full name
+* phone number
+* address
+* notes
+* created date
+* last activity date
+
+3. Automatic Customer Linking
+    When new orders are created:
+
+* existing customers should auto-match by phone number
+* duplicate customer creation should be prevented where possible
+
+4. Customer Business Metrics
+    Track and display:
+
+* total orders
+* completed orders
+* active orders
+* total spending
+* outstanding balances
+* average order value
+* total pickups remaining
+
+5. Customer Order History
+    Allow owners to view:
+
+* complete order history
+* payment history
+* pickup history
+* partially picked up orders
+* unpaid balances
+* active orders
+
+6. Customer Insights
+    Create operational indicators for:
+
+* repeat customers
+* VIP/high spending customers
+* customers with unpaid balances
+* inactive customers
+* customers with remaining pickups
+
+7. Customer Notes System
+    Allow owners/workers to save:
+
+* clothing preferences
+* delivery instructions
+* fabric warnings
+* behavior notes
+* operational remarks
+
+8. Quick Operational Actions
+    From customer profile:
+
+* create new order
+* view active orders
+* view unpaid balances
+* call customer
+* copy phone number
+* future-ready WhatsApp structure
+
+9. SaaS UI Requirements
+    Build:
+
+* customer analytics cards
+* customer table
+* customer profile modal/drawer
+* activity timeline
+* mobile responsive layout
+* operational badges and indicators
+
+10. Mobile Optimization
+    The customer system must work smoothly on phones for busy laundry operations.
+11. Backend Architecture
+    Build:
+
+* scalable PostgreSQL customer structure
+* protected tenant-aware APIs
+* optimized customer lookup queries
+* proper customer/order relationships
+
+12. Business Intelligence Layer
+    Design the customer structure to support future:
+
+* WhatsApp messaging
+* loyalty systems
+* rewards systems
+* marketing campaigns
+* customer analytics
+* customer segmentation
+
+13. Operational Simplicity
+    The experience should remain:
+
+* fast
+* clean
+* simple
+* practical for real laundries
+
+14. Technical Audit
+    After implementation, explain:
+
+* how customer isolation works
+* how duplicate prevention works
+* how customer metrics are calculated
+* how the structure supports future WhatsApp operations
+* any future scaling recommendations
+
+IMPORTANT:
+Do NOT build customer-facing portals or customer accounts.
+Customers interact with laundries through WhatsApp and real-world communication.
+This is an internal business operations system only.

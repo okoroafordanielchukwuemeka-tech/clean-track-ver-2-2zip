@@ -10,7 +10,7 @@ import {
   WashingMachine,
   Menu,
   X,
-  Building2,
+  UserCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 const ownerNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/orders", label: "Orders", icon: ShoppingCart },
+  { to: "/customers", label: "Customers", icon: UserCircle },
   { to: "/batches", label: "Batches", icon: Package },
   { to: "/services", label: "Services", icon: Wrench },
   { to: "/workers", label: "Workers", icon: Users },

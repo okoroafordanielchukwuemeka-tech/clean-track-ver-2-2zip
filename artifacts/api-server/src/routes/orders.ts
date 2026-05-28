@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -28,7 +28,7 @@ const orderInputSchema = z.object({
 });
 
 const orderUpdateSchema = z.object({
-  status: z.enum(["pending", "processing", "ready"]).optional(),
+  status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed"]).optional(),
   paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),
   price: z.number().optional(),
   extraCharge: z.number().optional(),
@@ -114,9 +114,33 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
     const laundryId = req.auth!.laundryId;
     const data = orderInputSchema.parse(req.body);
     const orderId = generateOrderId();
+
+    let customerId: number | null = null;
+    const phoneNorm = data.phone.trim();
+
+    const [existingCustomer] = await db.select().from(customers)
+      .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, phoneNorm)));
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      await db.update(customers).set({
+        lastActivityAt: new Date(),
+        fullName: existingCustomer.fullName,
+      }).where(eq(customers.id, existingCustomer.id));
+    } else {
+      const [newCustomer] = await db.insert(customers).values({
+        laundryId,
+        fullName: data.customerName,
+        phone: phoneNorm,
+        address: data.address,
+      }).returning();
+      customerId = newCustomer.id;
+    }
+
     const [order] = await db.insert(orders).values({
       ...data,
       laundryId,
+      customerId,
       orderId,
       price: data.price?.toString(),
       extraCharge: data.extraCharge?.toString(),

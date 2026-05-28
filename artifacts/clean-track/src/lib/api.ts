@@ -83,6 +83,17 @@ export const api = {
     list: (orderId: number) => request<PickupRecord[]>("GET", `/orders/${orderId}/pickups`),
     record: (orderId: number, data: PickupInput) => request<{ pickup: PickupRecord; order: { status: string; shirtsPickedUp: number; trousersPickedUp: number; remainingShirts: number; remainingTrousers: number; allPickedUp: boolean; fullyPaid: boolean } }>("POST", `/orders/${orderId}/pickups`, data),
   },
+  customers: {
+    list: (params?: { search?: string; tag?: string }) => {
+      const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+      return request<CustomerWithMetrics[]>("GET", `/customers${qs}`);
+    },
+    get: (id: number) => request<CustomerProfile>("GET", `/customers/${id}`),
+    create: (data: CustomerInput) => request<CustomerWithMetrics>("POST", "/customers", data),
+    update: (id: number, data: CustomerUpdateInput) => request<Customer>("PATCH", `/customers/${id}`, data),
+    delete: (id: number) => request<void>("DELETE", `/customers/${id}`),
+    backfill: () => request<{ created: number; linked: number; message: string }>("POST", "/customers/backfill"),
+  },
 };
 
 export interface AuthUser {
@@ -310,6 +321,54 @@ export interface DailyStats {
   date: string;
   count: number;
   revenue: number;
+}
+
+export interface Customer {
+  id: number;
+  laundryId: number;
+  fullName: string;
+  phone: string;
+  address?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  lastActivityAt: string;
+}
+
+export interface CustomerMetrics {
+  totalOrders: number;
+  completedOrders: number;
+  activeOrders: number;
+  totalSpending: number;
+  totalPaid: number;
+  outstandingBalance: number;
+  avgOrderValue: number;
+  remainingItems: number;
+  lastOrderDate: string | null;
+  isVip: boolean;
+  isRepeat: boolean;
+  hasBalance: boolean;
+  hasRemainingPickups: boolean;
+  tags: string[];
+}
+
+export interface CustomerWithMetrics extends Customer, CustomerMetrics {}
+
+export interface CustomerProfile extends CustomerWithMetrics {
+  orders: Order[];
+}
+
+export interface CustomerInput {
+  fullName: string;
+  phone: string;
+  address?: string;
+  notes?: string;
+}
+
+export interface CustomerUpdateInput {
+  fullName?: string;
+  phone?: string;
+  address?: string | null;
+  notes?: string | null;
 }
 
 export interface Worker {

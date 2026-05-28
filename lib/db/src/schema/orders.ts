@@ -2,10 +2,12 @@ import { pgTable, serial, text, integer, numeric, boolean, timestamp } from "dri
 import { batches } from "./batches.js";
 import { workers } from "./workers.js";
 import { laundries } from "./laundries.js";
+import { customers } from "./customers.js";
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   laundryId: integer("laundry_id").references(() => laundries.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
   orderId: text("order_id").notNull().unique(),
   customerName: text("customer_name").notNull(),
   phone: text("phone").notNull(),
