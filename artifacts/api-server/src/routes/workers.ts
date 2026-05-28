@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { workers } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 
 export const workersRouter = Router();
@@ -69,7 +70,8 @@ workersRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = workerInputSchema.parse(req.body);
-    const [worker] = await db.insert(workers).values({ ...data, laundryId }).returning();
+    const pinHash = await bcrypt.hash(data.pin, 12);
+    const [worker] = await db.insert(workers).values({ ...data, pin: pinHash, laundryId }).returning();
     const { pin: _pin, ...safeWorker } = worker;
     res.status(201).json(safeWorker);
   } catch (err) {
@@ -82,8 +84,12 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = workerUpdateSchema.parse(req.body);
+    const updatePayload: typeof data & { pin?: string } = { ...data };
+    if (data.pin) {
+      updatePayload.pin = await bcrypt.hash(data.pin, 12);
+    }
     const [worker] = await db.update(workers)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...updatePayload, updatedAt: new Date() })
       .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)))
       .returning();
     if (!worker) return res.status(404).json({ error: "Worker not found" });

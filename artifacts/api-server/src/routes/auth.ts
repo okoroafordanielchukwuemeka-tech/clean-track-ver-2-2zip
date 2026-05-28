@@ -119,7 +119,20 @@ authRouter.post("/worker-login", async (req, res) => {
     const allMatching = await db.select().from(workers)
       .where(and(eq(workers.phone, data.phone), eq(workers.isActive, true)));
 
-    const worker = allMatching.find(w => w.pin === data.pin);
+    if (!allMatching.length) {
+      return res.status(401).json({ error: "Invalid phone number or PIN" });
+    }
+
+    let worker = null;
+    for (const w of allMatching) {
+      if (!w.pin) continue;
+      const isHashed = w.pin.startsWith("$2");
+      const valid = isHashed
+        ? await bcrypt.compare(data.pin, w.pin)
+        : w.pin === data.pin;
+      if (valid) { worker = w; break; }
+    }
+
     if (!worker || !worker.laundryId) {
       return res.status(401).json({ error: "Invalid phone number or PIN" });
     }
