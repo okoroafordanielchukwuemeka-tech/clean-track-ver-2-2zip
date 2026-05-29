@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -8,11 +8,32 @@ import { emitEvent } from "../lib/events.js";
 
 export const ordersRouter = Router();
 
+const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
+
 function generateOrderId() {
   const now = new Date();
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
   const rand = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
   return `${datePart}${rand}`;
+}
+
+async function getLaundrySla(laundryId: number) {
+  const [laundry] = await db
+    .select({
+      standardTurnaroundHours: laundries.standardTurnaroundHours,
+      expressTurnaroundHours: laundries.expressTurnaroundHours,
+      premiumTurnaroundHours: laundries.premiumTurnaroundHours,
+    })
+    .from(laundries)
+    .where(eq(laundries.id, laundryId));
+  return laundry ?? { standardTurnaroundHours: 72, expressTurnaroundHours: 24, premiumTurnaroundHours: 48 };
+}
+
+function computeProcessingDueAt(createdAt: Date, serviceType: string, sla: { standardTurnaroundHours: number; expressTurnaroundHours: number; premiumTurnaroundHours: number }): Date {
+  const hours = serviceType === "express" ? sla.expressTurnaroundHours
+    : serviceType === "premium" ? sla.premiumTurnaroundHours
+    : sla.standardTurnaroundHours;
+  return new Date(createdAt.getTime() + hours * 3600000);
 }
 
 const orderInputSchema = z.object({
@@ -64,6 +85,7 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const result = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const now = new Date();
     const summary = {
       total: result.length,
       pending: result.filter(o => o.status === "pending").length,
@@ -78,6 +100,12 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
       pendingRevenue: result.filter(o => o.paymentStatus !== "paid")
         .reduce((sum, o) => sum + parseFloat(o.price || "0") - parseFloat(o.amountPaid || "0"), 0),
       collectedRevenue: result.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0),
+      overdueCount: result.filter(o => {
+        if (["completed"].includes(o.status)) return false;
+        if (o.processingDueAt) return new Date(o.processingDueAt) < now;
+        const h = DEFAULT_TURNAROUND[o.serviceType] ?? 72;
+        return new Date(new Date(o.createdAt).getTime() + h * 3600000) < now;
+      }).length,
     };
     res.json(summary);
   } catch {
@@ -135,6 +163,10 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       customerId = newCustomer.id;
     }
 
+    const sla = await getLaundrySla(laundryId);
+    const createdAt = new Date();
+    const processingDueAt = computeProcessingDueAt(createdAt, data.serviceType, sla);
+
     const [order] = await db.insert(orders).values({
       ...data,
       laundryId,
@@ -143,13 +175,14 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       price: data.price?.toString(),
       extraCharge: data.extraCharge?.toString(),
       discount: data.discount?.toString(),
+      processingDueAt,
     }).returning();
 
     emitEvent({
       laundryId,
       eventType: "new_order",
       title: "New Order Received",
-      message: `Order #${order.orderId} for ${order.customerName} (${order.shirts}s/${order.trousers}t, ${order.serviceType}) has been created.`,
+      message: `Order #${order.orderId} for ${order.customerName} (${order.shirts}s/${order.trousers}t, ${order.serviceType}) — due ${processingDueAt.toLocaleString()}.`,
       severity: "info",
       relatedOrderId: order.id,
     }).catch(() => {});

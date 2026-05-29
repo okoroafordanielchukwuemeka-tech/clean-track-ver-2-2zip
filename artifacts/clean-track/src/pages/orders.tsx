@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OrderInput } from "@/lib/api";
+import { api, type OrderInput, type SlaSettings } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
-import { Plus, Search, Eye } from "lucide-react";
+import { Plus, Search, Eye, AlertTriangle, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
+import { CountdownTimer } from "@/components/countdown-timer";
+import { UrgencyBadge } from "@/components/urgency-badge";
+import { computeDueAt, getUrgency } from "@/lib/urgency";
+import { cn } from "@/lib/utils";
 
 function statusBadge(status: string) {
   const map: Record<string, any> = {
@@ -38,11 +42,15 @@ function formatCurrency(v: number | null | undefined) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
 }
 
+type SortKey = "urgency" | "date" | "status";
+
 export default function Orders() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
+  const [urgencyFilter, setUrgencyFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("urgency");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<Partial<OrderInput>>({
     serviceType: "standard",
@@ -53,6 +61,11 @@ export default function Orders() {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders"],
     queryFn: () => api.orders.list(),
+  });
+
+  const { data: sla } = useQuery({
+    queryKey: ["settings", "sla"],
+    queryFn: () => api.settings.getSla(),
   });
 
   const createMutation = useMutation({
@@ -66,7 +79,13 @@ export default function Orders() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const filtered = orders.filter((o) => {
+  const ordersWithUrgency = orders.map(o => {
+    const dueAt = computeDueAt(o.createdAt, o.serviceType, sla, o.processingDueAt);
+    const urgency = getUrgency(dueAt);
+    return { ...o, _urgency: urgency };
+  });
+
+  const filtered = ordersWithUrgency.filter((o) => {
     const matchSearch =
       !search ||
       o.customerName.toLowerCase().includes(search.toLowerCase()) ||
@@ -74,14 +93,42 @@ export default function Orders() {
       o.phone.includes(search);
     const matchStatus = statusFilter === "all" || o.status === statusFilter;
     const matchPayment = paymentFilter === "all" || o.paymentStatus === paymentFilter;
-    return matchSearch && matchStatus && matchPayment;
+    const matchUrgency = urgencyFilter === "all" || o._urgency.level === urgencyFilter;
+    return matchSearch && matchStatus && matchPayment && matchUrgency;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === "urgency") return a._urgency.hoursRemaining - b._urgency.hoursRemaining;
+    if (sortKey === "date") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return 0;
+  });
+
+  const overdueCount = ordersWithUrgency.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
+  const urgentCount = ordersWithUrgency.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Orders</h1>
-        <Button onClick={() => setShowCreate(true)}>
+        <div>
+          <h1 className="text-2xl font-bold">Orders</h1>
+          {(overdueCount > 0 || urgentCount > 0) && (
+            <div className="flex items-center gap-3 mt-1">
+              {overdueCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-500">
+                  <AlertTriangle className="h-3 w-3" />
+                  {overdueCount} overdue
+                </span>
+              )}
+              {urgentCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500">
+                  <AlertTriangle className="h-3 w-3" />
+                  {urgentCount} urgent
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <Button onClick={() => setShowCreate(true)} className="gap-2">
           <Plus className="h-4 w-4" />
           New Order
         </Button>
@@ -89,8 +136,8 @@ export default function Orders() {
 
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, order ID, or phone..."
@@ -99,6 +146,18 @@ export default function Orders() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Urgency" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Urgency</SelectItem>
+                <SelectItem value="overdue">🔴 Overdue</SelectItem>
+                <SelectItem value="urgent">🟠 Urgent</SelectItem>
+                <SelectItem value="attention">🟡 Attention</SelectItem>
+                <SelectItem value="safe">🟢 Safe</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Status" />
@@ -123,80 +182,91 @@ export default function Orders() {
                 <SelectItem value="paid">Paid</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortKey(k => k === "urgency" ? "date" : "urgency")}
+              className="gap-2 whitespace-nowrap"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {sortKey === "urgency" ? "By Urgency" : "By Date"}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {filtered.length} order{filtered.length !== 1 ? "s" : ""}
-          </CardTitle>
+        <CardHeader className="pb-0">
+          <CardTitle className="text-base">{sorted.length} order{sorted.length !== 1 ? "s" : ""}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading orders...</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Remaining</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((order) => {
-                  const remainingShirts = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
-                  const remainingTrousers = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
-                  const hasRemaining = remainingShirts > 0 || remainingTrousers > 0;
-                  return (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
-                      <TableCell className="font-medium">{order.customerName}</TableCell>
-                      <TableCell>{order.phone}</TableCell>
-                      <TableCell className="capitalize">{order.serviceType}</TableCell>
-                      <TableCell className="text-sm">{order.shirts}S / {order.trousers}T</TableCell>
-                      <TableCell>
-                        {(order.status === "partial_pickup" || (order.shirtsPickedUp ?? 0) > 0 || (order.trousersPickedUp ?? 0) > 0) && hasRemaining ? (
-                          <span className="text-xs text-orange-600 font-medium">{remainingShirts}S / {remainingTrousers}T left</span>
-                        ) : order.status === "completed" ? (
-                          <span className="text-xs text-green-600 font-medium">All done</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{statusBadge(order.status)}</TableCell>
-                      <TableCell>{paymentBadge(order.paymentStatus)}</TableCell>
-                      <TableCell>{formatCurrency(order.price as any)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
-                        </Button>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Timer</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sorted.map((order) => {
+                    const urg = order._urgency;
+                    const isActive = !["completed", "partial_pickup"].includes(order.status);
+                    return (
+                      <TableRow key={order.id} className={cn(isActive ? urg.rowClass : "")}>
+                        <TableCell className="pr-0">
+                          {isActive && (
+                            <span className={cn("block h-2 w-2 rounded-full mx-auto", urg.dotClass)} />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
+                        <TableCell className="font-medium">{order.customerName}</TableCell>
+                        <TableCell>
+                          <span className="capitalize text-sm">{order.serviceType}</span>
+                        </TableCell>
+                        <TableCell className="text-sm">{order.shirts}S / {order.trousers}T</TableCell>
+                        <TableCell>{statusBadge(order.status)}</TableCell>
+                        <TableCell>{paymentBadge(order.paymentStatus)}</TableCell>
+                        <TableCell>{formatCurrency(order.price as any)}</TableCell>
+                        <TableCell>
+                          <CountdownTimer
+                            createdAt={order.createdAt}
+                            serviceType={order.serviceType}
+                            processingDueAt={order.processingDueAt}
+                            status={order.status}
+                            slaSettings={sla}
+                            compact
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {!sorted.length && (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                        No orders found
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-                {!filtered.length && (
-                  <TableRow>
-                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
-                      No orders found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -236,9 +306,9 @@ export default function Orders() {
               <Select value={form.serviceType ?? "standard"} onValueChange={(v) => setForm({ ...form, serviceType: v as any })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="express">Express</SelectItem>
-                  <SelectItem value="premium">Premium</SelectItem>
+                  <SelectItem value="standard">Standard {sla ? `(${sla.standardTurnaroundHours}h SLA)` : ""}</SelectItem>
+                  <SelectItem value="express">Express {sla ? `(${sla.expressTurnaroundHours}h SLA)` : ""}</SelectItem>
+                  <SelectItem value="premium">Premium {sla ? `(${sla.premiumTurnaroundHours}h SLA)` : ""}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -29,6 +29,7 @@ export const orders = pgTable("orders", {
   isVerified: boolean("is_verified").notNull().default(false),
   batchId: integer("batch_id").references(() => batches.id),
   assignedWorkerId: integer("assigned_worker_id").references(() => workers.id),
+  processingDueAt: timestamp("processing_due_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

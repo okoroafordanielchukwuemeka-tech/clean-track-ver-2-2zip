@@ -13,6 +13,7 @@ import Services from "@/pages/services";
 import Workers from "@/pages/workers";
 import Customers from "@/pages/customers";
 import Expenditures from "@/pages/expenditures";
+import SettingsPage from "@/pages/settings";
 import WorkerStation from "@/pages/worker";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
@@ -53,6 +54,7 @@ export default function App() {
               <Route path="workers" element={<ProtectedRoute ownerOnly><Workers /></ProtectedRoute>} />
               <Route path="customers" element={<ProtectedRoute ownerOnly><Customers /></ProtectedRoute>} />
               <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
+              <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
               <Route path="worker-station" element={<WorkerStation />} />
               <Route path="*" element={<NotFound />} />
             </Route>

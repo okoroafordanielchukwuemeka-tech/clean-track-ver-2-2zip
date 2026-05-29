@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, batches, workers, customers, pickupRecords, expenditures } from "@workspace/db/schema";
+import { orders, batches, workers, customers, pickupRecords, expenditures, laundries } from "@workspace/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
 
@@ -343,5 +343,95 @@ analyticsRouter.get("/workers", async (req: AuthRequest, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to get worker analytics" });
+  }
+});
+
+analyticsRouter.get("/sla", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const [laundry] = await db
+      .select({
+        standardTurnaroundHours: laundries.standardTurnaroundHours,
+        expressTurnaroundHours: laundries.expressTurnaroundHours,
+        premiumTurnaroundHours: laundries.premiumTurnaroundHours,
+      })
+      .from(laundries)
+      .where(eq(laundries.id, laundryId));
+
+    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const now = new Date();
+
+    const DEFAULT_HOURS: Record<string, number> = {
+      express: laundry?.expressTurnaroundHours ?? 24,
+      premium: laundry?.premiumTurnaroundHours ?? 48,
+      standard: laundry?.standardTurnaroundHours ?? 72,
+    };
+
+    function getDueAt(o: typeof allOrders[0]): Date {
+      if (o.processingDueAt) return new Date(o.processingDueAt);
+      const h = DEFAULT_HOURS[o.serviceType] ?? 72;
+      return new Date(new Date(o.createdAt).getTime() + h * 3600000);
+    }
+
+    const activeOrders = allOrders.filter(o => !["completed"].includes(o.status));
+    const completedOrders = allOrders.filter(o => o.status === "completed");
+
+    const overdueOrders = activeOrders.filter(o => getDueAt(o) < now);
+    const dueSoonOrders = activeOrders.filter(o => {
+      const due = getDueAt(o);
+      const hoursLeft = (due.getTime() - now.getTime()) / 3600000;
+      return hoursLeft >= 0 && hoursLeft <= 24;
+    });
+
+    const completedOnTime = completedOrders.filter(o => {
+      const due = getDueAt(o);
+      return new Date(o.updatedAt) <= due;
+    }).length;
+
+    const onTimeRate = completedOrders.length > 0
+      ? (completedOnTime / completedOrders.length) * 100
+      : 100;
+
+    const completedWithTime = completedOrders.filter(o => {
+      const dur = (new Date(o.updatedAt).getTime() - new Date(o.createdAt).getTime()) / 3600000;
+      return dur > 0;
+    });
+
+    const avgCompletionHours = completedWithTime.length > 0
+      ? completedWithTime.reduce((sum, o) => {
+          return sum + (new Date(o.updatedAt).getTime() - new Date(o.createdAt).getTime()) / 3600000;
+        }, 0) / completedWithTime.length
+      : null;
+
+    const serviceTypes = ["express", "standard", "premium"];
+    const byServiceType: Record<string, any> = {};
+    for (const type of serviceTypes) {
+      const typeOrders = allOrders.filter(o => o.serviceType === type);
+      const typeActive = typeOrders.filter(o => !["completed"].includes(o.status));
+      const typeCompleted = typeOrders.filter(o => o.status === "completed");
+      const typeOverdue = typeActive.filter(o => getDueAt(o) < now);
+      const typeWithTime = typeCompleted.filter(o => new Date(o.updatedAt).getTime() > new Date(o.createdAt).getTime());
+      byServiceType[type] = {
+        count: typeOrders.length,
+        overdueCount: typeOverdue.length,
+        avgHours: typeWithTime.length > 0
+          ? typeWithTime.reduce((s, o) => s + (new Date(o.updatedAt).getTime() - new Date(o.createdAt).getTime()) / 3600000, 0) / typeWithTime.length
+          : null,
+      };
+    }
+
+    res.json({
+      avgCompletionHours,
+      overdueCount: overdueOrders.length,
+      dueSoonCount: dueSoonOrders.length,
+      onTimeRate,
+      totalCompleted: completedOrders.length,
+      totalActive: activeOrders.length,
+      byServiceType,
+      slaSettings: laundry ?? { standardTurnaroundHours: 72, expressTurnaroundHours: 24, premiumTurnaroundHours: 48 },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to get SLA analytics" });
   }
 });

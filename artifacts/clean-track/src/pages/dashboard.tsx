@@ -14,7 +14,7 @@ import {
   DollarSign, ShoppingCart, Users, AlertTriangle, TrendingUp,
   TrendingDown, Clock, CheckCircle, ShoppingBag, Package,
   Crown, RefreshCw, ArrowUpRight, ArrowDownRight, Minus,
-  Activity, UserCheck, Zap, Receipt,
+  Activity, UserCheck, Zap, Receipt, Settings,
 } from "lucide-react";
 
 const fmt = (v: number) =>
@@ -114,6 +114,12 @@ export default function Dashboard() {
   const { data: recent } = useQuery({
     queryKey: ["orders", "recent"],
     queryFn: () => api.orders.recent(),
+  });
+
+  const { data: slaData } = useQuery({
+    queryKey: ["analytics", "sla"],
+    queryFn: () => api.settings.getSlaAnalytics(),
+    refetchInterval: 60_000,
   });
 
   const ov = full?.overview;
@@ -236,6 +242,127 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           )}
+
+          {slaData && (slaData.overdueCount > 0 || slaData.dueSoonCount > 0) && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              {slaData.overdueCount > 0 && (
+                <Card className="flex-1 border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/20">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-red-800 dark:text-red-400">
+                        {slaData.overdueCount} overdue order{slaData.overdueCount > 1 ? "s" : ""}
+                      </p>
+                      <p className="text-xs text-red-600 dark:text-red-500">Past operational deadline — prioritise immediately</p>
+                    </div>
+                    <Button variant="outline" size="sm" asChild className="shrink-0 border-red-300 text-red-700 hover:bg-red-100">
+                      <Link to="/orders">View</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+              {slaData.dueSoonCount > 0 && (
+                <Card className="flex-1 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <Clock className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                        {slaData.dueSoonCount} due within 24h
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500">Ensure workers are on these orders</p>
+                    </div>
+                    <Button variant="outline" size="sm" asChild className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100">
+                      <Link to="/orders">View</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  SLA Performance
+                </CardTitle>
+                <Button variant="ghost" size="sm" asChild className="text-xs gap-1">
+                  <Link to="/settings"><Settings className="h-3 w-3" />Configure</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {slaData ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="text-center p-3 rounded-xl bg-muted/50">
+                    <p className={`text-2xl font-bold ${slaData.overdueCount > 0 ? "text-red-600" : "text-green-600"}`}>
+                      {slaData.overdueCount}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Overdue</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-muted/50">
+                    <p className={`text-2xl font-bold ${slaData.dueSoonCount > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                      {slaData.dueSoonCount}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Due Soon</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-muted/50">
+                    <p className={`text-2xl font-bold ${slaData.onTimeRate >= 90 ? "text-green-600" : slaData.onTimeRate >= 70 ? "text-amber-600" : "text-red-600"}`}>
+                      {slaData.onTimeRate.toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">On-Time Rate</p>
+                  </div>
+                  <div className="text-center p-3 rounded-xl bg-muted/50">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {slaData.avgCompletionHours != null ? `${slaData.avgCompletionHours.toFixed(0)}h` : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Avg Completion</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-4">
+                  {[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-muted animate-pulse rounded-xl" />)}
+                </div>
+              )}
+
+              {slaData && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Breakdown by service type</p>
+                  <div className="space-y-2">
+                    {(["express", "standard", "premium"] as const).map(type => {
+                      const stat = slaData.byServiceType?.[type];
+                      if (!stat || stat.count === 0) return null;
+                      const slaHours = type === "express"
+                        ? slaData.slaSettings?.expressTurnaroundHours
+                        : type === "premium"
+                        ? slaData.slaSettings?.premiumTurnaroundHours
+                        : slaData.slaSettings?.standardTurnaroundHours;
+                      return (
+                        <div key={type} className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground capitalize w-16 shrink-0">
+                            {type}
+                          </span>
+                          <span className="text-xs text-muted-foreground w-12 shrink-0">
+                            {slaHours ?? "—"}h SLA
+                          </span>
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <span className="text-xs font-medium">{stat.count} orders</span>
+                            {stat.overdueCount > 0 && (
+                              <Badge variant="destructive" className="text-xs px-1 py-0">{stat.overdueCount} overdue</Badge>
+                            )}
+                            {stat.avgHours != null && (
+                              <span className="text-xs text-muted-foreground">avg {stat.avgHours.toFixed(0)}h</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-2">

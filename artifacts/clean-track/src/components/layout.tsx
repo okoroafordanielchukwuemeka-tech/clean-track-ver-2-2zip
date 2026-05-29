@@ -12,6 +12,7 @@ import {
   X,
   UserCircle,
   Receipt,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
@@ -28,6 +29,7 @@ const ownerNavItems = [
   { to: "/services", label: "Services", icon: Wrench },
   { to: "/workers", label: "Workers", icon: Users },
   { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 const workerNavItems = [
@@ -37,7 +39,7 @@ const workerNavItems = [
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isOwner, isWorker, logout } = useAuth();
+  const { user, isOwner, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = isOwner ? ownerNavItems : workerNavItems;
@@ -75,7 +77,7 @@ export function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}

@@ -107,6 +107,11 @@ export const api = {
     markAllRead: () => request<{ success: boolean }>("PATCH", "/notifications/read-all"),
     delete: (id: number) => request<void>("DELETE", `/notifications/${id}`),
   },
+  settings: {
+    getSla: () => request<SlaSettings>("GET", "/settings/sla"),
+    updateSla: (data: Partial<SlaSettings>) => request<SlaSettings>("PATCH", "/settings/sla", data),
+    getSlaAnalytics: () => request<SlaAnalytics & { slaSettings: SlaSettings }>("GET", "/analytics/sla"),
+  },
   expenditures: {
     list: (period?: string) => {
       const qs = period ? `?period=${period}` : "";
@@ -192,6 +197,7 @@ export interface Order {
   isVerified: boolean;
   batchId?: number | null;
   assignedWorkerId?: number | null;
+  processingDueAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -534,4 +540,20 @@ export interface ExpenditureSummary {
   byCategory: Record<string, number>;
   count: number;
   period: string;
+}
+
+export interface SlaSettings {
+  standardTurnaroundHours: number;
+  expressTurnaroundHours: number;
+  premiumTurnaroundHours: number;
+}
+
+export interface SlaAnalytics {
+  avgCompletionHours: number | null;
+  overdueCount: number;
+  dueSoonCount: number;
+  onTimeRate: number;
+  totalCompleted: number;
+  totalActive: number;
+  byServiceType: Record<string, { count: number; overdueCount: number; avgHours: number | null }>;
 }

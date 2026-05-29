@@ -1,0 +1,291 @@
+# CLEAN TRACK — OPERATIONAL PRIORITY & SLA SYSTEM
+
+IMPORTANT:
+Clean Track is now an operational B2B laundry SaaS platform with:
+
+* authentication
+* workers
+* customers
+* analytics
+* expenditures
+* notifications
+* event engine
+* partial pickups
+* profitability tracking
+
+The next phase is:
+OPERATIONAL EXECUTION INTELLIGENCE.
+
+GOAL:
+Make the platform actively guide workers and owners operationally using:
+
+* countdown timers
+* urgency indicators
+* SLA tracking
+* queue prioritization
+* turnaround monitoring
+
+IMPORTANT:
+Keep the interface:
+
+* simple
+* operational
+* lightweight
+* mobile friendly
+* uncluttered
+
+Do NOT create enterprise complexity.
+
+---
+
+# PART 1 — ORDER TIMER SYSTEM
+
+## 1. Operational Countdown Timers
+
+Every active order should display:
+
+* time remaining
+  OR
+* overdue duration
+
+Examples:
+
+* 18h left
+* 5h left
+* Overdue by 3h
+
+IMPORTANT:
+This timer tracks operational completion only.
+
+It is completely separate from:
+
+* customer pickup timing
+* partial pickup logic
+
+---
+
+## 2. Countdown Logic
+
+Timers should be calculated from:
+
+* order createdAt
+* turnaround duration
+* processingDueAt
+
+Ensure calculations remain accurate after refresh/reload.
+
+---
+
+# PART 2 — LAUNDRY TURNAROUND SETTINGS
+
+## 3. Laundry-Level SLA Settings
+
+Owners should be able to configure:
+
+* standard turnaround
+* express turnaround
+* premium turnaround
+
+Examples:
+
+* Standard → 48h
+* Express → 24h
+* Premium → 72h
+
+These settings should automatically apply to new orders.
+
+---
+
+## 4. Service-Level Timing Support
+
+Allow services to optionally override default turnaround settings.
+
+Example:
+Blanket Cleaning may require longer completion time.
+
+---
+
+# PART 3 — URGENCY SYSTEM
+
+## 5. Due Soon Detection
+
+Automatically classify:
+
+* due within 24h
+* due within 12h
+* due within 5h
+
+---
+
+## 6. Overdue Detection
+
+Automatically detect and flag:
+
+* overdue operational orders
+
+Generate:
+
+* alerts
+* visual warnings
+* notification events
+
+---
+
+## 7. Urgency Color System
+
+Create a clean operational color hierarchy:
+
+Safe → green
+Attention → amber
+Urgent → red
+Overdue → dark red
+
+Apply consistently across:
+
+* orders table
+* worker station
+* dashboards
+* notification center
+
+---
+
+# PART 4 — OPERATIONAL PRIORITIZATION
+
+## 8. Queue Prioritization
+
+Automatically prioritize urgent orders.
+
+Workers should immediately see:
+
+* most urgent first
+* overdue first
+* due-soon next
+
+without manually sorting.
+
+---
+
+## 9. Worker Operational Guidance
+
+Worker Station should clearly separate:
+
+* overdue orders
+* urgent orders
+* normal queue
+
+Reduce worker confusion as much as possible.
+
+---
+
+## 10. Owner Operational Visibility
+
+Dashboard should show:
+
+* overdue counts
+* due-soon counts
+* operational bottlenecks
+* average turnaround performance
+
+Keep dashboard visually clean.
+
+---
+
+# PART 5 — SLA ANALYTICS
+
+## 11. SLA Performance Metrics
+
+Track:
+
+* average completion time
+* overdue percentage
+* average processing duration
+* on-time completion rate
+
+---
+
+## 12. Operational Efficiency Insights
+
+Generate lightweight operational insights:
+
+* high overdue rate
+* slow processing warning
+* worker workload imbalance
+
+Avoid excessive AI-style text.
+Keep insights concise and operational.
+
+---
+
+# PART 6 — NOTIFICATION INTEGRATION
+
+## 13. Timer Event Integration
+
+Connect timers to the existing event engine.
+
+Generate events for:
+
+* due soon
+* overdue
+* critical delays
+
+---
+
+## 14. Notification Center Integration
+
+Urgent timer alerts should appear inside:
+
+* notification center
+* worker station
+* owner dashboard
+
+---
+
+# PART 7 — MOBILE EXPERIENCE
+
+Ensure:
+
+* countdowns
+* urgency badges
+* operational queues
+* alerts
+
+work beautifully on phones and tablets.
+
+Workers must be able to quickly understand urgency from mobile screens.
+
+---
+
+# PART 8 — FUTURE-READY ARCHITECTURE
+
+Design the timer system so it can later support:
+
+* browser push notifications
+* WhatsApp operational alerts
+* escalation workflows
+* automatic customer ETA messaging
+
+without major rewrites.
+
+---
+
+# PART 9 — TECHNICAL AUDIT
+
+After implementation explain:
+
+* how countdown calculations work
+* how urgency is calculated
+* how prioritization works
+* how SLA metrics are generated
+* how future push notification systems can connect
+* future optimization recommendations
+
+IMPORTANT:
+Focus heavily on:
+
+* operational simplicity
+* realtime awareness
+* execution guidance
+* worker efficiency
+* clean SaaS UX
+
+Avoid over-engineering the interface.
