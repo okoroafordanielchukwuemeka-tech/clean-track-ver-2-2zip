@@ -1,0 +1,384 @@
+# CLEAN TRACK — OPERATIONAL EVENT ENGINE + EXPENDITURE SYSTEM
+
+IMPORTANT:
+Clean Track is now a mature operational B2B laundry SaaS platform.
+
+The focus is now:
+
+* operational automation
+* realtime awareness
+* workflow intelligence
+* profitability visibility
+* business operational simplicity
+
+DO NOT over-engineer the UI.
+Focus on:
+
+* clarity
+* speed
+* operational usefulness
+* mobile friendliness
+* clean SaaS UX
+
+---
+
+# PART 1 — OPERATIONAL EVENT ENGINE
+
+## 1. Create Central Event Architecture
+
+Design a scalable event system that reacts automatically to:
+
+* new orders
+* worker assignment
+* overdue orders
+* due-soon orders
+* order ready
+* payments received
+* unpaid balances
+* partial pickups
+* completed pickups
+
+IMPORTANT:
+This event architecture should later support:
+
+* browser push notifications
+* WhatsApp notifications
+* SMS
+* email
+
+without major rewrites.
+
+---
+
+# PART 2 — NOTIFICATION SYSTEM
+
+## 2. Notifications Database Table
+
+Create a notifications table supporting:
+
+* id
+* laundry_id
+* user target
+* role target
+* event type
+* title
+* message
+* severity
+* read/unread state
+* createdAt
+
+---
+
+## 3. Notification Types
+
+Support:
+
+* new_order
+* order_assigned
+* due_soon
+* overdue
+* payment_received
+* unpaid_balance
+* order_ready
+* partial_pickup
+* pickup_completed
+* high_expense
+* low_profit_warning
+
+---
+
+## 4. Owner Notifications
+
+Owners should receive alerts for:
+
+* new orders
+* overdue orders
+* urgent operational issues
+* unpaid balances
+* profitability warnings
+* high operational expenses
+
+---
+
+## 5. Worker Notifications
+
+Workers should receive:
+
+* assigned orders
+* urgent due-soon orders
+* overdue processing alerts
+* operational workload changes
+
+---
+
+## 6. Notification Center UI
+
+Build a clean notification center showing:
+
+* unread notifications
+* recent operational events
+* timestamps
+* severity indicators
+* quick action links
+
+Avoid:
+
+* clutter
+* excessive popups
+* noisy UI
+
+---
+
+## 7. Realtime Updates
+
+Implement lightweight realtime updates using polling:
+
+* auto-refresh notification counts
+* update worker queues
+* refresh operational alerts
+
+IMPORTANT:
+Do NOT use WebSockets yet.
+Polling is enough for this stage.
+
+---
+
+# PART 3 — OPERATIONAL DEADLINE ALERTS
+
+## 8. Due Soon Detection
+
+Automatically detect:
+
+* due within 24h
+* due within 12h
+* due within 5h
+
+---
+
+## 9. Overdue Detection
+
+Automatically:
+
+* flag overdue orders
+* generate alerts
+* prioritize urgent tasks visually
+
+---
+
+## 10. Operational Prioritization
+
+Highlight:
+
+* overdue orders
+* urgent orders
+* operational bottlenecks
+* unpaid balances
+
+inside:
+
+* owner dashboard
+* worker station
+* notification center
+
+---
+
+# PART 4 — EXPENDITURE & PROFITABILITY SYSTEM
+
+IMPORTANT:
+This is NOT accounting software.
+Keep it operationally simple.
+
+The goal is:
+
+* profitability visibility
+* operational expense awareness
+* business intelligence
+
+---
+
+## 11. Create Expenditures Page
+
+Build a clean expenditures page where owners can:
+
+* add expenses
+* edit expenses
+* delete expenses
+* categorize expenses
+
+Keep the UX:
+
+* simple
+* mobile friendly
+* easy for non-technical laundry owners
+
+---
+
+## 12. Expense Categories
+
+Support categories like:
+
+* electricity
+* detergent
+* water
+* salaries
+* transport
+* maintenance
+* packaging
+* miscellaneous
+
+Allow custom categories later.
+
+---
+
+## 13. Flexible Expense Editing
+
+IMPORTANT:
+Expenses are NOT fixed.
+
+Owners must be able to:
+
+* update expense amounts anytime
+* edit recurring operational costs
+* adjust pricing easily
+
+because operational costs constantly change.
+
+---
+
+## 14. Expense Records
+
+Each expense should support:
+
+* amount
+* category
+* notes
+* createdBy
+* createdAt
+* optional recurring flag
+
+---
+
+## 15. Profitability Analytics
+
+Integrate expenses into analytics.
+
+Dashboard should now show:
+
+* total revenue
+* total expenses
+* estimated profit
+* outstanding balances
+
+Profit formula:
+Revenue - Expenses = Estimated Profit
+
+---
+
+## 16. Operational Financial Insights
+
+Generate simple operational insights like:
+
+* rising expenses
+* low profit warning
+* high unpaid balances
+* operational cost trends
+
+IMPORTANT:
+Keep insights lightweight and operational.
+Do NOT become enterprise accounting software.
+
+---
+
+# PART 5 — OWNER DASHBOARD REFINEMENT
+
+Keep dashboard:
+
+* clean
+* operational
+* uncluttered
+* simple
+
+Prioritize:
+
+* active orders
+* due soon
+* overdue
+* notifications
+* expenses
+* profit visibility
+* unpaid balances
+* quick actions
+
+Avoid:
+
+* excessive charts
+* clutter
+* too many widgets
+
+The dashboard should feel like:
+a clean operational business control center.
+
+---
+
+# PART 6 — ROLE STRUCTURE
+
+Only owners/admins may:
+
+* manage expenses
+* view profitability
+* edit operational settings
+* access full financial analytics
+
+Workers may:
+
+* receive operational alerts
+* process orders
+* manage pickups
+* view operational queues
+
+Workers should NOT access:
+
+* profitability
+* expense management
+* financial controls
+
+---
+
+# PART 7 — MOBILE EXPERIENCE
+
+Ensure:
+
+* notification center
+* expenditures page
+* operational alerts
+* worker station
+
+all work smoothly on phones/tablets.
+
+This is extremely important for Nigerian operational environments.
+
+---
+
+# PART 8 — TECHNICAL AUDIT
+
+After implementation explain:
+
+* how the event system works
+* how notifications are generated
+* how polling works
+* how profitability is calculated
+* how expenses integrate into analytics
+* future push notification readiness
+* future WhatsApp integration readiness
+* future optimization recommendations
+
+IMPORTANT:
+Focus heavily on:
+
+* operational simplicity
+* business clarity
+* realtime awareness
+* scalable architecture
+* clean SaaS UX
+
+Do NOT over-engineer the interface.

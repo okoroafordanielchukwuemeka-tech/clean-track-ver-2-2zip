@@ -97,6 +97,29 @@ export const api = {
     delete: (id: number) => request<void>("DELETE", `/customers/${id}`),
     backfill: () => request<{ created: number; linked: number; message: string }>("POST", "/customers/backfill"),
   },
+  notifications: {
+    list: (unread?: boolean) => {
+      const qs = unread ? "?unread=true" : "";
+      return request<Notification[]>("GET", `/notifications${qs}`);
+    },
+    count: () => request<{ count: number }>("GET", "/notifications/count"),
+    markRead: (id: number) => request<{ success: boolean }>("PATCH", `/notifications/${id}/read`),
+    markAllRead: () => request<{ success: boolean }>("PATCH", "/notifications/read-all"),
+    delete: (id: number) => request<void>("DELETE", `/notifications/${id}`),
+  },
+  expenditures: {
+    list: (period?: string) => {
+      const qs = period ? `?period=${period}` : "";
+      return request<Expenditure[]>("GET", `/expenditures${qs}`);
+    },
+    summary: (period?: string) => {
+      const qs = period ? `?period=${period}` : "";
+      return request<ExpenditureSummary>("GET", `/expenditures/summary${qs}`);
+    },
+    create: (data: ExpenditureInput) => request<Expenditure>("POST", "/expenditures", data),
+    update: (id: number, data: Partial<ExpenditureInput>) => request<Expenditure>("PATCH", `/expenditures/${id}`, data),
+    delete: (id: number) => request<void>("DELETE", `/expenditures/${id}`),
+  },
 };
 
 export interface AuthUser {
@@ -318,6 +341,8 @@ export interface AnalyticsOverview {
   ordersThisMonth: number;
   activeBatches: number;
   delayedOrders: number;
+  totalExpenses: number;
+  estimatedProfit: number;
 }
 
 export interface DailyStats {
@@ -341,11 +366,14 @@ export interface FullAnalytics {
     partialPickup: number;
     delayedOrders: number;
     totalRemainingItems: number;
+    totalExpenses: number;
+    estimatedProfit: number;
   };
   growth: { revenue: number; orders: number; collected: number };
   statusCounts: { pending: number; processing: number; ready: number; partial_pickup: number; completed: number };
   paymentCounts: { unpaid: number; partial: number; paid: number };
   trends: { date: string; revenue: number; collected: number; orders: number }[];
+  expenses: { total: number; byCategory: Record<string, number> };
   alerts: {
     delayedOrders: { id: number; orderId: string; customerName: string; status: string; daysOld: number }[];
     unpaidCount: number;
@@ -456,4 +484,54 @@ export interface WorkerInput {
   role?: "admin" | "worker";
   pin: string;
   isActive?: boolean;
+}
+
+export type NotificationEventType =
+  | "new_order" | "order_assigned" | "due_soon" | "overdue"
+  | "payment_received" | "unpaid_balance" | "order_ready"
+  | "partial_pickup" | "pickup_completed" | "high_expense" | "low_profit_warning";
+
+export type NotificationSeverity = "info" | "warning" | "urgent" | "success";
+
+export interface Notification {
+  id: number;
+  laundryId: number;
+  targetType: "owner" | "worker" | "all";
+  targetWorkerId?: number | null;
+  eventType: NotificationEventType;
+  title: string;
+  message: string;
+  severity: NotificationSeverity;
+  isRead: boolean;
+  relatedOrderId?: number | null;
+  createdAt: string;
+}
+
+export type ExpenseCategory =
+  | "electricity" | "detergent" | "water" | "salaries"
+  | "transport" | "maintenance" | "packaging" | "miscellaneous";
+
+export interface Expenditure {
+  id: number;
+  laundryId: number;
+  category: ExpenseCategory;
+  amount: string;
+  notes?: string | null;
+  isRecurring: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpenditureInput {
+  category: ExpenseCategory;
+  amount: number;
+  notes?: string;
+  isRecurring?: boolean;
+}
+
+export interface ExpenditureSummary {
+  total: number;
+  byCategory: Record<string, number>;
+  count: number;
+  period: string;
 }

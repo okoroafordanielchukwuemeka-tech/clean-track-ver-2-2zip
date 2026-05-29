@@ -8,6 +8,8 @@ import { workersRouter } from "./workers.js";
 import { authRouter } from "./auth.js";
 import { pickupsRouter } from "./pickups.js";
 import { customersRouter } from "./customers.js";
+import { notificationsRouter } from "./notifications.js";
+import { expendituresRouter } from "./expenditures.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export const router = Router();
@@ -21,3 +23,5 @@ router.use("/services", requireAuth, servicesRouter);
 router.use("/batches", requireAuth, batchesRouter);
 router.use("/analytics", requireAuth, analyticsRouter);
 router.use("/workers", requireAuth, workersRouter);
+router.use("/notifications", requireAuth, notificationsRouter);
+router.use("/expenditures", requireAuth, expendituresRouter);

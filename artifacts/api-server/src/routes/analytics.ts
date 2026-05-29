@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, batches, workers, customers, pickupRecords } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { orders, batches, workers, customers, pickupRecords, expenditures } from "@workspace/db/schema";
+import { eq, and, gte } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
 
 export const analyticsRouter = Router();
@@ -68,10 +68,19 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
       !["completed", "ready"].includes(o.status) && new Date(o.createdAt) < sevenDaysAgo
     ).length;
 
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const monthExpenses = await db.select().from(expenditures).where(
+      and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, thirtyDaysAgo))
+    );
+    const totalExpenses = monthExpenses.reduce((s, e) => s + parseFloat(e.amount), 0);
+    const totalRevenue = allOrders.reduce((sum, o) => sum + orderTotalDue(o), 0);
+    const collectedRevenue = allOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0);
+
     res.json({
       totalOrders: allOrders.length,
-      totalRevenue: allOrders.reduce((sum, o) => sum + orderTotalDue(o), 0),
-      collectedRevenue: allOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0),
+      totalRevenue,
+      collectedRevenue,
       pendingRevenue: allOrders.reduce((sum, o) => sum + Math.max(0, orderTotalDue(o) - parseFloat(o.amountPaid || "0")), 0),
       ordersThisWeek,
       ordersLastWeek,
@@ -79,6 +88,8 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
       ordersThisMonth: allOrders.filter(o => new Date(o.createdAt) >= startOfMonth).length,
       activeBatches,
       delayedOrders,
+      totalExpenses,
+      estimatedProfit: collectedRevenue - totalExpenses,
     });
   } catch {
     res.status(500).json({ error: "Failed to get analytics overview" });
@@ -122,6 +133,15 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
       const d = new Date(o.createdAt);
       return d >= prevSince && d < since;
     });
+
+    const expensesInPeriod = await db.select().from(expenditures).where(
+      and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, since))
+    );
+    const totalExpenses = expensesInPeriod.reduce((s, e) => s + parseFloat(e.amount), 0);
+    const expensesByCategory: Record<string, number> = {};
+    for (const e of expensesInPeriod) {
+      expensesByCategory[e.category] = (expensesByCategory[e.category] ?? 0) + parseFloat(e.amount);
+    }
 
     const calc = (os: typeof allOrders) => {
       const totalRevenue = os.reduce((s, o) => s + orderTotalDue(o), 0);
@@ -195,6 +215,8 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
         partialPickup: statusCounts.partial_pickup,
         delayedOrders: delayedOrders.length,
         totalRemainingItems,
+        totalExpenses,
+        estimatedProfit: curr.collectedRevenue - totalExpenses,
       },
       growth: {
         revenue: pctChange(curr.totalRevenue, prev.totalRevenue),
@@ -204,6 +226,7 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
       statusCounts,
       paymentCounts,
       trends,
+      expenses: { total: totalExpenses, byCategory: expensesByCategory },
       alerts: {
         delayedOrders: delayedOrders.slice(0, 5).map(o => ({
           id: o.id,

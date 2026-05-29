@@ -12,6 +12,7 @@ import BatchDetail from "@/pages/batch-detail";
 import Services from "@/pages/services";
 import Workers from "@/pages/workers";
 import Customers from "@/pages/customers";
+import Expenditures from "@/pages/expenditures";
 import WorkerStation from "@/pages/worker";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="services" element={<ProtectedRoute ownerOnly><Services /></ProtectedRoute>} />
               <Route path="workers" element={<ProtectedRoute ownerOnly><Workers /></ProtectedRoute>} />
               <Route path="customers" element={<ProtectedRoute ownerOnly><Customers /></ProtectedRoute>} />
+              <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
               <Route path="worker-station" element={<WorkerStation />} />
               <Route path="*" element={<NotFound />} />
             </Route>

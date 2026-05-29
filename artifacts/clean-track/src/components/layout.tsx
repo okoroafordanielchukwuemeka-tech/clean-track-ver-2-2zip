@@ -11,10 +11,12 @@ import {
   Menu,
   X,
   UserCircle,
+  Receipt,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
+import { NotificationCenter } from "@/components/notification-center";
 import { toast } from "sonner";
 
 const ownerNavItems = [
@@ -22,6 +24,7 @@ const ownerNavItems = [
   { to: "/orders", label: "Orders", icon: ShoppingCart },
   { to: "/customers", label: "Customers", icon: UserCircle },
   { to: "/batches", label: "Batches", icon: Package },
+  { to: "/expenditures", label: "Expenditures", icon: Receipt },
   { to: "/services", label: "Services", icon: Wrench },
   { to: "/workers", label: "Workers", icon: Users },
   { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
@@ -99,6 +102,7 @@ export function Layout() {
                 {isOwner ? "Owner" : user?.role === "admin" ? "Admin Worker" : "Worker"}
               </p>
             </div>
+            <NotificationCenter />
             <Button
               variant="ghost"
               size="icon"
@@ -121,9 +125,12 @@ export function Layout() {
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1">
             <WashingMachine className="h-5 w-5 text-primary" />
             <span className="font-bold">Clean Track</span>
+          </div>
+          <div className="bg-sidebar rounded-lg">
+            <NotificationCenter />
           </div>
         </header>
 

@@ -4,6 +4,7 @@ import { orders, paymentRecords, orderItems, customers } from "@workspace/db/sch
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { emitEvent } from "../lib/events.js";
 
 export const ordersRouter = Router();
 
@@ -54,7 +55,7 @@ ordersRouter.get("/", async (req: AuthRequest, res) => {
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
     res.json(result);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to list orders" });
   }
 });
@@ -79,7 +80,7 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
       collectedRevenue: result.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0),
     };
     res.json(summary);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to get summary" });
   }
 });
@@ -92,7 +93,7 @@ ordersRouter.get("/recent", async (req: AuthRequest, res) => {
       .orderBy(desc(orders.createdAt))
       .limit(10);
     res.json(result);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to get recent orders" });
   }
 });
@@ -104,7 +105,7 @@ ordersRouter.get("/:id", async (req: AuthRequest, res) => {
       .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
     res.json(order);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to get order" });
   }
 });
@@ -123,10 +124,7 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
 
     if (existingCustomer) {
       customerId = existingCustomer.id;
-      await db.update(customers).set({
-        lastActivityAt: new Date(),
-        fullName: existingCustomer.fullName,
-      }).where(eq(customers.id, existingCustomer.id));
+      await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, existingCustomer.id));
     } else {
       const [newCustomer] = await db.insert(customers).values({
         laundryId,
@@ -146,6 +144,16 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       extraCharge: data.extraCharge?.toString(),
       discount: data.discount?.toString(),
     }).returning();
+
+    emitEvent({
+      laundryId,
+      eventType: "new_order",
+      title: "New Order Received",
+      message: `Order #${order.orderId} for ${order.customerName} (${order.shirts}s/${order.trousers}t, ${order.serviceType}) has been created.`,
+      severity: "info",
+      relatedOrderId: order.id,
+    }).catch(() => {});
+
     res.status(201).json(order);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
@@ -162,10 +170,40 @@ ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
     if (data.extraCharge !== undefined) updateData.extraCharge = data.extraCharge?.toString();
     if (data.discount !== undefined) updateData.discount = data.discount?.toString();
 
+    const [beforeOrder] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
+
     const [order] = await db.update(orders).set(updateData)
       .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)))
       .returning();
     if (!order) return res.status(404).json({ error: "Order not found" });
+
+    if (beforeOrder) {
+      if (data.status === "ready" && beforeOrder.status !== "ready") {
+        emitEvent({
+          laundryId,
+          eventType: "order_ready",
+          title: "Order Ready for Pickup",
+          message: `Order #${order.orderId} for ${order.customerName} is ready for pickup.`,
+          severity: "success",
+          relatedOrderId: order.id,
+        }).catch(() => {});
+      }
+
+      if (data.assignedWorkerId && data.assignedWorkerId !== beforeOrder.assignedWorkerId) {
+        emitEvent({
+          laundryId,
+          targetType: "worker",
+          targetWorkerId: data.assignedWorkerId,
+          eventType: "order_assigned",
+          title: "Order Assigned to You",
+          message: `Order #${order.orderId} for ${order.customerName} has been assigned to you.`,
+          severity: "info",
+          relatedOrderId: order.id,
+        }).catch(() => {});
+      }
+    }
+
     res.json(order);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
@@ -181,7 +219,7 @@ ordersRouter.delete("/:id", async (req: AuthRequest, res) => {
       .returning();
     if (!deleted) return res.status(404).json({ error: "Order not found" });
     res.status(204).send();
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to delete order" });
   }
 });
@@ -196,7 +234,7 @@ ordersRouter.get("/:id/payments", async (req: AuthRequest, res) => {
       .where(eq(paymentRecords.orderId, order.id))
       .orderBy(desc(paymentRecords.recordedAt));
     res.json(payments);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to list payments" });
   }
 });
@@ -236,6 +274,15 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
       updatedAt: new Date(),
     }).where(eq(orders.id, order.id));
 
+    emitEvent({
+      laundryId,
+      eventType: "payment_received",
+      title: "Payment Received",
+      message: `₦${data.amount.toLocaleString()} received for Order #${order.orderId} (${order.customerName}) via ${data.method}. Balance: ₦${remainingBalance.toLocaleString()}.`,
+      severity: remainingBalance <= 0 ? "success" : "info",
+      relatedOrderId: order.id,
+    }).catch(() => {});
+
     res.status(201).json(payment);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
@@ -254,7 +301,7 @@ ordersRouter.delete("/:id/payments/:paymentId", async (req: AuthRequest, res) =>
       .returning();
     if (!deleted) return res.status(404).json({ error: "Payment not found" });
     res.status(204).send();
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to delete payment" });
   }
 });
@@ -267,7 +314,7 @@ ordersRouter.get("/:id/items", async (req: AuthRequest, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
     res.json(items);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to list order items" });
   }
 });

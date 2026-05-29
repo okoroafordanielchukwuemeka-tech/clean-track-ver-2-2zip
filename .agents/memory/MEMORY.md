@@ -1,0 +1,3 @@
+- [Event & Notification Engine](event-notification-engine.md) — emitEvent() fires async (non-blocking) from route handlers; notifications table uses laundryId scoping
+- [Expenditures & Profitability](expenditures-profitability.md) — EXPENSE_CATEGORIES const exported from schema; profit = collectedRevenue - totalExpenses; requireOwner guards write endpoints
+- [UI Components Available](ui-components.md) — shadcn/ui components are hand-built; always check artifacts/clean-track/src/components/ui/ before importing; alert-dialog was missing and had to be created manually from @radix-ui/react-alert-dialog

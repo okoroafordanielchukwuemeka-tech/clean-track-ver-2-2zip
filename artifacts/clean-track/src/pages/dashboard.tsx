@@ -7,14 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend, BarChart, Bar,
 } from "recharts";
 import {
   DollarSign, ShoppingCart, Users, AlertTriangle, TrendingUp,
   TrendingDown, Clock, CheckCircle, ShoppingBag, Package,
   Crown, RefreshCw, ArrowUpRight, ArrowDownRight, Minus,
-  Activity, UserCheck, Zap,
+  Activity, UserCheck, Zap, Receipt,
 } from "lucide-react";
 
 const fmt = (v: number) =>
@@ -44,10 +44,10 @@ function GrowthBadge({ pct }: { pct: number }) {
 }
 
 function KpiCard({
-  label, value, sub, icon: Icon, iconBg, iconColor, growth,
+  label, value, sub, icon: Icon, iconBg, iconColor, growth, valueClass,
 }: {
   label: string; value: string; sub?: string; icon: any;
-  iconBg: string; iconColor: string; growth?: number;
+  iconBg: string; iconColor: string; growth?: number; valueClass?: string;
 }) {
   return (
     <Card>
@@ -55,7 +55,7 @@ function KpiCard({
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
-            <p className="text-2xl font-bold truncate">{value}</p>
+            <p className={`text-2xl font-bold truncate ${valueClass ?? ""}`}>{value}</p>
             {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
             {growth !== undefined && <div className="mt-1"><GrowthBadge pct={growth} /></div>}
           </div>
@@ -118,13 +118,15 @@ export default function Dashboard() {
 
   const ov = full?.overview;
   const gr = full?.growth;
+  const profit = ov?.estimatedProfit ?? 0;
+  const isProfitable = profit >= 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-sm text-muted-foreground">Business intelligence for your laundry</p>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Operational control center</p>
         </div>
         <Tabs value={period} onValueChange={(v) => setPeriod(v as AnalyticsPeriod)}>
           <TabsList>
@@ -148,7 +150,7 @@ export default function Dashboard() {
             <KpiCard
               label="Total Revenue"
               value={fmtShort(ov?.totalRevenue ?? 0)}
-              sub={`${PERIOD_LABELS[period]}`}
+              sub={PERIOD_LABELS[period]}
               icon={DollarSign}
               iconBg="bg-green-100 dark:bg-green-950/40"
               iconColor="text-green-600"
@@ -164,21 +166,21 @@ export default function Dashboard() {
               growth={gr?.collected}
             />
             <KpiCard
-              label="Total Orders"
-              value={String(ov?.totalOrders ?? 0)}
-              sub={`Avg ${fmt(ov?.avgOrderValue ?? 0)}/order`}
-              icon={ShoppingCart}
-              iconBg="bg-purple-100 dark:bg-purple-950/40"
-              iconColor="text-purple-600"
-              growth={gr?.orders}
-            />
-            <KpiCard
-              label="Outstanding Balance"
-              value={fmtShort(ov?.outstandingBalance ?? 0)}
-              sub={`${full?.paymentCounts.unpaid ?? 0} unpaid orders`}
-              icon={AlertTriangle}
+              label="Total Expenses"
+              value={fmtShort(ov?.totalExpenses ?? 0)}
+              sub="Operational costs"
+              icon={TrendingDown}
               iconBg="bg-red-100 dark:bg-red-950/40"
               iconColor="text-red-600"
+            />
+            <KpiCard
+              label="Est. Profit"
+              value={fmtShort(Math.abs(profit))}
+              sub={isProfitable ? "Revenue − Expenses" : "Running at a loss"}
+              icon={isProfitable ? TrendingUp : AlertTriangle}
+              iconBg={isProfitable ? "bg-emerald-100 dark:bg-emerald-950/40" : "bg-red-100 dark:bg-red-950/40"}
+              iconColor={isProfitable ? "text-emerald-600" : "text-red-600"}
+              valueClass={isProfitable ? "text-emerald-600" : "text-red-600"}
             />
           </div>
 
@@ -192,12 +194,13 @@ export default function Dashboard() {
               iconColor="text-orange-600"
             />
             <KpiCard
-              label="Completed"
-              value={String(ov?.completedOrders ?? 0)}
-              sub="All time"
-              icon={CheckCircle}
-              iconBg="bg-emerald-100 dark:bg-emerald-950/40"
-              iconColor="text-emerald-600"
+              label="Total Orders"
+              value={String(ov?.totalOrders ?? 0)}
+              sub={`Avg ${fmt(ov?.avgOrderValue ?? 0)}/order`}
+              icon={ShoppingCart}
+              iconBg="bg-purple-100 dark:bg-purple-950/40"
+              iconColor="text-purple-600"
+              growth={gr?.orders}
             />
             <KpiCard
               label="Partial Pickups"
@@ -208,14 +211,31 @@ export default function Dashboard() {
               iconColor="text-amber-600"
             />
             <KpiCard
-              label="Delayed Orders"
-              value={String(ov?.delayedOrders ?? 0)}
-              sub=">7 days not ready"
-              icon={Clock}
+              label="Outstanding Balance"
+              value={fmtShort(ov?.outstandingBalance ?? 0)}
+              sub={`${full?.paymentCounts.unpaid ?? 0} unpaid orders`}
+              icon={AlertTriangle}
               iconBg="bg-rose-100 dark:bg-rose-950/40"
               iconColor="text-rose-600"
             />
           </div>
+
+          {!isProfitable && (ov?.totalExpenses ?? 0) > 0 && (
+            <Card className="border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-400">Low Profit Warning</p>
+                  <p className="text-xs text-red-600 dark:text-red-500">
+                    Expenses ({fmtShort(ov?.totalExpenses ?? 0)}) exceed collected revenue ({fmtShort(ov?.collectedRevenue ?? 0)}) for {PERIOD_LABELS[period].toLowerCase()}. Review your expenditures.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" asChild className="shrink-0 border-red-300 text-red-700 hover:bg-red-100">
+                  <Link to="/expenditures">View Expenses</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-2">
@@ -316,6 +336,54 @@ export default function Dashboard() {
             </Card>
 
             <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Receipt className="h-4 w-4 text-red-500" />
+                  Expenses by Category
+                </CardTitle>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/expenditures">Manage</Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {full?.expenses && Object.keys(full.expenses.byCategory).length > 0 ? (
+                  <>
+                    {Object.entries(full.expenses.byCategory)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([cat, amount]) => {
+                        const pct = full.expenses.total > 0 ? (amount / full.expenses.total) * 100 : 0;
+                        return (
+                          <div key={cat}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-muted-foreground capitalize">{cat}</span>
+                              <span className="font-medium">{fmtShort(amount)}</span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-red-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    <div className="pt-2 border-t flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-bold text-red-600">{fmtShort(full.expenses.total)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-6 text-center text-muted-foreground text-sm">
+                    <Receipt className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p>No expenses recorded for this period</p>
+                    <Button variant="outline" size="sm" className="mt-3" asChild>
+                      <Link to="/expenditures">Add expenses</Link>
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -364,6 +432,51 @@ export default function Dashboard() {
                     ))}
                   </>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  Recent Orders
+                </CardTitle>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/orders">View all</Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {(recent ?? []).slice(0, 5).map((order) => {
+                    const remainingS = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
+                    const remainingT = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
+                    const statusVariant: Record<string, any> = {
+                      pending: "warning", processing: "info", ready: "success",
+                      partial_pickup: "warning", completed: "success",
+                    };
+                    const statusLabel: Record<string, string> = { partial_pickup: "Partial" };
+                    return (
+                      <Link key={order.id} to={`/orders/${order.id}`}
+                        className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{order.customerName}</p>
+                          <p className="text-xs text-muted-foreground">{order.orderId} · {order.shirts}S/{order.trousers}T</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {order.status === "partial_pickup" && (
+                            <span className="text-xs text-orange-500">{remainingS}S/{remainingT}T</span>
+                          )}
+                          <Badge variant={statusVariant[order.status] ?? "outline"} className="text-xs">
+                            {statusLabel[order.status] ?? order.status}
+                          </Badge>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  {!recent?.length && (
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">No orders yet</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -492,51 +605,6 @@ export default function Dashboard() {
                   {[...Array(3)].map((_, i) => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                Recent Orders
-              </CardTitle>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/orders">View all</Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y">
-                {(recent ?? []).slice(0, 5).map((order) => {
-                  const remainingS = Math.max(0, order.shirts - (order.shirtsPickedUp ?? 0));
-                  const remainingT = Math.max(0, order.trousers - (order.trousersPickedUp ?? 0));
-                  const statusVariant: Record<string, any> = {
-                    pending: "warning", processing: "info", ready: "success",
-                    partial_pickup: "warning", completed: "success",
-                  };
-                  const statusLabel: Record<string, string> = { partial_pickup: "Partial" };
-                  return (
-                    <Link key={order.id} to={`/orders/${order.id}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{order.customerName}</p>
-                        <p className="text-xs text-muted-foreground">{order.orderId} · {order.shirts}S/{order.trousers}T</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        {order.status === "partial_pickup" && (
-                          <span className="text-xs text-orange-500">{remainingS}S/{remainingT}T</span>
-                        )}
-                        <Badge variant={statusVariant[order.status] ?? "outline"} className="text-xs">
-                          {statusLabel[order.status] ?? order.status}
-                        </Badge>
-                      </div>
-                    </Link>
-                  );
-                })}
-                {!recent?.length && (
-                  <p className="px-4 py-8 text-center text-sm text-muted-foreground">No orders yet</p>
-                )}
-              </div>
             </CardContent>
           </Card>
         </div>
