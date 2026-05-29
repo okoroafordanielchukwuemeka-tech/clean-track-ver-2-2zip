@@ -16,7 +16,10 @@
       "drizzle-orm": "^0.42.0",
       "zod": "^3.24.4",
       "@types/node": "^22.15.21"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "dependencies": {
     "pnpm": "^10.34.0"
