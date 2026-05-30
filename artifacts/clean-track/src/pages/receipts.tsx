@@ -27,22 +27,29 @@ function statusBadge(status: string) {
   return <Badge variant={map[status] ?? "outline"} className="text-xs capitalize">{status}</Badge>;
 }
 
-type DateRange = "all" | "today" | "7days" | "30days";
+type DateRange = "all" | "today" | "7days" | "30days" | "custom";
 
 export default function Receipts() {
   const { isOwner } = useAuth();
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [page, setPage] = useState(0);
   const [selectedReceiptNumber, setSelectedReceiptNumber] = useState<string | null>(null);
   const limit = 50;
 
   const params: Record<string, string> = { limit: limit.toString(), offset: (page * limit).toString() };
   if (search) params.search = search;
-  if (dateRange !== "all") params.dateRange = dateRange;
+  if (dateRange !== "all" && dateRange !== "custom") params.dateRange = dateRange;
+  if (dateRange === "custom") {
+    params.dateRange = "custom";
+    if (customFrom) params.from = customFrom;
+    if (customTo) params.to = customTo;
+  }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["receipts", search, dateRange, page],
+    queryKey: ["receipts", search, dateRange, customFrom, customTo, page],
     queryFn: () => api.receipts.list(params),
     enabled: isOwner,
   });
@@ -124,17 +131,36 @@ export default function Receipts() {
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               />
             </div>
-            <div className="flex gap-1">
-              {(["all", "today", "7days", "30days"] as DateRange[]).map((r) => (
+            <div className="flex flex-wrap gap-1 items-center">
+              {(["all", "today", "7days", "30days", "custom"] as DateRange[]).map((r) => (
                 <Button
                   key={r}
                   variant={dateRange === r ? "default" : "outline"}
                   size="sm"
                   onClick={() => { setDateRange(r); setPage(0); }}
                 >
-                  {r === "all" ? "All" : r === "today" ? "Today" : r === "7days" ? "7 Days" : "30 Days"}
+                  {r === "all" ? "All" : r === "today" ? "Today" : r === "7days" ? "7 Days" : r === "30days" ? "30 Days" : "Custom"}
                 </Button>
               ))}
+              {dateRange === "custom" && (
+                <div className="flex items-center gap-1 mt-1 sm:mt-0">
+                  <Input
+                    type="date"
+                    className="h-8 text-xs w-36"
+                    value={customFrom}
+                    onChange={(e) => { setCustomFrom(e.target.value); setPage(0); }}
+                    placeholder="From"
+                  />
+                  <span className="text-muted-foreground text-xs">–</span>
+                  <Input
+                    type="date"
+                    className="h-8 text-xs w-36"
+                    value={customTo}
+                    onChange={(e) => { setCustomTo(e.target.value); setPage(0); }}
+                    placeholder="To"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

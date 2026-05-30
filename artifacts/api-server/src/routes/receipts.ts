@@ -76,7 +76,18 @@ receiptsRouter.get("/", async (req: AuthRequest, res) => {
       db
         .select({
           totalCollected: sql<string>`COALESCE(SUM(${paymentRecords.amount}), 0)`,
-          totalBalance: sql<string>`COALESCE(SUM(CASE WHEN ${orders.paymentStatus} != 'paid' THEN ${orders.price} + COALESCE(${orders.extraCharge}, 0) - COALESCE(${orders.discount}, 0) - ${orders.amountPaid} ELSE 0 END), 0)`,
+          totalBalance: sql<string>`COALESCE((
+            SELECT SUM(balance) FROM (
+              SELECT DISTINCT ON (o.id)
+                GREATEST(0, o.price::numeric + COALESCE(o.extra_charge, 0)::numeric - COALESCE(o.discount, 0)::numeric - o.amount_paid::numeric) AS balance
+              FROM payment_records pr
+              INNER JOIN orders o ON pr.order_id = o.id
+              WHERE ${sql.raw(`pr.laundry_id = ${laundryId}`)}
+                AND o.payment_status != 'paid'
+                ${startDate ? sql.raw(`AND pr.recorded_at >= '${startDate.toISOString()}'`) : sql.raw("")}
+                ${endDate ? sql.raw(`AND pr.recorded_at <= '${endDate.toISOString()}'`) : sql.raw("")}
+            ) AS distinct_orders
+          ), 0)`,
         })
         .from(paymentRecords)
         .innerJoin(orders, eq(paymentRecords.orderId, orders.id))

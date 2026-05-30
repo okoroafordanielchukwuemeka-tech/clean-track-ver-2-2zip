@@ -86,7 +86,7 @@ export default function Customers() {
 
   const { data: customerReceiptsData, isLoading: receiptsLoading } = useQuery({
     queryKey: ["customerReceipts", profile?.phone],
-    queryFn: () => api.receipts.list({ search: profile!.phone, limit: 50, page: 1 }),
+    queryFn: () => api.receipts.list({ search: profile!.phone, limit: "50", offset: "0" }),
     enabled: isOwner && profile != null && profileTab === "receipts",
   });
 
@@ -519,7 +519,7 @@ export default function Customers() {
                                   <TableCell className="font-mono text-xs text-primary">{r.receiptNumber}</TableCell>
                                   <TableCell className="font-mono text-xs">{r.orderId}</TableCell>
                                   <TableCell className="text-xs font-semibold">{fmt(Number(r.amount))}</TableCell>
-                                  <TableCell className="text-xs capitalize">{r.paymentMethod.replace("_", " ")}</TableCell>
+                                  <TableCell className="text-xs capitalize">{r.method.replace("_", " ")}</TableCell>
                                   <TableCell className="text-xs text-muted-foreground">
                                     {new Date(r.recordedAt).toLocaleDateString()}
                                   </TableCell>
@@ -528,7 +528,7 @@ export default function Customers() {
                                       variant="ghost"
                                       size="icon"
                                       title="Print receipt"
-                                      onClick={() => window.open(`/receipts/print/${encodeURIComponent(r.receiptNumber)}`, "_blank")}
+                                      onClick={() => r.receiptNumber && window.open(`/receipts/print/${encodeURIComponent(r.receiptNumber)}`, "_blank")}
                                     >
                                       <Printer className="h-3.5 w-3.5" />
                                     </Button>
