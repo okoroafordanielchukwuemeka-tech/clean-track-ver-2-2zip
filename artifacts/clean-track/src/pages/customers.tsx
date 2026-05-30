@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/auth-context";
 import { api, type CustomerWithMetrics, type CustomerProfile, type CustomerInput, type CustomerUpdateInput } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,7 @@ function CustomerTags({ c }: { c: CustomerWithMetrics }) {
 export default function Customers() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { isOwner } = useAuth();
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -308,23 +310,25 @@ export default function Customers() {
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditForm({
-                          id: profile.id,
-                          fullName: profile.fullName,
-                          phone: profile.phone,
-                          address: profile.address ?? "",
-                          notes: profile.notes ?? "",
-                        });
-                        setShowEdit(true);
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit
-                    </Button>
+                    {isOwner && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditForm({
+                            id: profile.id,
+                            fullName: profile.fullName,
+                            phone: profile.phone,
+                            address: profile.address ?? "",
+                            notes: profile.notes ?? "",
+                          });
+                          setShowEdit(true);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       onClick={() => {
@@ -464,15 +468,19 @@ export default function Customers() {
               )}
 
               <div className="flex justify-between items-center pt-2 border-t">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setShowDelete(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Delete Customer
-                </Button>
+                {isOwner ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setShowDelete(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Delete Customer
+                  </Button>
+                ) : (
+                  <span />
+                )}
                 <p className="text-xs text-muted-foreground">
                   Last active: {timeAgo(profile.lastActivityAt)}
                 </p>

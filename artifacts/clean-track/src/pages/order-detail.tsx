@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useAuth } from "@/context/auth-context";
 import { api, type PaymentInput, type OrderItem, type PriceAdjustment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { isOwner } = useAuth();
   const [showPayment, setShowPayment] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showPickup, setShowPickup] = useState(false);
@@ -578,11 +580,13 @@ export default function OrderDetail() {
                   <TableCell>{formatCurrency(Number(p.remainingBalance))}</TableCell>
                   <TableCell>{p.notes || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{new Date(p.recordedAt).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => deletePaymentMutation.mutate(p.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </TableCell>
+                  {isOwner && (
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => deletePaymentMutation.mutate(p.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {!payments.length && (
@@ -595,11 +599,13 @@ export default function OrderDetail() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
-        <Button variant="destructive" onClick={() => setShowDelete(true)}>
-          <Trash2 className="h-4 w-4 mr-1" /> Delete Order
-        </Button>
-      </div>
+      {isOwner && (
+        <div className="flex gap-3">
+          <Button variant="destructive" onClick={() => setShowDelete(true)}>
+            <Trash2 className="h-4 w-4 mr-1" /> Delete Order
+          </Button>
+        </div>
+      )}
 
       <Dialog open={showPickup} onOpenChange={(v) => {
         if (!v) { setItemPickupQtys(new Map()); setPickupNotes(""); setPickupForm({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" }); }
