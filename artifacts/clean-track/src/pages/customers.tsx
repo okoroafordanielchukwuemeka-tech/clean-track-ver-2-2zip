@@ -524,14 +524,28 @@ export default function Customers() {
                                     {new Date(r.recordedAt).toLocaleDateString()}
                                   </TableCell>
                                   <TableCell>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title="Print receipt"
-                                      onClick={() => r.receiptNumber && window.open(`/receipts/print/${encodeURIComponent(r.receiptNumber)}`, "_blank")}
-                                    >
-                                      <Printer className="h-3.5 w-3.5" />
-                                    </Button>
+                                    <div className="flex gap-1">
+                                      {r.receiptNumber && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          title="View receipt"
+                                          onClick={() => window.open(`/receipts/${encodeURIComponent(r.receiptNumber!)}/print`, "_blank")}
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                      {r.receiptNumber && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          title="Print / Download PDF"
+                                          onClick={() => window.open(`/receipts/${encodeURIComponent(r.receiptNumber!)}/print`, "_blank")}
+                                        >
+                                          <Printer className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))}

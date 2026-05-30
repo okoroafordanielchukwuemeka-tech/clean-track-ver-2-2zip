@@ -15,20 +15,21 @@ const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, s
 async function generateReceiptNumber(laundryId: number): Promise<string> {
   const today = new Date();
   const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
-  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  const [{ cnt }] = await db
-    .select({ cnt: sql<number>`COUNT(*)` })
+  const prefix = `RCT-${datePart}-`;
+  // Use MAX of existing suffix to avoid collisions from deletions or concurrent inserts
+  const [row] = await db
+    .select({
+      maxSuffix: sql<string>`COALESCE(MAX(CAST(SUBSTRING(${paymentRecords.receiptNumber} FROM ${prefix.length + 1}) AS INTEGER)), 0)`,
+    })
     .from(paymentRecords)
     .where(
       and(
         eq(paymentRecords.laundryId, laundryId),
-        sql`${paymentRecords.recordedAt} >= ${startOfDay}`,
-        sql`${paymentRecords.recordedAt} < ${endOfDay}`,
+        sql`${paymentRecords.receiptNumber} LIKE ${prefix + "%"}`,
       )
     );
-  const seq = (Number(cnt) + 1).toString().padStart(4, "0");
-  return `RCT-${datePart}-${seq}`;
+  const next = (Number(row?.maxSuffix ?? 0) + 1).toString().padStart(4, "0");
+  return `${prefix}${next}`;
 }
 
 function generateOrderId() {

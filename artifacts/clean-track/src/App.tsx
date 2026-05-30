@@ -68,7 +68,7 @@ export default function App() {
               <Route path="worker-station" element={<WorkerStation />} />
               <Route path="*" element={<NotFound />} />
             </Route>
-            <Route path="/receipts/print/:receiptNumber" element={<ReceiptPrint />} />
+            <Route path="/receipts/:receiptNumber/print" element={<ReceiptPrint />} />
           </Routes>
         </BrowserRouter>
         <Toaster richColors />

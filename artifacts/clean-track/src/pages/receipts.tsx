@@ -71,7 +71,7 @@ export default function Receipts() {
   const totalPages = Math.ceil(total / limit);
 
   const handlePrint = (receiptNumber: string) => {
-    window.open(`/receipts/print/${encodeURIComponent(receiptNumber)}`, "_blank");
+    window.open(`/receipts/${encodeURIComponent(receiptNumber)}/print`, "_blank");
   };
 
   return (

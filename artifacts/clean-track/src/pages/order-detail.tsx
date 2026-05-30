@@ -292,7 +292,7 @@ export default function OrderDetail() {
                 Receipt
               </Button>
               <Button size="sm" variant="outline" onClick={() => {
-                window.open(`/receipts/print/${encodeURIComponent(payments[payments.length - 1]?.receiptNumber ?? "")}`, "_blank");
+                window.open(`/receipts/${encodeURIComponent(payments[payments.length - 1]?.receiptNumber ?? "")}/print`, "_blank");
               }}>
                 <Printer className="h-4 w-4 mr-1" />
                 Print
@@ -670,7 +670,7 @@ export default function OrderDetail() {
                     <div className="flex gap-1">
                       {p.receiptNumber && (
                         <Button variant="ghost" size="icon" title="Print receipt"
-                          onClick={() => window.open(`/receipts/print/${encodeURIComponent(p.receiptNumber!)}`, "_blank")}>
+                          onClick={() => window.open(`/receipts/${encodeURIComponent(p.receiptNumber!)}/print`, "_blank")}>
                           <Printer className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -764,7 +764,7 @@ export default function OrderDetail() {
               {receiptData?.allPayments && receiptData.allPayments.length > 0 && receiptData.allPayments[receiptData.allPayments.length - 1].receiptNumber && (
                 <Button size="sm" variant="outline" onClick={() => {
                   const rn = receiptData.allPayments[receiptData.allPayments.length - 1].receiptNumber!;
-                  window.open(`/receipts/print/${encodeURIComponent(rn)}`, "_blank");
+                  window.open(`/receipts/${encodeURIComponent(rn)}/print`, "_blank");
                 }}>
                   <Printer className="h-4 w-4 mr-1" />
                   Print / PDF
