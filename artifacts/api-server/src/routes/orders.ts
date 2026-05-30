@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { checkPermission } from "../middleware/permissions.js";
+import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 
 export const ordersRouter = Router();
@@ -58,17 +60,20 @@ const orderInputSchema = z.object({
   discountReason: z.string().optional(),
 });
 
-const orderUpdateSchema = z.object({
+const workerOrderUpdateSchema = z.object({
   status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed"]).optional(),
   paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),
-  price: z.number().optional(),
-  extraCharge: z.number().optional(),
-  discount: z.number().optional(),
   verifiedShirts: z.number().int().optional(),
   verifiedTrousers: z.number().int().optional(),
   isVerified: z.boolean().optional(),
   additionalNotes: z.string().optional(),
   assignedWorkerId: z.number().int().nullable().optional(),
+});
+
+const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({
+  price: z.number().optional(),
+  extraCharge: z.number().optional(),
+  discount: z.number().optional(),
 });
 
 ordersRouter.get("/", async (req: AuthRequest, res) => {
@@ -79,36 +84,16 @@ ordersRouter.get("/", async (req: AuthRequest, res) => {
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
 
-    const result = await db.select().from(orders)
-      .where(and(...conditions))
-      .orderBy(desc(orders.createdAt))
-      .limit(parseInt(limit as string))
-      .offset(parseInt(offset as string));
+    const [orderList, [{ total }]] = await Promise.all([
+      db.select().from(orders)
+        .where(and(...conditions))
+        .orderBy(desc(orders.createdAt))
+        .limit(parseInt(limit as string))
+        .offset(parseInt(offset as string)),
+      db.select({ total: count() }).from(orders).where(and(...conditions)),
+    ]);
 
-    if (result.length === 0) return res.json([]);
-
-    const orderIds = result.map(o => o.id);
-    const itemRows = await db
-      .select({ orderId: orderItems.orderId, name: orderItems.name, quantity: orderItems.quantity })
-      .from(orderItems)
-      .where(inArray(orderItems.orderId, orderIds));
-
-    type ItemAgg = { count: number; summary: string };
-    const itemMap: Record<number, ItemAgg> = {};
-    for (const ordIdVal of orderIds) {
-      const rows = itemRows.filter(r => r.orderId === ordIdVal);
-      if (rows.length === 0) continue;
-      const totalQty = rows.reduce((s, r) => s + r.quantity, 0);
-      const top = rows.slice(0, 3).map(r => `${r.quantity}× ${r.name}`).join(", ");
-      const summary = rows.length > 3 ? `${top} +${rows.length - 3} more` : top;
-      itemMap[ordIdVal] = { count: totalQty, summary };
-    }
-
-    res.json(result.map(o => ({
-      ...o,
-      itemCount: itemMap[o.id]?.count ?? 0,
-      itemSummary: itemMap[o.id]?.summary ?? null,
-    })));
+    res.json(orderList);
   } catch {
     res.status(500).json({ error: "Failed to list orders" });
   }
@@ -118,44 +103,22 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const result = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
-    const now = new Date();
-    const summary = {
+    res.json({
       total: result.length,
       pending: result.filter(o => o.status === "pending").length,
       processing: result.filter(o => o.status === "processing").length,
       ready: result.filter(o => o.status === "ready").length,
-      partialPickup: result.filter(o => o.status === "partial_pickup").length,
       completed: result.filter(o => o.status === "completed").length,
       unpaid: result.filter(o => o.paymentStatus === "unpaid").length,
       partial: result.filter(o => o.paymentStatus === "partial").length,
       paid: result.filter(o => o.paymentStatus === "paid").length,
       totalRevenue: result.reduce((sum, o) => sum + parseFloat(o.price || "0"), 0),
-      pendingRevenue: result.filter(o => o.paymentStatus !== "paid")
+      outstandingBalance: result
+        .filter(o => o.paymentStatus !== "paid")
         .reduce((sum, o) => sum + parseFloat(o.price || "0") - parseFloat(o.amountPaid || "0"), 0),
-      collectedRevenue: result.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0),
-      overdueCount: result.filter(o => {
-        if (["completed"].includes(o.status)) return false;
-        if (o.processingDueAt) return new Date(o.processingDueAt) < now;
-        const h = DEFAULT_TURNAROUND[o.serviceType] ?? 72;
-        return new Date(new Date(o.createdAt).getTime() + h * 3600000) < now;
-      }).length,
-    };
-    res.json(summary);
+    });
   } catch {
-    res.status(500).json({ error: "Failed to get summary" });
-  }
-});
-
-ordersRouter.get("/recent", async (req: AuthRequest, res) => {
-  try {
-    const laundryId = req.auth!.laundryId;
-    const result = await db.select().from(orders)
-      .where(eq(orders.laundryId, laundryId))
-      .orderBy(desc(orders.createdAt))
-      .limit(10);
-    res.json(result);
-  } catch {
-    res.status(500).json({ error: "Failed to get recent orders" });
+    res.status(500).json({ error: "Failed to get order summary" });
   }
 });
 
@@ -182,7 +145,19 @@ ordersRouter.get("/:id", async (req: AuthRequest, res) => {
 ordersRouter.post("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const data = orderInputSchema.parse(req.body);
+    const isOwner = req.auth!.type === "owner";
+    const rawData = orderInputSchema.parse(req.body);
+
+    // Workers cannot manually set pricing fields — price must come from catalog
+    const data = isOwner ? rawData : {
+      ...rawData,
+      price: undefined,
+      extraCharge: undefined,
+      extraChargeReason: undefined,
+      discount: undefined,
+      discountReason: undefined,
+    };
+
     const orderId = generateOrderId();
 
     let customerId: number | null = data.customerId ?? null;
@@ -205,7 +180,6 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
         customerId = newCustomer.id;
       }
     } else {
-      // Verify this customer belongs to this laundry (prevent cross-tenant linkage)
       const [ownedCustomer] = await db.select().from(customers)
         .where(and(eq(customers.id, customerId!), eq(customers.laundryId, laundryId)));
       if (!ownedCustomer) {
@@ -274,7 +248,7 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
     }
 
     const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];
-    const appliedBy = req.auth?.name ?? req.auth?.email ?? "system";
+    const appliedBy = actorName(req.auth!);
 
     if (data.discount && data.discount > 0 && data.discountReason) {
       adjustmentRows.push({
@@ -313,6 +287,20 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       relatedOrderId: order.id,
     }).catch(() => {});
 
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "order_created",
+      orderId: order.id,
+      metadata: {
+        orderId: order.orderId,
+        customerName: order.customerName,
+        serviceType: order.serviceType,
+        price: computedPrice,
+        items: itemSummary,
+      },
+    }).catch(() => {});
+
     res.status(201).json({ ...order, items: insertedItems });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
@@ -323,11 +311,30 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
 ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const data = orderUpdateSchema.parse(req.body);
+    const isOwner = req.auth!.type === "owner";
+
+    // Workers cannot touch any pricing fields — check before Zod strips them
+    if (!isOwner) {
+      const priceFields = ["price", "extraCharge", "discount"];
+      const forbidden = priceFields.filter(f => f in req.body);
+      if (forbidden.length > 0) {
+        return res.status(403).json({
+          error: "Permission denied",
+          hint: `Workers cannot modify pricing fields: ${forbidden.join(", ")}. Use the discount request system instead.`,
+        });
+      }
+    }
+
+    const data = isOwner
+      ? ownerOrderUpdateSchema.parse(req.body)
+      : workerOrderUpdateSchema.parse(req.body);
+
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
-    if (data.price !== undefined) updateData.price = data.price?.toString();
-    if (data.extraCharge !== undefined) updateData.extraCharge = data.extraCharge?.toString();
-    if (data.discount !== undefined) updateData.discount = data.discount?.toString();
+    if (isOwner) {
+      if ((data as any).price !== undefined) updateData.price = (data as any).price?.toString();
+      if ((data as any).extraCharge !== undefined) updateData.extraCharge = (data as any).extraCharge?.toString();
+      if ((data as any).discount !== undefined) updateData.discount = (data as any).discount?.toString();
+    }
 
     const [beforeOrder] = await db.select().from(orders)
       .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
@@ -363,6 +370,14 @@ ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
       }
     }
 
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "order_updated",
+      orderId: order.id,
+      metadata: { changes: data, orderId: order.orderId },
+    }).catch(() => {});
+
     res.json(order);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
@@ -370,13 +385,21 @@ ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.delete("/:id", async (req: AuthRequest, res) => {
+ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const [deleted] = await db.delete(orders)
       .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)))
       .returning();
     if (!deleted) return res.status(404).json({ error: "Order not found" });
+
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "order_deleted",
+      metadata: { orderId: deleted.orderId, customerName: deleted.customerName },
+    }).catch(() => {});
+
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete order" });
@@ -425,6 +448,8 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
       method: data.method,
       notes: data.notes,
       remainingBalance: remainingBalance.toString(),
+      recordedBy: actorName(req.auth!),
+      workerId: req.auth!.type === "worker" ? (req.auth!.workerId ?? null) : null,
     }).returning();
 
     await db.update(orders).set({
@@ -442,6 +467,20 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
       relatedOrderId: order.id,
     }).catch(() => {});
 
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "payment_recorded",
+      orderId: order.id,
+      metadata: {
+        amount: data.amount,
+        method: data.method,
+        remainingBalance,
+        paymentStatus,
+        orderId: order.orderId,
+      },
+    }).catch(() => {});
+
     res.status(201).json(payment);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
@@ -449,7 +488,7 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.delete("/:id/payments/:paymentId", async (req: AuthRequest, res) => {
+ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const [order] = await db.select().from(orders)
@@ -459,6 +498,15 @@ ordersRouter.delete("/:id/payments/:paymentId", async (req: AuthRequest, res) =>
       .where(eq(paymentRecords.id, parseInt(req.params.paymentId)))
       .returning();
     if (!deleted) return res.status(404).json({ error: "Payment not found" });
+
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "payment_deleted",
+      orderId: order.id,
+      metadata: { paymentId: deleted.id, amount: deleted.amount, orderId: order.orderId },
+    }).catch(() => {});
+
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete payment" });
@@ -478,7 +526,7 @@ ordersRouter.get("/:id/items", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.post("/:id/items", async (req: AuthRequest, res) => {
+ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const itemsSchema = z.object({
@@ -515,6 +563,14 @@ ordersRouter.post("/:id/items", async (req: AuthRequest, res) => {
       updatedAt: new Date(),
     }).where(eq(orders.id, order.id)).returning();
 
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "order_items_updated",
+      orderId: order.id,
+      metadata: { newTotal: totalPrice, itemCount: data.items.length, orderId: order.orderId },
+    }).catch(() => {});
+
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
     res.json({ ...updated, items });
   } catch (err) {
@@ -541,6 +597,8 @@ ordersRouter.get("/:id/price-adjustments", async (req: AuthRequest, res) => {
 ordersRouter.post("/:id/price-adjustments", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const isOwner = req.auth!.type === "owner";
+
     const schema = z.object({
       type: z.enum(["discount", "extra_charge"]),
       amount: z.number().positive(),
@@ -548,38 +606,153 @@ ordersRouter.post("/:id/price-adjustments", async (req: AuthRequest, res) => {
     });
     const data = schema.parse(req.body);
 
+    // Workers cannot add surcharges — only owners can
+    if (!isOwner && data.type === "extra_charge") {
+      return res.status(403).json({
+        error: "Permission denied",
+        hint: "Workers cannot add surcharges. Contact the owner to add extra charges.",
+      });
+    }
+
     const [order] = await db.select().from(orders)
       .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    const appliedBy = req.auth?.name ?? req.auth?.email ?? "system";
-    const [adjustment] = await db.insert(priceAdjustments).values({
-      orderId: order.id,
-      laundryId,
-      type: data.type,
-      amount: data.amount.toString(),
-      reason: data.reason,
-      appliedBy,
-    }).returning();
+    const appliedBy = actorName(req.auth!);
 
-    const currentDiscount = parseFloat(order.discount || "0");
-    const currentExtraCharge = parseFloat(order.extraCharge || "0");
+    // Owner: always direct apply
+    if (isOwner) {
+      const [adjustment] = await db.insert(priceAdjustments).values({
+        orderId: order.id,
+        laundryId,
+        type: data.type,
+        amount: data.amount.toString(),
+        reason: data.reason,
+        appliedBy,
+      }).returning();
 
-    if (data.type === "discount") {
+      const currentDiscount = parseFloat(order.discount || "0");
+      const currentExtraCharge = parseFloat(order.extraCharge || "0");
+
+      if (data.type === "discount") {
+        await db.update(orders).set({
+          discount: (currentDiscount + data.amount).toString(),
+          updatedAt: new Date(),
+        }).where(eq(orders.id, order.id));
+      } else {
+        await db.update(orders).set({
+          extraCharge: (currentExtraCharge + data.amount).toString(),
+          updatedAt: new Date(),
+        }).where(eq(orders.id, order.id));
+      }
+
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: data.type === "discount" ? "discount_applied" : "surcharge_applied",
+        orderId: order.id,
+        metadata: { amount: data.amount, reason: data.reason, type: data.type, orderId: order.orderId },
+      }).catch(() => {});
+
+      return res.status(201).json(adjustment);
+    }
+
+    // Worker requesting a discount — check against laundry discount rules
+    const [laundry] = await db.select({ discountSettings: laundries.discountSettings })
+      .from(laundries)
+      .where(eq(laundries.id, laundryId));
+
+    const settings = (laundry?.discountSettings ?? {}) as {
+      maxDiscountPerOrder?: number;
+      maxDiscountPercentage?: number;
+      autoApprovalThreshold?: number;
+    };
+
+    const orderPrice = parseFloat(order.price || "0");
+    const maxAbs = settings.maxDiscountPerOrder ?? 0;
+    const maxPct = settings.maxDiscountPercentage ?? 0;
+    const autoThreshold = settings.autoApprovalThreshold ?? 0;
+
+    const withinAbsLimit = maxAbs === 0 || data.amount <= maxAbs;
+    const withinPctLimit = maxPct === 0 || data.amount <= (orderPrice * maxPct / 100);
+    const withinLimits = withinAbsLimit && withinPctLimit;
+    const autoApprove = autoThreshold > 0 && data.amount <= autoThreshold && withinLimits;
+
+    if (autoApprove) {
+      // Auto-apply within configured threshold
+      const [adjustment] = await db.insert(priceAdjustments).values({
+        orderId: order.id,
+        laundryId,
+        type: "discount",
+        amount: data.amount.toString(),
+        reason: data.reason,
+        appliedBy,
+      }).returning();
+
+      const currentDiscount = parseFloat(order.discount || "0");
       await db.update(orders).set({
         discount: (currentDiscount + data.amount).toString(),
         updatedAt: new Date(),
       }).where(eq(orders.id, order.id));
-    } else {
-      await db.update(orders).set({
-        extraCharge: (currentExtraCharge + data.amount).toString(),
-        updatedAt: new Date(),
-      }).where(eq(orders.id, order.id));
+
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: "discount_auto_applied",
+        orderId: order.id,
+        metadata: {
+          amount: data.amount,
+          reason: data.reason,
+          autoThreshold,
+          orderId: order.orderId,
+        },
+      }).catch(() => {});
+
+      return res.status(201).json({ ...adjustment, status: "auto_applied" });
     }
 
-    res.status(201).json(adjustment);
+    // Exceeds auto-approval threshold or limits — create pending approval request
+    const [approval] = await db.insert(discountApprovals).values({
+      laundryId,
+      orderId: order.id,
+      requestedBy: req.auth!.workerId ?? null,
+      requestedByName: appliedBy,
+      originalAmount: orderPrice.toString(),
+      requestedDiscount: data.amount.toString(),
+      reason: data.reason,
+      status: "pending",
+    }).returning();
+
+    emitEvent({
+      laundryId,
+      eventType: "discount_requested",
+      title: "Discount Approval Required",
+      message: `${appliedBy} requested ₦${data.amount.toLocaleString()} discount on Order #${order.orderId} (${order.customerName}). Reason: ${data.reason}`,
+      severity: "warning",
+      relatedOrderId: order.id,
+    }).catch(() => {});
+
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "discount_requested",
+      orderId: order.id,
+      metadata: {
+        amount: data.amount,
+        reason: data.reason,
+        withinLimits,
+        approvalId: approval.id,
+        orderId: order.orderId,
+      },
+    }).catch(() => {});
+
+    return res.status(202).json({
+      status: "pending_approval",
+      message: "Discount request submitted. Awaiting owner approval.",
+      approval,
+    });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
-    res.status(500).json({ error: "Failed to add price adjustment" });
+    res.status(500).json({ error: "Failed to process price adjustment" });
   }
 });

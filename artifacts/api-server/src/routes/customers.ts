@@ -4,6 +4,7 @@ import { customers, orders } from "@workspace/db/schema";
 import { eq, and, desc, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { checkPermission } from "../middleware/permissions.js";
 
 export const customersRouter = Router();
 
@@ -241,7 +242,7 @@ customersRouter.post("/", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.patch("/:id", async (req: AuthRequest, res) => {
+customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
@@ -266,7 +267,7 @@ customersRouter.patch("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.delete("/:id", async (req: AuthRequest, res) => {
+customersRouter.delete("/:id", checkPermission("delete:customers"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);

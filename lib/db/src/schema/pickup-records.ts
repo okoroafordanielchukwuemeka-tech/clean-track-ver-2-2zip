@@ -12,6 +12,7 @@ export const pickupRecords = pgTable("pickup_records", {
   itemPickups: json("item_pickups").$type<{ orderItemId: number; quantity: number; name: string }[]>(),
   notes: text("notes"),
   processedBy: integer("processed_by").references(() => workers.id),
+  recordedBy: text("recorded_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

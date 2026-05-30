@@ -4,6 +4,7 @@ import { pickupRecords, orders, orderItems } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 
 export const pickupsRouter = Router({ mergeParams: true });
@@ -126,7 +127,22 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
       itemPickups: itemPickupsJson,
       notes: data.notes,
       processedBy: workerId,
+      recordedBy: actorName(req.auth!),
     }).returning();
+
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: allPickedUp ? "pickup_completed" : "pickup_partial",
+      orderId,
+      metadata: {
+        itemPickups: itemPickupsJson,
+        shirtsPickedUp: data.shirtsPickedUp ?? 0,
+        trousersPickedUp: data.trousersPickedUp ?? 0,
+        allPickedUp,
+        orderId: order.orderId,
+      },
+    }).catch(() => {});
 
     await db.update(orders).set({
       shirtsPickedUp: newShirtsPickedUp,

@@ -1,5 +1,6 @@
 import { pgTable, serial, integer, numeric, text, timestamp } from "drizzle-orm/pg-core";
 import { orders } from "./orders.js";
+import { workers } from "./workers.js";
 
 export const paymentRecords = pgTable("payment_records", {
   id: serial("id").primaryKey(),
@@ -8,6 +9,8 @@ export const paymentRecords = pgTable("payment_records", {
   method: text("method", { enum: ["cash", "transfer", "pos"] }).notNull().default("cash"),
   notes: text("notes"),
   remainingBalance: numeric("remaining_balance", { precision: 10, scale: 2 }).notNull(),
+  recordedBy: text("recorded_by"),
+  workerId: integer("worker_id").references(() => workers.id, { onDelete: "set null" }),
   recordedAt: timestamp("recorded_at").notNull().defaultNow(),
 });
 

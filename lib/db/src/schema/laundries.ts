@@ -48,6 +48,11 @@ export const laundries = pgTable("laundries", {
     showNotifications?: boolean;
     showOperationalInsights?: boolean;
   }>().default({}),
+  discountSettings: jsonb("discount_settings").$type<{
+    maxDiscountPerOrder?: number;
+    maxDiscountPercentage?: number;
+    autoApprovalThreshold?: number;
+  }>().default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

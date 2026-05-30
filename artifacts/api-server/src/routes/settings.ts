@@ -252,3 +252,44 @@ settingsRouter.patch("/dashboard-preferences", requireOwner, async (req: AuthReq
     res.status(500).json({ error: "Failed to update dashboard preferences" });
   }
 });
+
+const discountSettingsSchema = z.object({
+  maxDiscountPerOrder: z.number().min(0).optional(),
+  maxDiscountPercentage: z.number().min(0).max(100).optional(),
+  autoApprovalThreshold: z.number().min(0).optional(),
+});
+
+settingsRouter.get("/discount-rules", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundry = await getLaundry(req.auth!.laundryId);
+    if (!laundry) return res.status(404).json({ error: "Laundry not found" });
+    const settings = (laundry.discountSettings ?? {}) as {
+      maxDiscountPerOrder?: number;
+      maxDiscountPercentage?: number;
+      autoApprovalThreshold?: number;
+    };
+    res.json({
+      maxDiscountPerOrder: settings.maxDiscountPerOrder ?? 0,
+      maxDiscountPercentage: settings.maxDiscountPercentage ?? 0,
+      autoApprovalThreshold: settings.autoApprovalThreshold ?? 0,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to get discount rules" });
+  }
+});
+
+settingsRouter.patch("/discount-rules", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const { laundryId } = req.auth!;
+    const data = discountSettingsSchema.parse(req.body);
+    const laundry = await getLaundry(laundryId);
+    if (!laundry) return res.status(404).json({ error: "Laundry not found" });
+    const merged = { ...(laundry.discountSettings as object ?? {}), ...data };
+    const [updated] = await db.update(laundries).set({ discountSettings: merged, updatedAt: new Date() })
+      .where(eq(laundries.id, laundryId)).returning();
+    res.json(updated.discountSettings ?? {});
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+    res.status(500).json({ error: "Failed to update discount rules" });
+  }
+});

@@ -1,0 +1,154 @@
+Perform a full security and workflow rebuild for CleanTrack focusing on role-based permissions, discount control, and safe operational access.
+
+DO NOT add new features beyond this scope.
+
+---
+
+## 🔐 1. IMPLEMENT ACTION-LEVEL PERMISSION SYSTEM
+
+Replace current route-only guards with a centralized permission system.
+
+Create a permissions matrix:
+
+OWNER ONLY:
+
+* delete customers
+* delete orders
+* delete payments
+* edit customer identity
+* modify services pricing
+* modify system settings
+
+OWNER + WORKER:
+
+* create orders
+* record payments
+* record pickups
+* update order status
+* view customers
+* view orders
+* search customers
+
+WORKER (RESTRICTED):
+
+* cannot delete anything
+* cannot modify customer identity
+* cannot change base service prices
+* cannot access analytics or settings
+
+Implement middleware:
+
+* `checkPermission(action)`
+
+Every sensitive API route must enforce this.
+
+---
+
+## 💰 2. BUILD CONTROLLED DISCOUNT SYSTEM
+
+DO NOT allow direct price editing from workers.
+
+Replace current discount logic with:
+
+### Discount Rules Engine:
+
+* maxDiscountPerOrder (owner configurable)
+* maxDiscountPercentage (owner configurable)
+* autoApprovalThreshold (owner configurable per order amount)
+
+If worker applies discount:
+
+CASE A:
+If discount is within limits → auto-apply
+
+CASE B:
+If discount exceeds limits → create:
+
+* status: "pending_discount"
+* store request in discount_approvals table
+
+Owner must approve or reject.
+
+Order must NEVER be overwritten directly by worker.
+
+---
+
+## 🧾 3. CREATE DISCOUNT_APPROVALS TABLE
+
+Fields:
+
+* id
+* orderId
+* requestedBy (workerId)
+* originalAmount
+* requestedDiscount
+* reason
+* status (pending | approved | rejected)
+* createdAt
+
+---
+
+## ⚡ 4. ORDER SAFETY RULES
+
+* Workers cannot directly edit order.price
+* Workers cannot modify order totals
+* All price changes must go through:
+
+  * service pricing system OR
+  * discount approval system
+
+---
+
+## 🧠 5. FIX SECURITY HOLES FOUND IN AUDIT
+
+Block ALL of the following for workers:
+
+* DELETE /customers
+* DELETE /orders
+* DELETE /payments
+* PATCH /customers
+* PATCH /orders price fields
+
+Return proper HTTP 403 for all violations.
+
+---
+
+## 📊 6. ADD AUDIT LOGGING
+
+Log every:
+
+* order create
+* payment record
+* pickup
+* discount request
+* approval/rejection
+
+Store:
+
+* actorId
+* role
+* action
+* timestamp
+* orderId
+
+---
+
+## FINAL GOAL
+
+After implementation:
+
+* Workers can fully operate laundry workflow safely
+* Owners retain full financial control
+* Discounts are controlled, not abused
+* System is production-grade SaaS secure
+
+After completing, run a full fake workflow test:
+
+* create order
+* apply discount (valid + invalid)
+* approve/reject discount
+* record payment
+* record pickup
+* attempt forbidden actions (must fail with 403)
+
+Then output full security report.

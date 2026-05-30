@@ -13,3 +13,5 @@ export * from "./expenditures.js";
 export * from "./expense-categories.js";
 export * from "./message-templates.js";
 export * from "./price-adjustments.js";
+export * from "./discount-approvals.js";
+export * from "./audit-log.js";
