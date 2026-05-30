@@ -1,5 +1,5 @@
 /**
- * CleanTrack Full Stress Test — 50 Customers / 200 Orders
+ * CleanTrack Full Stress Test — 100 Customers / 1000 Orders
  * Generates realistic operational data including payments, pickups,
  * discount approvals (pending/approved/rejected), and audit log entries.
  *
@@ -90,9 +90,9 @@ function randomAddress() {
 }
 
 async function main() {
-  console.log("╔═══════════════════════════════════════════════════════════╗");
-  console.log("║   CleanTrack Full Stress Test — 50 Customers / 200 Orders ║");
-  console.log("╚═══════════════════════════════════════════════════════════╝\n");
+  console.log("╔════════════════════════════════════════════════════════════╗");
+  console.log("║  CleanTrack Full Stress Test — 100 Customers / 1000 Orders ║");
+  console.log("╚════════════════════════════════════════════════════════════╝\n");
 
   // ─── 0. Wipe Everything ───────────────────────────────────────────────────
   console.log("🧹 Wiping all existing data...");
@@ -181,12 +181,12 @@ async function main() {
   }
   console.log(`✅ ${createdWorkers.length} workers created\n`);
 
-  // ─── 4. Customers (50) ────────────────────────────────────────────────────
-  console.log("👥 Creating 50 customers...");
+  // ─── 4. Customers (100) ───────────────────────────────────────────────────
+  console.log("👥 Creating 100 customers...");
   const usedPhones = new Set<string>();
   const customerRows: typeof customers.$inferInsert[] = [];
 
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 100; i++) {
     const first = rnd(FIRST_NAMES);
     const last = rnd(LAST_NAMES);
     let phone = randomPhone();
@@ -208,8 +208,8 @@ async function main() {
   const insertedCustomers = await db.insert(customers).values(customerRows).returning();
   console.log(`✅ ${insertedCustomers.length} customers created\n`);
 
-  // ─── 5. Orders (200) with items, payments, pickups ───────────────────────
-  console.log("📦 Creating 200 orders with full lifecycle data...");
+  // ─── 5. Orders (1000) with items, payments, pickups ──────────────────────
+  console.log("📦 Creating 1000 orders with full lifecycle data...");
 
   const svcNames = Object.keys(createdSvcs);
   const STATUSES = ["pending", "processing", "ready", "partial_pickup", "completed"] as const;
@@ -269,7 +269,7 @@ async function main() {
     orderId: string;
   }> = [];
 
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 1000; i++) {
     const cust = insertedCustomers[i % insertedCustomers.length];
     const status: Status = rnd(STATUS_DIST);
     const svcType: SvcType = rnd(SVC_DIST);
@@ -545,10 +545,10 @@ async function main() {
   const discountRows: typeof discountApprovals.$inferInsert[] = [];
   const discountAuditRows: typeof auditLog.$inferInsert[] = [];
 
-  // Pick ~30 random orders for discount requests
-  const discountOrderIndices = [...Array(200).keys()]
+  // Pick ~150 random orders for discount requests (~15% of 1000)
+  const discountOrderIndices = [...Array(1000).keys()]
     .sort(() => Math.random() - 0.5)
-    .slice(0, 30);
+    .slice(0, 150);
 
   for (const idx of discountOrderIndices) {
     const ord = insertedOrders[idx];
