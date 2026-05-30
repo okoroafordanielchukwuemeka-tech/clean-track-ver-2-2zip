@@ -33,12 +33,12 @@ export const ADMIN_DEFAULT_PERMISSIONS = {
 };
 
 export const WORKER_DEFAULT_PERMISSIONS = {
-  canViewCustomers: true,
+  canViewCustomers: false,
   canCreateCustomers: false,
   canViewCustomerBalances: false,
   canRecordPayments: false,
-  canRecordPickups: true,
-  canViewOrders: true,
-  canProcessOrders: true,
+  canRecordPickups: false,
+  canViewOrders: false,
+  canProcessOrders: false,
   canAssignOrders: false,
 };

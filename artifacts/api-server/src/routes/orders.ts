@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { orders, paymentRecords, orderItems, customers, laundries, services } from "@workspace/db/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { emitEvent } from "../lib/events.js";
@@ -37,10 +37,8 @@ function computeProcessingDueAt(createdAt: Date, serviceType: string, sla: { sta
 }
 
 const orderItemInputSchema = z.object({
-  serviceId: z.number().int().optional(),
-  serviceName: z.string().min(1),
+  serviceId: z.number().int(),
   quantity: z.number().int().min(1),
-  unitPrice: z.number().min(0),
 });
 
 const orderInputSchema = z.object({
@@ -183,9 +181,27 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
     let computedPrice = data.price;
     let insertedItems: typeof orderItems.$inferSelect[] = [];
 
+    let resolvedItems: Array<{ serviceId: number; name: string; quantity: number; unitPrice: number; lineTotal: number }> = [];
+
     if (data.items && data.items.length > 0) {
-      const lineTotal = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-      computedPrice = lineTotal;
+      const activeServices = await db.select().from(services)
+        .where(and(eq(services.laundryId, laundryId), eq(services.isActive, true)));
+
+      const serviceMap = new Map(activeServices.map(s => [s.id, s]));
+
+      for (const item of data.items) {
+        const svc = serviceMap.get(item.serviceId);
+        if (!svc) {
+          return res.status(400).json({ error: `Service ID ${item.serviceId} not found or is inactive for this laundry` });
+        }
+        const priceField = data.serviceType === "express" ? svc.expressPrice
+          : data.serviceType === "premium" ? svc.premiumPrice
+          : svc.standardPrice;
+        const unitPrice = parseFloat(priceField ?? svc.standardPrice);
+        resolvedItems.push({ serviceId: svc.id, name: svc.name, quantity: item.quantity, unitPrice, lineTotal: item.quantity * unitPrice });
+      }
+
+      computedPrice = resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0);
     }
 
     const [order] = await db.insert(orders).values({
@@ -205,15 +221,15 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       processingDueAt,
     }).returning();
 
-    if (data.items && data.items.length > 0) {
-      const itemRows = data.items.map(item => ({
+    if (resolvedItems.length > 0) {
+      const itemRows = resolvedItems.map(item => ({
         orderId: order.id,
         serviceId: item.serviceId,
         serviceType: data.serviceType,
-        name: item.serviceName,
+        name: item.name,
         quantity: item.quantity,
         unitPrice: item.unitPrice.toString(),
-        totalPrice: (item.quantity * item.unitPrice).toString(),
+        totalPrice: item.lineTotal.toString(),
       }));
       insertedItems = await db.insert(orderItems).values(itemRows).returning();
     }
