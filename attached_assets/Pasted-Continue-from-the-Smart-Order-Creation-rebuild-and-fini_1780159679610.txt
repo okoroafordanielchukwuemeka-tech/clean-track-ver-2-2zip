@@ -1,0 +1,139 @@
+Continue from the Smart Order Creation rebuild and finish all remaining validation issues.
+
+Current goal:
+
+Make order creation production-ready and ensure the Services catalog is the single source of pricing truth.
+
+Verify and fix:
+
+1. Customer ownership validation.
+2. Item-based pickup enforcement.
+3. Item summaries in orders list and mobile cards.
+4. Worker order creation flow.
+5. Service-linked live pricing.
+6. Discount/manual adjustment workflow.
+7. Adjustment audit trail.
+8. Customer auto-linking.
+9. SLA deadline generation.
+10. Notification generation.
+11. Order item display on order detail page.
+12. Item-based remaining quantity calculations for partial pickups.
+
+Then perform complete end-to-end testing.
+
+Create realistic test data inside the system.
+
+Customers:
+
+* John Doe
+* Mary Johnson
+* David Smith
+* Sarah Williams
+
+Orders:
+
+Order A
+
+* 5 Shirts
+* 3 Trousers
+* Standard Service
+
+Order B
+
+* 2 Duvets
+* 1 Rug
+* Express Service
+
+Order C
+
+* 4 Curtains
+* 2 Blankets
+* Premium Service
+
+Order D
+
+* VIP Customer
+* Multiple items
+* Discount applied
+
+Order E
+
+* Partial payment scenario
+
+Order F
+
+* Partial pickup scenario
+
+Order G
+
+* Due soon scenario
+
+Order H
+
+* Overdue scenario
+
+For every order:
+
+Verify:
+
+* service pricing retrieval
+* live calculation
+* customer linking
+* worker assignment
+* order item creation
+* adjustment history
+* SLA deadline generation
+* notification generation
+* dashboard metrics updates
+* customer profile metrics updates
+* expense/profit calculations remain correct
+* partial payment calculations
+* partial pickup calculations
+
+Then simulate the complete operational workflow:
+
+Customer arrives
+→ Order created
+→ Worker assigned
+→ Processing started
+→ Order marked ready
+→ Payment recorded
+→ Partial pickup recorded
+→ Final pickup recorded
+→ Order completed
+
+Show exactly:
+
+1. Which tables are updated.
+2. Which statuses change.
+3. Which notifications are generated.
+4. Which dashboard metrics change.
+5. Which customer metrics change.
+6. Which worker metrics change.
+
+Finally provide:
+
+A production readiness report containing:
+
+* Passed tests
+* Failed tests
+* Remaining bugs
+* Remaining UI gaps
+* Remaining operational gaps
+
+Do not start new features.
+
+The goal is to validate that Clean Track can successfully operate a real laundry from order creation through final pickup.
+
+Important:
+
+After creating the test data, keep the sample orders in the database and show screenshots/examples of where they appear in:
+
+* Orders page
+* Worker Station
+* Customer Profiles
+* Dashboard
+* Notifications Center
+* Pickup History
+
+I want to visually inspect how orders move through the system and verify the workflow behaves correctly before building additional features.

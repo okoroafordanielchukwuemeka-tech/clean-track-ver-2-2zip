@@ -4,6 +4,7 @@ import { pickupRecords, orders, orderItems } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { emitEvent } from "../lib/events.js";
 
 export const pickupsRouter = Router({ mergeParams: true });
 
@@ -133,6 +134,29 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
       status: newStatus,
       updatedAt: new Date(),
     }).where(eq(orders.id, orderId));
+
+    if (newStatus === "completed") {
+      emitEvent({
+        laundryId,
+        eventType: "pickup_completed",
+        title: "Order Completed",
+        message: `Order #${order.orderId} for ${order.customerName} — all items picked up${fullyPaid ? " and fully paid" : ""}.`,
+        severity: "success",
+        relatedOrderId: order.id,
+      }).catch(() => {});
+    } else {
+      const itemsMsg = responseItems
+        ? `${responseItems.reduce((s, i) => s + i.remaining, 0)} item(s) still remaining`
+        : `${remainingShirts}S / ${remainingTrousers}T remaining`;
+      emitEvent({
+        laundryId,
+        eventType: "partial_pickup",
+        title: "Partial Pickup Recorded",
+        message: `Order #${order.orderId} (${order.customerName}): ${itemsMsg}.${!fullyPaid ? ` Balance: ₦${Math.max(0, parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0") - parseFloat(order.amountPaid || "0")).toLocaleString()}.` : ""}`,
+        severity: "info",
+        relatedOrderId: order.id,
+      }).catch(() => {});
+    }
 
     res.status(201).json({
       pickup,

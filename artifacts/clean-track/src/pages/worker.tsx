@@ -77,7 +77,13 @@ function UrgencySection({
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 flex-wrap">
-                    <span className="text-sm text-muted-foreground">{order.shirts}S / {order.trousers}T</span>
+                    <span className="text-sm text-muted-foreground">
+                      {(order.itemCount ?? 0) > 0
+                        ? order.itemSummary
+                          ? order.itemSummary
+                          : `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
+                        : `${order.shirts}S / ${order.trousers}T`}
+                    </span>
                     <CountdownTimer
                       createdAt={order.createdAt}
                       serviceType={order.serviceType}
@@ -178,8 +184,15 @@ export default function WorkerStation() {
   const claimOrder = (id: number) =>
     updateMutation.mutate({ id, data: { assignedWorkerId: user?.id, status: "processing" } });
 
-  const markVerified = (id: number, o: any) =>
-    updateMutation.mutate({ id, data: { isVerified: true, verifiedShirts: o.shirts, verifiedTrousers: o.trousers } });
+  const markVerified = (id: number, o: any) => {
+    const isItemBased = (o.itemCount ?? 0) > 0;
+    const verifyData: Record<string, any> = { isVerified: true };
+    if (!isItemBased) {
+      verifyData.verifiedShirts = o.shirts;
+      verifyData.verifiedTrousers = o.trousers;
+    }
+    updateMutation.mutate({ id, data: verifyData });
+  };
 
   const markReady = (id: number) =>
     updateMutation.mutate({ id, data: { status: "ready" } });
