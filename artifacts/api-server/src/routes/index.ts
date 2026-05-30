@@ -38,7 +38,6 @@ router.use("/expenditures", requireOwner, expendituresRouter);
 router.use("/expense-categories", requireOwner, expenseCategoriesRouter);
 router.use("/message-templates", requireOwner, messageTemplatesRouter);
 router.use("/discount-approvals", requireAuth, discountApprovalsRouter);
-// Owner-only: receipt list with search/filters/totals.
-// Receipt detail (GET /:receiptNumber) is also owner-only here;
-// workers access individual receipts via GET /orders/:id/receipt.
-router.use("/receipts", requireOwner, receiptsRouter);
+// GET /receipts (list)          → requireOwner enforced inside the handler
+// GET /receipts/:receiptNumber  → requireAuth (workers + owners, for print page)
+router.use("/receipts", requireAuth, receiptsRouter);

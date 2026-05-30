@@ -2,14 +2,13 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { orders, paymentRecords, orderItems, customers, laundries, priceAdjustments } from "@workspace/db/schema";
 import { eq, desc, and, count, ilike, or, gte, lte, sql } from "drizzle-orm";
-import { AuthRequest } from "../middleware/auth.js";
+import { AuthRequest, requireOwner } from "../middleware/auth.js";
 
 export const receiptsRouter = Router();
 
-// All authenticated users (owner + worker): laundry-scoped receipt list.
-// The /receipts page in the frontend is guarded by ProtectedRoute ownerOnly;
-// workers reach this via the customer profile receipts tab only.
-receiptsRouter.get("/", async (req: AuthRequest, res) => {
+// Owner-only: full receipt list with financial totals.
+// Workers are blocked here; they access receipts via GET /customers/:id/receipts or GET /orders/:id/receipt.
+receiptsRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { search, dateRange, from, to, limit = "50", offset = "0" } = req.query as Record<string, string>;
