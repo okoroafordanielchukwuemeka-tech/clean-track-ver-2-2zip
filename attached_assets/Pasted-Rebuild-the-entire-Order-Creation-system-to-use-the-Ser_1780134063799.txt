@@ -1,0 +1,83 @@
+Rebuild the entire Order Creation system to use the Services catalog as the single source of truth.
+
+Requirements:
+
+1. Remove manual price entry as the primary workflow.
+
+2. New Order flow:
+
+Customer Selection
+→ Search existing customers by name or phone
+→ Create customer if not found
+
+Service Type
+→ Standard / Express / Premium
+
+Item Selection
+→ Pull all active services from the Services table
+→ Group by category if categories exist
+→ Support any service type (shirts, trousers, duvets, rugs, curtains, blankets, shoes, etc.)
+
+Quantity Entry
+→ Quantity control for every selected item
+
+Live Pricing
+→ Calculate totals in real time from Services pricing
+→ Use correct pricing tier based on selected service type
+
+Price Adjustments
+→ Allow optional discount or manual adjustment
+→ Require a reason
+→ Store:
+
+* calculated subtotal
+* adjustment amount
+* adjustment reason
+* final total
+* user who applied adjustment
+* timestamp
+
+Operational Timing
+→ Display SLA being used
+→ Display Ready By date/time before order creation
+
+Review Step
+→ Show full order summary before saving
+
+Order Save
+→ Create order
+→ Create order_items
+→ Link customer
+→ Save pricing breakdown
+→ Save SLA deadline
+→ Trigger existing notification system
+
+Order Detail Page
+→ Display all order items
+→ Display pricing breakdown
+→ Display adjustment history
+→ Display received quantities
+→ Display picked-up quantities
+→ Display remaining quantities for every item type
+
+Partial Pickup Compatibility
+→ Must work for every item type, not only shirts and trousers
+
+Worker Compatibility
+→ Workers must be able to create orders
+
+Testing
+
+After implementation:
+
+1. Create multiple realistic test orders.
+2. Verify live pricing calculations.
+3. Verify customer linking.
+4. Verify dashboard totals.
+5. Verify customer profile metrics.
+6. Verify SLA deadlines.
+7. Verify notifications.
+8. Verify partial pickup calculations.
+9. Provide a complete audit of all tests and results.
+
+Do not stop at implementation. Run end-to-end testing and provide a detailed report.
