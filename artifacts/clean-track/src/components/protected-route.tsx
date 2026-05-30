@@ -6,6 +6,12 @@ interface ProtectedRouteProps {
   ownerOnly?: boolean;
 }
 
+const WORKER_ALLOWED_PREFIXES = [
+  "/worker-station",
+  "/orders",
+  "/customers",
+];
+
 export function ProtectedRoute({ children, ownerOnly = false }: ProtectedRouteProps) {
   const { isAuthenticated, isOwner, isWorker } = useAuth();
   const location = useLocation();
@@ -18,8 +24,15 @@ export function ProtectedRoute({ children, ownerOnly = false }: ProtectedRoutePr
     return <Navigate to="/worker-station" replace />;
   }
 
-  if (isWorker && location.pathname !== "/worker-station") {
-    return <Navigate to="/worker-station" replace />;
+  if (isWorker) {
+    const allowed = WORKER_ALLOWED_PREFIXES.some(
+      (prefix) =>
+        location.pathname === prefix ||
+        location.pathname.startsWith(prefix + "/")
+    );
+    if (!allowed) {
+      return <Navigate to="/worker-station" replace />;
+    }
   }
 
   return <>{children}</>;

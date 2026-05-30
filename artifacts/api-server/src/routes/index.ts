@@ -13,21 +13,25 @@ import { expendituresRouter } from "./expenditures.js";
 import { settingsRouter } from "./settings.js";
 import { messageTemplatesRouter } from "./message-templates.js";
 import { expenseCategoriesRouter } from "./expense-categories.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 export const router = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+
+// Worker + owner routes (workers can run daily operations)
 router.use("/orders", requireAuth, ordersRouter);
 router.use("/orders/:orderId/pickups", requireAuth, pickupsRouter);
 router.use("/customers", requireAuth, customersRouter);
 router.use("/services", requireAuth, servicesRouter);
-router.use("/batches", requireAuth, batchesRouter);
-router.use("/analytics", requireAuth, analyticsRouter);
-router.use("/workers", requireAuth, workersRouter);
 router.use("/notifications", requireAuth, notificationsRouter);
-router.use("/expenditures", requireAuth, expendituresRouter);
-router.use("/expense-categories", requireAuth, expenseCategoriesRouter);
-router.use("/message-templates", requireAuth, messageTemplatesRouter);
 router.use("/settings", requireAuth, settingsRouter);
+
+// Owner-only routes (financials, management, configuration)
+router.use("/analytics", requireOwner, analyticsRouter);
+router.use("/workers", requireOwner, workersRouter);
+router.use("/batches", requireOwner, batchesRouter);
+router.use("/expenditures", requireOwner, expendituresRouter);
+router.use("/expense-categories", requireOwner, expenseCategoriesRouter);
+router.use("/message-templates", requireOwner, messageTemplatesRouter);

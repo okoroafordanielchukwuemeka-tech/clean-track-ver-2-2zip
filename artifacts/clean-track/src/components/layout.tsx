@@ -34,6 +34,8 @@ const ownerNavItems = [
 
 const workerNavItems = [
   { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+  { to: "/orders", label: "Orders", icon: ShoppingCart },
+  { to: "/customers", label: "Customers", icon: UserCircle },
 ];
 
 export function Layout() {

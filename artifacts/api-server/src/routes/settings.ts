@@ -61,7 +61,7 @@ async function getLaundry(laundryId: number) {
   return laundry;
 }
 
-settingsRouter.get("/sla", requireOwner, async (req: AuthRequest, res) => {
+settingsRouter.get("/sla", async (req: AuthRequest, res) => {
   try {
     const laundry = await getLaundry(req.auth!.laundryId);
     if (!laundry) return res.status(404).json({ error: "Laundry not found" });
