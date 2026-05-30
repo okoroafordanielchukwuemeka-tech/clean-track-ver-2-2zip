@@ -66,11 +66,16 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
     let itemPickupsJson: { orderItemId: number; quantity: number; name: string }[] | null = null;
     let responseItems: { id: number; name: string; quantity: number; quantityPickedUp: number; remaining: number }[] | null = null;
 
-    if (data.items && data.items.length > 0 && allOrderItems.length > 0) {
+    if (allOrderItems.length > 0) {
+      // Item-based order: MUST provide items[] — reject shirts/trousers-only payload
+      if (!data.items || data.items.length === 0) {
+        return res.status(400).json({ error: "This order uses item-based tracking. Provide items[] to record pickup." });
+      }
+
       for (const itemReq of data.items) {
         const oi = allOrderItems.find(i => i.id === itemReq.orderItemId);
         if (!oi) {
-          return res.status(400).json({ error: `Order item ${itemReq.orderItemId} not found` });
+          return res.status(400).json({ error: `Order item ${itemReq.orderItemId} not found on this order` });
         }
         const remaining = oi.quantity - oi.quantityPickedUp;
         if (itemReq.quantity > remaining) {
@@ -98,6 +103,7 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
         return { id: oi.id, name: oi.name, quantity: oi.quantity, quantityPickedUp: newPickedUp, remaining: Math.max(0, oi.quantity - newPickedUp) };
       });
     } else {
+      // Legacy shirts/trousers-based order
       if ((data.shirtsPickedUp ?? 0) === 0 && (data.trousersPickedUp ?? 0) === 0) {
         return res.status(400).json({ error: "At least one item must be picked up" });
       }

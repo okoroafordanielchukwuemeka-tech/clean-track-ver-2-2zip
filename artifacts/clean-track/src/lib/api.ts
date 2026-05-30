@@ -229,6 +229,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   itemCount?: number;
+  itemSummary?: string | null;
   items?: OrderItem[];
   priceAdjustments?: PriceAdjustment[];
 }

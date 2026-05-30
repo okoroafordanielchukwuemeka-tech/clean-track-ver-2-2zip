@@ -88,18 +88,27 @@ ordersRouter.get("/", async (req: AuthRequest, res) => {
     if (result.length === 0) return res.json([]);
 
     const orderIds = result.map(o => o.id);
-    const itemCounts = await db
-      .select({ orderId: orderItems.orderId, n: count(orderItems.id) })
+    const itemRows = await db
+      .select({ orderId: orderItems.orderId, name: orderItems.name, quantity: orderItems.quantity })
       .from(orderItems)
-      .where(inArray(orderItems.orderId, orderIds))
-      .groupBy(orderItems.orderId);
+      .where(inArray(orderItems.orderId, orderIds));
 
-    const countMap: Record<number, number> = {};
-    for (const row of itemCounts) {
-      if (row.orderId !== null) countMap[row.orderId] = Number(row.n);
+    type ItemAgg = { count: number; summary: string };
+    const itemMap: Record<number, ItemAgg> = {};
+    for (const ordIdVal of orderIds) {
+      const rows = itemRows.filter(r => r.orderId === ordIdVal);
+      if (rows.length === 0) continue;
+      const totalQty = rows.reduce((s, r) => s + r.quantity, 0);
+      const top = rows.slice(0, 3).map(r => `${r.quantity}× ${r.name}`).join(", ");
+      const summary = rows.length > 3 ? `${top} +${rows.length - 3} more` : top;
+      itemMap[ordIdVal] = { count: totalQty, summary };
     }
 
-    res.json(result.map(o => ({ ...o, itemCount: countMap[o.id] ?? 0 })));
+    res.json(result.map(o => ({
+      ...o,
+      itemCount: itemMap[o.id]?.count ?? 0,
+      itemSummary: itemMap[o.id]?.summary ?? null,
+    })));
   } catch {
     res.status(500).json({ error: "Failed to list orders" });
   }
@@ -196,7 +205,13 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
         customerId = newCustomer.id;
       }
     } else {
-      await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, customerId));
+      // Verify this customer belongs to this laundry (prevent cross-tenant linkage)
+      const [ownedCustomer] = await db.select().from(customers)
+        .where(and(eq(customers.id, customerId!), eq(customers.laundryId, laundryId)));
+      if (!ownedCustomer) {
+        return res.status(403).json({ error: "Customer not found" });
+      }
+      await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, customerId!));
     }
 
     const sla = await getLaundrySla(laundryId);
