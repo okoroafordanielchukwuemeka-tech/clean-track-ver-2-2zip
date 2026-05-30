@@ -1,0 +1,414 @@
+# CLEAN TRACK — SMART ORDER CREATION + FULL SETTINGS & AUTOMATION HUB
+
+IMPORTANT:
+
+Clean Track is a multi-tenant B2B Laundry SaaS platform.
+
+The goal of this phase is to:
+
+* make order creation extremely fast
+* reduce worker mistakes
+* centralize business configuration
+* create a true operational control center for each laundry
+* prepare for future WhatsApp automation
+* prepare for future push notifications
+
+IMPORTANT:
+
+The system should remain:
+
+* simple
+* fast
+* mobile friendly
+* operationally efficient
+* easy for non-technical laundry owners and workers
+
+A worker should be able to create an order in under 60 seconds.
+
+DO NOT over-engineer the interface.
+
+---
+
+# PART 1 — FULL SETTINGS & AUTOMATION HUB
+
+Create a dedicated Settings page.
+
+Only Owners/Admins can access it.
+
+Settings should be grouped into clean sections.
+
+---
+
+## BUSINESS PROFILE
+
+Allow owners to manage:
+
+* Laundry Name
+* Business Phone
+* WhatsApp Number
+* Business Address
+* Business Email
+* Logo Upload Placeholder
+* Business Notes
+
+Future-ready for branding.
+
+---
+
+## BRANDING SETTINGS
+
+Allow owners to configure:
+
+* Laundry Logo
+* Brand Color
+* Receipt Header Name
+* Receipt Footer Text
+
+Prepare for future printable receipts.
+
+---
+
+## OPERATIONAL SETTINGS
+
+Allow owners to configure:
+
+### Standard Turnaround
+
+Example:
+
+48 Hours
+
+### Express Turnaround
+
+Example:
+
+24 Hours
+
+### Premium Turnaround
+
+Example:
+
+72 Hours
+
+These settings should automatically apply to new orders.
+
+---
+
+### Working Days
+
+Example:
+
+Monday – Saturday
+
+---
+
+### Working Hours
+
+Example:
+
+8:00 AM – 7:00 PM
+
+---
+
+### Operational Rules
+
+Toggle options:
+
+* Require Item Verification
+* Auto Assign Orders
+* Allow Partial Pickup
+* Allow Workers To Create Customers
+* Allow Workers To Record Payments
+
+---
+
+# PART 2 — WORKER PERMISSION MANAGEMENT
+
+Create a permission system controlled by the owner.
+
+Per worker role, owner should choose:
+
+Can View Customers
+Can Create Customers
+Can View Customer Balances
+Can Record Payments
+Can Record Pickups
+Can View Orders
+Can Process Orders
+Can Assign Orders
+
+Prepare architecture for future custom roles.
+
+---
+
+# PART 3 — SERVICE MANAGEMENT UPGRADE
+
+Services become the single source of pricing.
+
+Each service should contain:
+
+* Name
+* Category
+* Unit Price
+* Optional Turnaround Override
+* Active/Inactive Status
+
+Examples:
+
+Shirt Wash
+₦500
+
+Trouser Wash
+₦700
+
+Duvet
+₦2500
+
+Blanket
+₦3000
+
+Rug
+₦5000
+
+Curtain
+₦4000
+
+---
+
+# PART 4 — SMART ORDER CREATION SYSTEM
+
+Redesign order creation completely.
+
+Goal:
+
+Fast.
+Simple.
+Error-proof.
+
+---
+
+## CUSTOMER STEP
+
+Allow:
+
+Select Existing Customer
+
+OR
+
+Create Customer Instantly
+
+without leaving the order screen.
+
+If customer exists:
+
+Auto-fill:
+
+* Name
+* Phone
+* Address
+
+---
+
+## ITEM SELECTION STEP
+
+Workers should select services directly.
+
+Example:
+
+2 Shirts
+
+3 Trousers
+
+1 Duvet
+
+1 Rug
+
+No manual item typing.
+
+---
+
+## LIVE PRICING ENGINE
+
+As quantities change:
+
+Automatically calculate:
+
+* Line Total
+* Service Total
+* Grand Total
+
+Update instantly.
+
+Workers should never calculate prices manually.
+
+---
+
+## ORDER SUMMARY
+
+Before saving show:
+
+* Customer
+* Item Breakdown
+* Quantities
+* Unit Prices
+* Grand Total
+* Estimated Completion Time
+
+---
+
+## QUICK ENTRY EXPERIENCE
+
+Optimize for speed:
+
+* Large buttons
+* Mobile-friendly inputs
+* Quick quantity controls
+* Fast navigation
+
+Target:
+
+Order creation under 60 seconds.
+
+---
+
+# PART 5 — CUSTOMER LINKING
+
+Every order must automatically connect to the customer profile.
+
+Customer profile should automatically update:
+
+* Order Count
+* Outstanding Balance
+* Pickup History
+* Total Spending
+
+---
+
+# PART 6 — AUTOMATION SETTINGS
+
+Prepare future automation controls.
+
+Owner should be able to toggle:
+
+* Order Ready Alerts
+* Payment Reminder Alerts
+* Pickup Reminder Alerts
+* Overdue Order Alerts
+* Due Soon Alerts
+
+No WhatsApp integration yet.
+
+Only settings and architecture.
+
+---
+
+# PART 7 — MESSAGE TEMPLATE SETTINGS
+
+Create editable templates.
+
+Examples:
+
+Order Ready
+
+"Hello {{customer_name}}, your order is ready for pickup."
+
+Payment Reminder
+
+"Hello {{customer_name}}, you have an outstanding balance of {{balance}}."
+
+Pickup Reminder
+
+"Hello {{customer_name}}, your items are still awaiting pickup."
+
+Store templates in the database.
+
+Prepare for future WhatsApp integration.
+
+---
+
+# PART 8 — EXPENSE SETTINGS
+
+Allow owners to:
+
+Add Categories
+Edit Categories
+Disable Categories
+
+Default categories:
+
+* Electricity
+* Water
+* Detergent
+* Salaries
+* Transport
+* Maintenance
+* Packaging
+* Miscellaneous
+
+Support custom categories.
+
+Example:
+
+* Generator Fuel
+* Rent
+* Machine Repairs
+
+---
+
+# PART 9 — DASHBOARD PREFERENCES
+
+Allow owners to control dashboard visibility.
+
+Show/Hide:
+
+* Revenue
+* Expenses
+* Profit
+* Worker Performance
+* Notifications
+* Operational Insights
+
+Keep dashboard uncluttered.
+
+---
+
+# PART 10 — FUTURE READINESS
+
+Design architecture so this phase can later support:
+
+* WhatsApp automation
+* Push notifications
+* Barcode generation
+* QR tracking
+* Receipt printing
+* Customer portals
+* AI operational recommendations
+
+without major rewrites.
+
+---
+
+# PART 11 — TECHNICAL AUDIT
+
+After implementation explain:
+
+* how settings are stored
+* how pricing is calculated
+* how service pricing links to orders
+* how worker permissions work
+* how automation settings work
+* how templates are stored
+* future WhatsApp readiness
+* future scaling recommendations
+
+IMPORTANT:
+
+Prioritize:
+
+* speed
+* operational simplicity
+* mobile usability
+* owner control
+* worker efficiency
+
+Avoid unnecessary complexity.
