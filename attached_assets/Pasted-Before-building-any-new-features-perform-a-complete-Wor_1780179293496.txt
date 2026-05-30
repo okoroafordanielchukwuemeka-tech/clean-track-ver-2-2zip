@@ -1,0 +1,117 @@
+Before building any new features, perform a complete Worker Interface Audit and fix all worker navigation issues.
+
+Current problem:
+Workers can see Orders and Customers in the sidebar, but navigation between pages is not working correctly.
+
+I need a full investigation and fix.
+
+Audit and verify:
+
+1. Worker Navigation
+
+* Can workers move between:
+
+  * Worker Station
+  * Orders
+  * Customers
+* Verify sidebar links.
+* Verify route permissions.
+* Verify ProtectedRoute logic.
+* Verify redirects.
+* Verify browser navigation.
+* Verify mobile navigation.
+
+2. Route Access Matrix
+   Test every route using a worker account and report:
+
+Allowed:
+
+* /worker-station
+* /orders
+* /orders/:id
+* /customers
+* /customers/:id
+
+Blocked:
+
+* /dashboard
+* /analytics
+* /workers
+* /services
+* /settings
+* /expenditures
+* /batches
+
+Confirm all expected results.
+
+3. Worker Order Experience
+   Verify workers can:
+
+* Create orders
+* Open order details
+* View customer information
+* View item breakdown
+* View order history
+* View payments
+* Record payments
+* Record pickups
+* Move orders through statuses
+
+Identify anything missing.
+
+4. Worker Customer Experience
+   Verify workers can:
+
+* View customer profile
+* View customer balances
+* View customer order history
+* View pickup history
+* View payment history
+
+Verify workers CANNOT:
+
+* Delete customers
+* Edit customer identity
+* Modify customer contact information
+
+5. Navigation Bug Fix
+   If any route, redirect, sidebar item, permission, layout, or component is preventing proper worker navigation:
+
+Fix it.
+
+6. Full Verification
+   After fixing:
+
+Create a worker test account.
+
+Log in as the worker.
+
+Navigate through every worker page manually.
+
+Document:
+
+* Page visited
+* Result
+* Any errors
+* Final outcome
+
+7. Screenshot Verification
+   Provide screenshots showing:
+
+* Worker Station
+* Orders page
+* Order Detail page
+* Customers page
+* Customer Profile page
+
+8. Production Readiness Report
+
+Provide:
+
+* Root cause of the navigation bug
+* Exact files changed
+* Exact fixes applied
+* Before vs after behavior
+* Remaining worker interface gaps
+
+Do not build any new features until the worker interface is confirmed fully operational.
