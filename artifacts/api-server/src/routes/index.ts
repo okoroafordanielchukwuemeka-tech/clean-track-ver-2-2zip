@@ -38,4 +38,6 @@ router.use("/expenditures", requireOwner, expendituresRouter);
 router.use("/expense-categories", requireOwner, expenseCategoriesRouter);
 router.use("/message-templates", requireOwner, messageTemplatesRouter);
 router.use("/discount-approvals", requireAuth, discountApprovalsRouter);
-router.use("/receipts", requireOwner, receiptsRouter);
+// Receipt detail (by number) is requireAuth — workers need it to print receipts from order detail.
+// Receipt list (GET /) enforces requireOwner internally.
+router.use("/receipts", requireAuth, receiptsRouter);

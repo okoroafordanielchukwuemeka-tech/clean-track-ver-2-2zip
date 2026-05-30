@@ -6,6 +6,9 @@ import { AuthRequest } from "../middleware/auth.js";
 
 export const receiptsRouter = Router();
 
+// All authenticated users (owner + worker): laundry-scoped receipt list.
+// The /receipts page in the frontend is guarded by ProtectedRoute ownerOnly;
+// workers reach this via the customer profile receipts tab only.
 receiptsRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;

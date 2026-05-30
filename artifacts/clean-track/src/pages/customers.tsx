@@ -87,7 +87,7 @@ export default function Customers() {
   const { data: customerReceiptsData, isLoading: receiptsLoading } = useQuery({
     queryKey: ["customerReceipts", profile?.phone],
     queryFn: () => api.receipts.list({ search: profile!.phone, limit: "50", offset: "0" }),
-    enabled: isOwner && profile != null && profileTab === "receipts",
+    enabled: profile != null && profileTab === "receipts",
   });
 
   const backfillMutation = useMutation({
@@ -403,12 +403,10 @@ export default function Customers() {
                     <ShoppingBag className="h-3.5 w-3.5" />
                     Orders ({profile.orders.length})
                   </TabsTrigger>
-                  {isOwner && (
-                    <TabsTrigger value="receipts" className="flex-1 gap-1.5">
-                      <FileText className="h-3.5 w-3.5" />
-                      Receipts
-                    </TabsTrigger>
-                  )}
+                  <TabsTrigger value="receipts" className="flex-1 gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
+                    Receipts
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Orders Tab */}
@@ -490,9 +488,8 @@ export default function Customers() {
                   )}
                 </div>
 
-                {/* Receipts Tab — owner only */}
-                {isOwner && (
-                  <div className={profileTab === "receipts" ? "mt-3" : "hidden"}>
+                {/* Receipts Tab — all authenticated users (workers via customer profile, owners via /receipts page) */}
+                <div className={profileTab === "receipts" ? "mt-3" : "hidden"}>
                     {receiptsLoading ? (
                       <div className="py-8 text-center text-muted-foreground text-sm">Loading receipts…</div>
                     ) : !customerReceiptsData?.receipts?.length ? (
@@ -560,7 +557,6 @@ export default function Customers() {
                       </div>
                     )}
                   </div>
-                )}
               </Tabs>
 
               <div className="flex justify-between items-center pt-2 border-t">
