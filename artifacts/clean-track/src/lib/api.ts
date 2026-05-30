@@ -111,6 +111,32 @@ export const api = {
     getSla: () => request<SlaSettings>("GET", "/settings/sla"),
     updateSla: (data: Partial<SlaSettings>) => request<SlaSettings>("PATCH", "/settings/sla", data),
     getSlaAnalytics: () => request<SlaAnalytics & { slaSettings: SlaSettings }>("GET", "/analytics/sla"),
+    getBusinessProfile: () => request<BusinessProfile>("GET", "/settings/business-profile"),
+    updateBusinessProfile: (data: Partial<BusinessProfile>) => request<BusinessProfile>("PATCH", "/settings/business-profile", data),
+    getBranding: () => request<BrandingSettings>("GET", "/settings/branding"),
+    updateBranding: (data: Partial<BrandingSettings>) => request<BrandingSettings>("PATCH", "/settings/branding", data),
+    getOperational: () => request<OperationalSettings>("GET", "/settings/operational"),
+    updateOperational: (data: Partial<OperationalSettings>) => request<OperationalSettings>("PATCH", "/settings/operational", data),
+    getAutomation: () => request<AutomationSettings>("GET", "/settings/automation"),
+    updateAutomation: (data: Partial<AutomationSettings>) => request<AutomationSettings>("PATCH", "/settings/automation", data),
+    getDashboardPreferences: () => request<DashboardPreferences>("GET", "/settings/dashboard-preferences"),
+    updateDashboardPreferences: (data: Partial<DashboardPreferences>) => request<DashboardPreferences>("PATCH", "/settings/dashboard-preferences", data),
+  },
+  workerPermissions: {
+    get: (workerId: number) => request<WorkerPermission>("GET", `/workers/${workerId}/permissions`),
+    update: (workerId: number, data: Partial<WorkerPermission>) => request<WorkerPermission>("PUT", `/workers/${workerId}/permissions`, data),
+  },
+  messageTemplates: {
+    list: () => request<MessageTemplate[]>("GET", "/message-templates"),
+    create: (data: MessageTemplateInput) => request<MessageTemplate>("POST", "/message-templates", data),
+    update: (id: number, data: Partial<MessageTemplateInput>) => request<MessageTemplate>("PATCH", `/message-templates/${id}`, data),
+    delete: (id: number) => request<void>("DELETE", `/message-templates/${id}`),
+  },
+  expenseCategories: {
+    list: () => request<ExpenseCategoryRecord[]>("GET", "/expense-categories"),
+    create: (data: { name: string }) => request<ExpenseCategoryRecord>("POST", "/expense-categories", data),
+    update: (id: number, data: { name?: string; isActive?: boolean }) => request<ExpenseCategoryRecord>("PATCH", `/expense-categories/${id}`, data),
+    delete: (id: number) => request<void>("DELETE", `/expense-categories/${id}`),
   },
   expenditures: {
     list: (period?: string) => {
@@ -540,6 +566,91 @@ export interface ExpenditureSummary {
   byCategory: Record<string, number>;
   count: number;
   period: string;
+}
+
+export interface BusinessProfile {
+  businessName?: string;
+  phone?: string;
+  whatsapp?: string;
+  address?: string;
+  email?: string;
+  logoUrl?: string;
+  notes?: string;
+}
+
+export interface BrandingSettings {
+  brandColor?: string;
+  receiptHeaderName?: string;
+  receiptFooterText?: string;
+}
+
+export interface OperationalSettings {
+  standardTurnaroundHours?: number;
+  expressTurnaroundHours?: number;
+  premiumTurnaroundHours?: number;
+  workingDays?: string[];
+  workingHoursStart?: string;
+  workingHoursEnd?: string;
+  requireItemVerification?: boolean;
+  autoAssignOrders?: boolean;
+  allowPartialPickup?: boolean;
+  allowWorkersCreateCustomers?: boolean;
+  allowWorkersRecordPayments?: boolean;
+}
+
+export interface AutomationSettings {
+  orderReadyAlerts?: boolean;
+  paymentReminderAlerts?: boolean;
+  pickupReminderAlerts?: boolean;
+  overdueAlerts?: boolean;
+  dueSoonAlerts?: boolean;
+}
+
+export interface DashboardPreferences {
+  showRevenue?: boolean;
+  showExpenses?: boolean;
+  showProfit?: boolean;
+  showWorkerPerformance?: boolean;
+  showNotifications?: boolean;
+  showOperationalInsights?: boolean;
+}
+
+export interface WorkerPermission {
+  workerId: number;
+  canViewCustomers: boolean;
+  canCreateCustomers: boolean;
+  canViewCustomerBalances: boolean;
+  canRecordPayments: boolean;
+  canRecordPickups: boolean;
+  canViewOrders: boolean;
+  canProcessOrders: boolean;
+  canAssignOrders: boolean;
+}
+
+export interface MessageTemplate {
+  id: number;
+  name: string;
+  subject?: string | null;
+  body: string;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MessageTemplateInput {
+  name?: string;
+  subject?: string;
+  body?: string;
+  isActive?: boolean;
+}
+
+export interface ExpenseCategoryRecord {
+  id: number;
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface SlaSettings {
