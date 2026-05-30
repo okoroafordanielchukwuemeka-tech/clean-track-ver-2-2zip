@@ -1,12 +1,15 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { workers } from "@workspace/db/schema";
+import { workers, workerPermissions, ADMIN_DEFAULT_PERMISSIONS, WORKER_DEFAULT_PERMISSIONS } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { workerPermissionsRouter } from "./worker-permissions.js";
 
 export const workersRouter = Router();
+
+workersRouter.use("/:workerId/permissions", workerPermissionsRouter);
 
 const workerInputSchema = z.object({
   name: z.string().min(1),
@@ -40,7 +43,7 @@ workersRouter.get("/", async (req: AuthRequest, res) => {
       .where(eq(workers.laundryId, laundryId))
       .orderBy(desc(workers.createdAt));
     res.json(result);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to list workers" });
   }
 });
@@ -48,6 +51,8 @@ workersRouter.get("/", async (req: AuthRequest, res) => {
 workersRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid worker ID" });
     const [worker] = await db.select({
       id: workers.id,
       laundryId: workers.laundryId,
@@ -58,10 +63,10 @@ workersRouter.get("/:id", async (req: AuthRequest, res) => {
       createdAt: workers.createdAt,
       updatedAt: workers.updatedAt,
     }).from(workers)
-      .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)));
+      .where(and(eq(workers.id, id), eq(workers.laundryId, laundryId)));
     if (!worker) return res.status(404).json({ error: "Worker not found" });
     res.json(worker);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to get worker" });
   }
 });
@@ -72,6 +77,10 @@ workersRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
     const data = workerInputSchema.parse(req.body);
     const pinHash = await bcrypt.hash(data.pin, 12);
     const [worker] = await db.insert(workers).values({ ...data, pin: pinHash, laundryId }).returning();
+
+    const defaults = data.role === "admin" ? ADMIN_DEFAULT_PERMISSIONS : WORKER_DEFAULT_PERMISSIONS;
+    await db.insert(workerPermissions).values({ workerId: worker.id, laundryId, ...defaults });
+
     const { pin: _pin, ...safeWorker } = worker;
     res.status(201).json(safeWorker);
   } catch (err) {
@@ -83,6 +92,8 @@ workersRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
 workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid worker ID" });
     const data = workerUpdateSchema.parse(req.body);
     const updatePayload: typeof data & { pin?: string } = { ...data };
     if (data.pin) {
@@ -90,7 +101,7 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
     }
     const [worker] = await db.update(workers)
       .set({ ...updatePayload, updatedAt: new Date() })
-      .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)))
+      .where(and(eq(workers.id, id), eq(workers.laundryId, laundryId)))
       .returning();
     if (!worker) return res.status(404).json({ error: "Worker not found" });
     const { pin: _pin, ...safeWorker } = worker;
@@ -104,12 +115,14 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
 workersRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid worker ID" });
     const [deleted] = await db.delete(workers)
-      .where(and(eq(workers.id, parseInt(req.params.id)), eq(workers.laundryId, laundryId)))
+      .where(and(eq(workers.id, id), eq(workers.laundryId, laundryId)))
       .returning();
     if (!deleted) return res.status(404).json({ error: "Worker not found" });
     res.status(204).send();
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to delete worker" });
   }
 });

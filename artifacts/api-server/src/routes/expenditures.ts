@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { expenditures, EXPENSE_CATEGORIES } from "@workspace/db/schema";
+import { expenditures, expenseCategories } from "@workspace/db/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
@@ -8,7 +8,7 @@ import { AuthRequest, requireOwner } from "../middleware/auth.js";
 export const expendituresRouter = Router();
 
 const expenditureSchema = z.object({
-  category: z.enum(EXPENSE_CATEGORIES),
+  category: z.string().min(1, "Category required"),
   amount: z.number().positive("Amount must be positive"),
   notes: z.string().optional(),
   isRecurring: z.boolean().default(false),
@@ -70,6 +70,14 @@ expendituresRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
   try {
     const { laundryId } = req.auth!;
     const data = expenditureSchema.parse(req.body);
+
+    const categories = await db.select().from(expenseCategories)
+      .where(and(eq(expenseCategories.laundryId, laundryId), eq(expenseCategories.isActive, true)));
+    const validNames = categories.map(c => c.name.toLowerCase());
+    if (!validNames.includes(data.category.toLowerCase())) {
+      return res.status(400).json({ error: `Invalid category. Choose from active categories.` });
+    }
+
     const [item] = await db
       .insert(expenditures)
       .values({
@@ -92,6 +100,16 @@ expendituresRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => 
     const { laundryId } = req.auth!;
     const id = parseInt(req.params.id);
     const data = expenditureSchema.partial().parse(req.body);
+
+    if (data.category) {
+      const categories = await db.select().from(expenseCategories)
+        .where(and(eq(expenseCategories.laundryId, laundryId), eq(expenseCategories.isActive, true)));
+      const validNames = categories.map(c => c.name.toLowerCase());
+      if (!validNames.includes(data.category.toLowerCase())) {
+        return res.status(400).json({ error: `Invalid category.` });
+      }
+    }
+
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (data.amount !== undefined) updateData.amount = data.amount.toString();
     if (data.category !== undefined) updateData.category = data.category;

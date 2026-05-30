@@ -6,12 +6,12 @@ export const EXPENSE_CATEGORIES = [
   "transport", "maintenance", "packaging", "miscellaneous",
 ] as const;
 
-export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
+export type ExpenseCategoryLegacy = typeof EXPENSE_CATEGORIES[number];
 
 export const expenditures = pgTable("expenditures", {
   id: serial("id").primaryKey(),
   laundryId: integer("laundry_id").notNull().references(() => laundries.id, { onDelete: "cascade" }),
-  category: text("category", { enum: EXPENSE_CATEGORIES }).notNull(),
+  category: text("category").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   notes: text("notes"),
   isRecurring: boolean("is_recurring").notNull().default(false),

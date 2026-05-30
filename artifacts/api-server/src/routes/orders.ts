@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers, laundries } from "@workspace/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { orders, paymentRecords, orderItems, customers, laundries, services } from "@workspace/db/schema";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { emitEvent } from "../lib/events.js";
@@ -36,13 +36,22 @@ function computeProcessingDueAt(createdAt: Date, serviceType: string, sla: { sta
   return new Date(createdAt.getTime() + hours * 3600000);
 }
 
+const orderItemInputSchema = z.object({
+  serviceId: z.number().int().optional(),
+  serviceName: z.string().min(1),
+  quantity: z.number().int().min(1),
+  unitPrice: z.number().min(0),
+});
+
 const orderInputSchema = z.object({
   customerName: z.string().min(1),
   phone: z.string().min(1),
   address: z.string().optional(),
+  customerId: z.number().int().optional(),
   serviceType: z.enum(["standard", "express", "premium"]).default("standard"),
-  shirts: z.number().int().min(0),
-  trousers: z.number().int().min(0),
+  items: z.array(orderItemInputSchema).optional(),
+  shirts: z.number().int().min(0).optional().default(0),
+  trousers: z.number().int().min(0).optional().default(0),
   additionalNotes: z.string().optional(),
   price: z.number().optional(),
   extraCharge: z.number().optional(),
@@ -144,50 +153,85 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
     const data = orderInputSchema.parse(req.body);
     const orderId = generateOrderId();
 
-    let customerId: number | null = null;
+    let customerId: number | null = data.customerId ?? null;
     const phoneNorm = data.phone.trim();
 
-    const [existingCustomer] = await db.select().from(customers)
-      .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, phoneNorm)));
+    if (!customerId) {
+      const [existingCustomer] = await db.select().from(customers)
+        .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, phoneNorm)));
 
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
-      await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, existingCustomer.id));
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, existingCustomer.id));
+      } else {
+        const [newCustomer] = await db.insert(customers).values({
+          laundryId,
+          fullName: data.customerName,
+          phone: phoneNorm,
+          address: data.address,
+        }).returning();
+        customerId = newCustomer.id;
+      }
     } else {
-      const [newCustomer] = await db.insert(customers).values({
-        laundryId,
-        fullName: data.customerName,
-        phone: phoneNorm,
-        address: data.address,
-      }).returning();
-      customerId = newCustomer.id;
+      await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, customerId));
     }
 
     const sla = await getLaundrySla(laundryId);
     const createdAt = new Date();
     const processingDueAt = computeProcessingDueAt(createdAt, data.serviceType, sla);
 
+    let computedPrice = data.price;
+    let insertedItems: typeof orderItems.$inferSelect[] = [];
+
+    if (data.items && data.items.length > 0) {
+      const lineTotal = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+      computedPrice = lineTotal;
+    }
+
     const [order] = await db.insert(orders).values({
-      ...data,
       laundryId,
       customerId,
       orderId,
-      price: data.price?.toString(),
+      customerName: data.customerName,
+      phone: phoneNorm,
+      address: data.address,
+      serviceType: data.serviceType,
+      shirts: data.shirts ?? 0,
+      trousers: data.trousers ?? 0,
+      additionalNotes: data.additionalNotes,
+      price: computedPrice?.toString(),
       extraCharge: data.extraCharge?.toString(),
       discount: data.discount?.toString(),
       processingDueAt,
     }).returning();
 
+    if (data.items && data.items.length > 0) {
+      const itemRows = data.items.map(item => ({
+        orderId: order.id,
+        serviceId: item.serviceId,
+        serviceType: data.serviceType,
+        name: item.serviceName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice.toString(),
+        totalPrice: (item.quantity * item.unitPrice).toString(),
+      }));
+      insertedItems = await db.insert(orderItems).values(itemRows).returning();
+    }
+
+    const itemSummary = insertedItems.length > 0
+      ? insertedItems.map(i => `${i.quantity}x ${i.name}`).join(", ")
+      : `${order.shirts}s/${order.trousers}t`;
+
     emitEvent({
       laundryId,
       eventType: "new_order",
       title: "New Order Received",
-      message: `Order #${order.orderId} for ${order.customerName} (${order.shirts}s/${order.trousers}t, ${order.serviceType}) — due ${processingDueAt.toLocaleString()}.`,
+      message: `Order #${order.orderId} for ${order.customerName} (${itemSummary}, ${order.serviceType}) — due ${processingDueAt.toLocaleString()}.`,
       severity: "info",
       relatedOrderId: order.id,
     }).catch(() => {});
 
-    res.status(201).json(order);
+    res.status(201).json({ ...order, items: insertedItems });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: "Failed to create order" });
@@ -389,7 +433,8 @@ ordersRouter.post("/:id/items", async (req: AuthRequest, res) => {
       updatedAt: new Date(),
     }).where(eq(orders.id, order.id)).returning();
 
-    res.json(updated);
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    res.json({ ...updated, items });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: "Failed to add order items" });

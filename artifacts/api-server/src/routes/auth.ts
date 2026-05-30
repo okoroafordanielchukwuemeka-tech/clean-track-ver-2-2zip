@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { laundries, workers } from "@workspace/db/schema";
+import { laundries, workers, expenseCategories, messageTemplates, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_MESSAGE_TEMPLATES } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -25,6 +25,28 @@ const workerLoginSchema = z.object({
   pin: z.string().min(4, "PIN required"),
 });
 
+async function seedLaundryDefaults(laundryId: number) {
+  await db.insert(expenseCategories).values(
+    DEFAULT_EXPENSE_CATEGORIES.map(name => ({
+      laundryId,
+      name,
+      isDefault: true,
+      isActive: true,
+    }))
+  ).onConflictDoNothing();
+
+  await db.insert(messageTemplates).values(
+    DEFAULT_MESSAGE_TEMPLATES.map(t => ({
+      laundryId,
+      name: t.name,
+      subject: t.subject,
+      body: t.body,
+      isDefault: true,
+      isActive: true,
+    }))
+  ).onConflictDoNothing();
+}
+
 authRouter.post("/signup", async (req, res) => {
   try {
     const data = ownerSignupSchema.parse(req.body);
@@ -43,6 +65,8 @@ authRouter.post("/signup", async (req, res) => {
       passwordHash,
       phone: data.phone,
     }).returning();
+
+    await seedLaundryDefaults(laundry.id);
 
     const token = signToken({
       laundryId: laundry.id,

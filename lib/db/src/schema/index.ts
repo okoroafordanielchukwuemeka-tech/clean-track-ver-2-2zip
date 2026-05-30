@@ -7,5 +7,8 @@ export * from "./pickup-records.js";
 export * from "./services.js";
 export * from "./batches.js";
 export * from "./workers.js";
+export * from "./worker-permissions.js";
 export * from "./notifications.js";
 export * from "./expenditures.js";
+export * from "./expense-categories.js";
+export * from "./message-templates.js";
