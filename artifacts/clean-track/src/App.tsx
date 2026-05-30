@@ -19,6 +19,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import WorkerLogin from "@/pages/worker-login";
 import NotFound from "@/pages/not-found";
+import DiscountApprovals from "@/pages/discount-approvals";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="services" element={<ProtectedRoute ownerOnly><Services /></ProtectedRoute>} />
               <Route path="workers" element={<ProtectedRoute ownerOnly><Workers /></ProtectedRoute>} />
               <Route path="customers" element={<Customers />} />
+              <Route path="discount-approvals" element={<ProtectedRoute ownerOnly><DiscountApprovals /></ProtectedRoute>} />
               <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
               <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
               <Route path="worker-station" element={<WorkerStation />} />

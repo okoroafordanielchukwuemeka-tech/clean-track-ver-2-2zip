@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -576,6 +576,21 @@ ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (re
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: "Failed to add order items" });
+  }
+});
+
+ordersRouter.get("/:id/audit-log", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const entries = await db.select().from(auditLog)
+      .where(and(eq(auditLog.orderId, order.id), eq(auditLog.laundryId, laundryId)))
+      .orderBy(desc(auditLog.createdAt));
+    res.json(entries);
+  } catch {
+    res.status(500).json({ error: "Failed to get order timeline" });
   }
 });
 

@@ -13,24 +13,15 @@ import {
   UserCircle,
   Receipt,
   Settings,
+  Percent,
 } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { NotificationCenter } from "@/components/notification-center";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
-
-const ownerNavItems = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/orders", label: "Orders", icon: ShoppingCart },
-  { to: "/customers", label: "Customers", icon: UserCircle },
-  { to: "/batches", label: "Batches", icon: Package },
-  { to: "/expenditures", label: "Expenditures", icon: Receipt },
-  { to: "/services", label: "Services", icon: Wrench },
-  { to: "/workers", label: "Workers", icon: Users },
-  { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
-  { to: "/settings", label: "Settings", icon: Settings },
-];
 
 const workerNavItems = [
   { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
@@ -43,6 +34,28 @@ export function Layout() {
   const navigate = useNavigate();
   const { user, isOwner, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const { data: pendingCount } = useQuery({
+    queryKey: ["discount-approvals", "pending-count"],
+    queryFn: () => api.discountApprovals.pendingCount(),
+    enabled: isOwner,
+    refetchInterval: 30_000,
+  });
+
+  const pending = pendingCount?.count ?? 0;
+
+  const ownerNavItems = [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/orders", label: "Orders", icon: ShoppingCart },
+    { to: "/customers", label: "Customers", icon: UserCircle },
+    { to: "/batches", label: "Batches", icon: Package },
+    { to: "/expenditures", label: "Expenditures", icon: Receipt },
+    { to: "/discount-approvals", label: "Discounts", icon: Percent, badge: pending > 0 ? pending : undefined },
+    { to: "/services", label: "Services", icon: Wrench },
+    { to: "/workers", label: "Workers", icon: Users },
+    { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+    { to: "/settings", label: "Settings", icon: Settings },
+  ];
 
   const navItems = isOwner ? ownerNavItems : workerNavItems;
 
@@ -80,7 +93,7 @@ export function Layout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon, badge }: any) => (
             <Link
               key={to}
               to={to}
@@ -92,8 +105,13 @@ export function Layout() {
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}
             >
-              <Icon className="h-4 w-4" />
-              {label}
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="flex-1">{label}</span>
+              {badge != null && (
+                <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {badge}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

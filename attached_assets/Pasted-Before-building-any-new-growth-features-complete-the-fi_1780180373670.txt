@@ -1,0 +1,205 @@
+Before building any new growth features, complete the final V1 operational phase of CleanTrack.
+
+This task has 3 objectives:
+
+1. Owner Discount Approval Dashboard
+2. Order Activity Timeline
+3. Full System Stress Test & Verification
+
+====================================
+PHASE 1 — DISCOUNT APPROVAL DASHBOARD
+=====================================
+
+The backend discount approval engine already exists.
+
+Audit first:
+
+* Verify discount_approvals table
+* Verify approval endpoints
+* Verify owner approval workflow
+* Verify worker discount request workflow
+
+Then build a complete owner UI.
+
+Requirements:
+
+Create a new page:
+
+/discount-approvals
+
+Owner only.
+
+Show:
+
+* Pending approvals
+* Approved approvals
+* Rejected approvals
+
+For each request show:
+
+* Order Number
+* Customer Name
+* Worker Name
+* Original Order Total
+* Requested Discount
+* Discount %
+* Reason
+* Request Time
+
+Actions:
+
+Approve
+Reject
+
+When approved:
+
+* Apply discount immediately
+* Update order totals
+* Create audit log entry
+* Create notification
+
+When rejected:
+
+* Leave order unchanged
+* Create audit log entry
+* Create notification
+
+Add:
+
+* Sidebar badge showing number of pending approvals
+* Dashboard widget showing pending approvals count
+
+====================================
+PHASE 2 — ORDER ACTIVITY TIMELINE
+=================================
+
+Use the existing audit_log system.
+
+Build a complete activity timeline on the Order Detail page.
+
+For every order display:
+
+Order Created
+Order Updated
+Worker Assigned
+Status Changes
+Discount Requested
+Discount Approved
+Discount Rejected
+Payment Recorded
+Payment Deleted
+Pickup Recorded
+Partial Pickup
+Completed Pickup
+Notifications Generated
+
+Display:
+
+* Timestamp
+* User Name
+* User Role
+* Action
+* Details
+
+Example:
+
+09:32 AM
+Amaka Obi (Worker)
+Created Order
+
+09:45 AM
+Owner
+Approved ₦2,000 Discount
+
+10:20 AM
+Amaka Obi (Worker)
+Recorded ₦5,000 Payment
+
+Timeline must be:
+
+* Reverse chronological
+* Easy to read
+* Mobile friendly
+
+====================================
+PHASE 3 — FULL SYSTEM STRESS TEST
+=================================
+
+Create test data safely.
+
+Generate:
+
+50 Customers
+
+200 Orders
+
+Mix of:
+
+* Standard
+* Express
+* Premium
+
+Include:
+
+* Paid orders
+* Partial payments
+* Unpaid orders
+* Ready orders
+* Processing orders
+* Completed orders
+* Partial pickup orders
+* Overdue orders
+* Due soon orders
+
+Generate:
+
+* Discount requests
+* Approved discounts
+* Rejected discounts
+* Notifications
+* Audit logs
+* Pickup records
+
+Verify:
+
+Dashboard
+Analytics
+Orders
+Customers
+Workers
+Notifications
+Expenses
+Profitability
+Discount Approvals
+Order Timeline
+
+Check for:
+
+* Broken calculations
+* Incorrect customer counts
+* Incorrect revenue
+* Incorrect balances
+* Missing notifications
+* Missing audit entries
+* Slow pages
+* Permission issues
+
+====================================
+FINAL AUDIT REPORT
+==================
+
+Do not stop after implementation.
+
+Provide a complete report:
+
+1. What was built
+2. What was verified
+3. Any bugs discovered
+4. Any bugs fixed
+5. Remaining production gaps
+6. Performance observations with 200 orders
+7. Launch readiness score out of 100
+
+Do not skip verification.
+
+Actually test the workflows and prove they work before marking the task complete.

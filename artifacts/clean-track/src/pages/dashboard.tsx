@@ -14,7 +14,7 @@ import {
   DollarSign, ShoppingCart, Users, AlertTriangle, TrendingUp,
   TrendingDown, Clock, CheckCircle, ShoppingBag, Package,
   Crown, RefreshCw, ArrowUpRight, ArrowDownRight, Minus,
-  Activity, UserCheck, Zap, Receipt, Settings,
+  Activity, UserCheck, Zap, Receipt, Settings, Percent,
 } from "lucide-react";
 
 const fmt = (v: number) =>
@@ -120,6 +120,12 @@ export default function Dashboard() {
     queryKey: ["analytics", "sla"],
     queryFn: () => api.settings.getSlaAnalytics(),
     refetchInterval: 60_000,
+  });
+
+  const { data: pendingDiscounts } = useQuery({
+    queryKey: ["discount-approvals", "pending-count"],
+    queryFn: () => api.discountApprovals.pendingCount(),
+    refetchInterval: 30_000,
   });
 
   const ov = full?.overview;
@@ -238,6 +244,23 @@ export default function Dashboard() {
                 </div>
                 <Button variant="outline" size="sm" asChild className="shrink-0 border-red-300 text-red-700 hover:bg-red-100">
                   <Link to="/expenditures">View Expenses</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {(pendingDiscounts?.count ?? 0) > 0 && (
+            <Card className="border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Percent className="h-5 w-5 text-amber-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                    {pendingDiscounts!.count} discount request{pendingDiscounts!.count !== 1 ? "s" : ""} awaiting approval
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500">Workers are waiting — review and approve or reject</p>
+                </div>
+                <Button variant="outline" size="sm" asChild className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100">
+                  <Link to="/discount-approvals">Review</Link>
                 </Button>
               </CardContent>
             </Card>

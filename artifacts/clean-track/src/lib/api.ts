@@ -53,6 +53,16 @@ export const api = {
     addItems: (id: number, data: { items: OrderItemInput[] }) => request<Order>("POST", `/orders/${id}/items`, data),
     priceAdjustments: (id: number) => request<PriceAdjustment[]>("GET", `/orders/${id}/price-adjustments`),
     addPriceAdjustment: (id: number, data: PriceAdjustmentInput) => request<PriceAdjustment>("POST", `/orders/${id}/price-adjustments`, data),
+    auditLog: (id: number) => request<AuditLogEntry[]>("GET", `/orders/${id}/audit-log`),
+  },
+  discountApprovals: {
+    list: (status?: "pending" | "approved" | "rejected") => {
+      const qs = status ? `?status=${status}` : "";
+      return request<DiscountApproval[]>("GET", `/discount-approvals${qs}`);
+    },
+    pendingCount: () => request<{ count: number }>("GET", "/discount-approvals/pending-count"),
+    resolve: (id: number, status: "approved" | "rejected") =>
+      request<DiscountApproval>("PATCH", `/discount-approvals/${id}`, { status }),
   },
   services: {
     list: (params?: Record<string, string>) => {
@@ -692,6 +702,33 @@ export interface MessageTemplateInput {
   subject?: string;
   body?: string;
   isActive?: boolean;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  laundryId?: number | null;
+  actorId?: number | null;
+  actorType: "owner" | "worker";
+  actorName: string;
+  action: string;
+  orderId?: number | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface DiscountApproval {
+  id: number;
+  laundryId?: number | null;
+  orderId: number;
+  requestedBy?: number | null;
+  requestedByName: string;
+  originalAmount: string;
+  requestedDiscount: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  resolvedBy?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
 }
 
 export interface ExpenseCategoryRecord {

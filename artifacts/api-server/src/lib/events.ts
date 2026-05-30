@@ -12,7 +12,10 @@ export type EventType =
   | "partial_pickup"
   | "pickup_completed"
   | "high_expense"
-  | "low_profit_warning";
+  | "low_profit_warning"
+  | "discount_requested"
+  | "discount_approved"
+  | "discount_rejected";
 
 export type Severity = "info" | "warning" | "urgent" | "success";
 

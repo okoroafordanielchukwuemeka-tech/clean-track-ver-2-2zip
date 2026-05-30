@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
-import { api, type PaymentInput, type OrderItem, type PriceAdjustment } from "@/lib/api";
+import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,64 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus, TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock } from "lucide-react";
 import { toast } from "sonner";
+
+const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
+  order_created: { label: "Order Created", icon: CheckCircle, color: "text-green-600", bg: "bg-green-100 dark:bg-green-950/40" },
+  order_updated: { label: "Order Updated", icon: Activity, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950/40" },
+  order_deleted: { label: "Order Deleted", icon: Trash2, color: "text-red-600", bg: "bg-red-100 dark:bg-red-950/40" },
+  order_items_updated: { label: "Items Updated", icon: Package, color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950/40" },
+  payment_recorded: { label: "Payment Recorded", icon: CreditCard, color: "text-green-600", bg: "bg-green-100 dark:bg-green-950/40" },
+  payment_deleted: { label: "Payment Deleted", icon: Trash2, color: "text-red-600", bg: "bg-red-100 dark:bg-red-950/40" },
+  discount_requested: { label: "Discount Requested", icon: Percent, color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-950/40" },
+  discount_approved: { label: "Discount Approved", icon: CheckCircle, color: "text-green-600", bg: "bg-green-100 dark:bg-green-950/40" },
+  discount_rejected: { label: "Discount Rejected", icon: Trash2, color: "text-red-600", bg: "bg-red-100 dark:bg-red-950/40" },
+  discount_auto_applied: { label: "Discount Auto-Applied", icon: Percent, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950/40" },
+  discount_applied: { label: "Discount Applied", icon: Percent, color: "text-green-600", bg: "bg-green-100 dark:bg-green-950/40" },
+  surcharge_applied: { label: "Surcharge Applied", icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-100 dark:bg-orange-950/40" },
+  pickup_recorded: { label: "Pickup Recorded", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950/40" },
+};
+
+function getActionConfig(action: string) {
+  return ACTION_CONFIG[action] ?? { label: action.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), icon: Activity, color: "text-muted-foreground", bg: "bg-muted" };
+}
+
+function buildTimelineDetail(entry: AuditLogEntry): string | null {
+  const m = entry.metadata ?? {};
+  switch (entry.action) {
+    case "payment_recorded":
+      return `₦${Number(m.amount ?? 0).toLocaleString()} via ${m.method ?? ""}${m.remainingBalance !== undefined ? ` · Balance: ₦${Number(m.remainingBalance).toLocaleString()}` : ""}`;
+    case "payment_deleted":
+      return `₦${Number(m.amount ?? 0).toLocaleString()} removed`;
+    case "discount_requested":
+      return `₦${Number(m.amount ?? 0).toLocaleString()} · "${m.reason ?? ""}"`;
+    case "discount_approved":
+      return `₦${Number(m.discountAmount ?? 0).toLocaleString()} approved · requested by ${m.requestedBy ?? ""}`;
+    case "discount_rejected":
+      return `₦${Number(m.requestedDiscount ?? 0).toLocaleString()} rejected · requested by ${m.requestedBy ?? ""}`;
+    case "discount_auto_applied":
+      return `₦${Number(m.amount ?? 0).toLocaleString()} auto-applied · "${m.reason ?? ""}"`;
+    case "discount_applied":
+    case "surcharge_applied":
+      return `₦${Number(m.amount ?? 0).toLocaleString()} · "${m.reason ?? ""}"`;
+    case "order_updated": {
+      const changes = m.changes as Record<string, unknown> | undefined;
+      if (!changes) return null;
+      const parts: string[] = [];
+      if (changes.status) parts.push(`Status → ${String(changes.status)}`);
+      if (changes.assignedWorkerId !== undefined) parts.push(`Worker assigned`);
+      if (changes.price !== undefined) parts.push(`Price → ₦${Number(changes.price).toLocaleString()}`);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    }
+    case "order_items_updated":
+      return `${m.itemCount ?? 0} item type${Number(m.itemCount) !== 1 ? "s" : ""} · Total: ₦${Number(m.newTotal ?? 0).toLocaleString()}`;
+    case "order_created":
+      return `${m.customerName ?? ""} · ${m.serviceType ?? ""} · ₦${Number(m.price ?? 0).toLocaleString()}`;
+    default:
+      return null;
+  }
+}
 
 function formatCurrency(v: number | null | undefined) {
   if (v == null) return "—";
@@ -67,6 +123,12 @@ export default function OrderDetail() {
   const { data: pickups = [] } = useQuery({
     queryKey: ["orders", orderId, "pickups"],
     queryFn: () => api.pickups.list(orderId),
+    enabled: !!orderId,
+  });
+
+  const { data: auditEntries = [] } = useQuery({
+    queryKey: ["orders", orderId, "audit-log"],
+    queryFn: () => api.orders.auditLog(orderId),
     enabled: !!orderId,
   });
 
@@ -598,6 +660,58 @@ export default function OrderDetail() {
           </Table>
         </CardContent>
       </Card>
+
+      {auditEntries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              Activity Timeline ({auditEntries.length} events)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="relative">
+              <div className="absolute left-5 top-0 bottom-0 w-px bg-border" />
+              <div className="space-y-4">
+                {auditEntries.map((entry, idx) => {
+                  const cfg = getActionConfig(entry.action);
+                  const Icon = cfg.icon;
+                  const detail = buildTimelineDetail(entry);
+                  const isLast = idx === auditEntries.length - 1;
+                  return (
+                    <div key={entry.id} className={`relative flex gap-4 ${!isLast ? "pb-1" : ""}`}>
+                      <div className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${cfg.bg}`}>
+                        <Icon className={`h-4 w-4 ${cfg.color}`} />
+                      </div>
+                      <div className="flex-1 min-w-0 pt-1.5">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div>
+                            <p className="text-sm font-semibold">{cfg.label}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <User className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">{entry.actorName}</span>
+                                {" "}
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 capitalize">{entry.actorType}</Badge>
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {new Date(entry.createdAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
+                          </span>
+                        </div>
+                        {detail && (
+                          <p className="mt-1.5 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">{detail}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isOwner && (
         <div className="flex gap-3">
