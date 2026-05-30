@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { notifications, orders } from "@workspace/db/schema";
+import { notifications, orders, laundries } from "@workspace/db/schema";
 import { eq, and, desc, or } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
 import { emitEvent } from "../lib/events.js";
 
 export const notificationsRouter = Router();
 
-const SERVICE_TURNAROUND_HOURS: Record<string, number> = {
+const DEFAULT_TURNAROUND: Record<string, number> = {
   express: 24,
   premium: 48,
   standard: 72,
@@ -16,6 +16,25 @@ const SERVICE_TURNAROUND_HOURS: Record<string, number> = {
 async function detectOperationalAlerts(laundryId: number) {
   try {
     const now = new Date();
+
+    const [laundry] = await db
+      .select()
+      .from(laundries)
+      .where(eq(laundries.id, laundryId));
+
+    if (!laundry) return;
+
+    const automation = (laundry.automationSettings ?? {}) as {
+      overdueAlerts?: boolean;
+      dueSoonAlerts?: boolean;
+    };
+
+    const slaHours: Record<string, number> = {
+      express: laundry.expressTurnaroundHours ?? DEFAULT_TURNAROUND.express,
+      premium: laundry.premiumTurnaroundHours ?? DEFAULT_TURNAROUND.premium,
+      standard: laundry.standardTurnaroundHours ?? DEFAULT_TURNAROUND.standard,
+    };
+
     const allActive = await db
       .select()
       .from(orders)
@@ -26,13 +45,17 @@ async function detectOperationalAlerts(laundryId: number) {
     );
 
     for (const order of activeOrders) {
-      const created = new Date(order.createdAt);
-      const ageHours = (now.getTime() - created.getTime()) / 3600000;
-      const expectedHours = SERVICE_TURNAROUND_HOURS[order.serviceType] ?? 72;
-      const isOverdue = ageHours > expectedHours;
-      const isDueSoon = !isOverdue && ageHours > expectedHours * 0.75;
+      const dueAt = order.processingDueAt
+        ? new Date(order.processingDueAt)
+        : new Date(new Date(order.createdAt).getTime() + (slaHours[order.serviceType] ?? 72) * 3600000);
 
-      if (isOverdue) {
+      const msRemaining = dueAt.getTime() - now.getTime();
+      const hoursRemaining = msRemaining / 3600000;
+      const expectedHours = slaHours[order.serviceType] ?? 72;
+      const isOverdue = hoursRemaining < 0;
+      const isDueSoon = !isOverdue && hoursRemaining <= expectedHours * 0.25;
+
+      if (isOverdue && automation.overdueAlerts !== false) {
         const existing = await db
           .select()
           .from(notifications)
@@ -44,16 +67,17 @@ async function detectOperationalAlerts(laundryId: number) {
             )
           );
         if (existing.length === 0) {
+          const hoursOverdue = Math.floor(Math.abs(hoursRemaining));
           await emitEvent({
             laundryId,
             eventType: "overdue",
             title: "Order Overdue",
-            message: `Order #${order.orderId} for ${order.customerName} is overdue — ${Math.floor(ageHours)}h elapsed, expected within ${expectedHours}h.`,
+            message: `Order #${order.orderId} for ${order.customerName} is overdue by ${hoursOverdue}h — SLA was ${expectedHours}h.`,
             severity: "urgent",
             relatedOrderId: order.id,
           });
         }
-      } else if (isDueSoon) {
+      } else if (isDueSoon && automation.dueSoonAlerts !== false) {
         const existing = await db
           .select()
           .from(notifications)
@@ -65,12 +89,12 @@ async function detectOperationalAlerts(laundryId: number) {
             )
           );
         if (existing.length === 0) {
-          const hoursLeft = Math.round(expectedHours - ageHours);
+          const hoursLeft = Math.round(hoursRemaining);
           await emitEvent({
             laundryId,
             eventType: "due_soon",
             title: "Order Due Soon",
-            message: `Order #${order.orderId} for ${order.customerName} is due in ~${hoursLeft}h.`,
+            message: `Order #${order.orderId} for ${order.customerName} is due in ~${hoursLeft}h (${order.serviceType} SLA: ${expectedHours}h).`,
             severity: "warning",
             relatedOrderId: order.id,
           });
