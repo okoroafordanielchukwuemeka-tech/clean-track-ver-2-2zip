@@ -163,6 +163,15 @@ export const api = {
     update: (id: number, data: Partial<ExpenditureInput>) => request<Expenditure>("PATCH", `/expenditures/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/expenditures/${id}`),
   },
+  receipts: {
+    list: (params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+      return request<ReceiptListResponse>("GET", `/receipts${qs}`);
+    },
+    getByNumber: (receiptNumber: string) => request<import("@/components/receipt-view").ReceiptData>("GET", `/receipts/${encodeURIComponent(receiptNumber)}`),
+    getForOrder: (orderId: number) => request<import("@/components/receipt-view").ReceiptData>("GET", `/orders/${orderId}/receipt`),
+    getCustomerReceipts: (customerId: number) => request<ReceiptListResponse>("GET", `/receipts?customerId=${customerId}`),
+  },
 };
 
 export interface AuthUser {
@@ -277,10 +286,13 @@ export interface OrderUpdate {
 export interface PaymentRecord {
   id: number;
   orderId: number;
+  laundryId?: number | null;
+  receiptNumber?: string | null;
   amount: number;
   method: "cash" | "transfer" | "pos";
   notes?: string | null;
   remainingBalance: number;
+  recordedBy?: string | null;
   recordedAt: string;
 }
 
@@ -702,6 +714,29 @@ export interface MessageTemplateInput {
   subject?: string;
   body?: string;
   isActive?: boolean;
+}
+
+export interface ReceiptListItem {
+  id: number;
+  receiptNumber: string | null;
+  orderId: number;
+  orderRef: string;
+  customerName: string;
+  phone: string;
+  customerId?: number | null;
+  amount: string;
+  method: string;
+  remainingBalance: string;
+  recordedBy?: string | null;
+  recordedAt: string;
+  paymentStatus: string;
+}
+
+export interface ReceiptListResponse {
+  receipts: ReceiptListItem[];
+  total: number;
+  totalCollected: number;
+  totalBalance: number;
 }
 
 export interface AuditLogEntry {

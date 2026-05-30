@@ -20,6 +20,8 @@ import Signup from "@/pages/signup";
 import WorkerLogin from "@/pages/worker-login";
 import NotFound from "@/pages/not-found";
 import DiscountApprovals from "@/pages/discount-approvals";
+import Receipts from "@/pages/receipts";
+import ReceiptPrint from "@/pages/receipt-print";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,10 +63,12 @@ export default function App() {
               <Route path="customers" element={<Customers />} />
               <Route path="discount-approvals" element={<ProtectedRoute ownerOnly><DiscountApprovals /></ProtectedRoute>} />
               <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
+              <Route path="receipts" element={<ProtectedRoute ownerOnly><Receipts /></ProtectedRoute>} />
               <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
               <Route path="worker-station" element={<WorkerStation />} />
               <Route path="*" element={<NotFound />} />
             </Route>
+            <Route path="/receipts/print/:receiptNumber" element={<ReceiptPrint />} />
           </Routes>
         </BrowserRouter>
         <Toaster richColors />

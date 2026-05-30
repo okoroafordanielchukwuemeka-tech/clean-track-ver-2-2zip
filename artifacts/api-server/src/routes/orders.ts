@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog } from "@workspace/db/schema";
-import { eq, desc, and, count, inArray } from "drizzle-orm";
+import { eq, desc, and, count, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -11,6 +11,25 @@ import { emitEvent } from "../lib/events.js";
 export const ordersRouter = Router();
 
 const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
+
+async function generateReceiptNumber(laundryId: number): Promise<string> {
+  const today = new Date();
+  const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const [{ cnt }] = await db
+    .select({ cnt: sql<number>`COUNT(*)` })
+    .from(paymentRecords)
+    .where(
+      and(
+        eq(paymentRecords.laundryId, laundryId),
+        sql`${paymentRecords.recordedAt} >= ${startOfDay}`,
+        sql`${paymentRecords.recordedAt} < ${endOfDay}`,
+      )
+    );
+  const seq = (Number(cnt) + 1).toString().padStart(4, "0");
+  return `RCT-${datePart}-${seq}`;
+}
 
 function generateOrderId() {
   const now = new Date();
@@ -442,8 +461,12 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
     const remainingBalance = Math.max(0, totalDue - amountPaid);
     const paymentStatus = remainingBalance <= 0 ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
 
+    const receiptNumber = await generateReceiptNumber(laundryId);
+
     const [payment] = await db.insert(paymentRecords).values({
       orderId: order.id,
+      laundryId,
+      receiptNumber,
       amount: data.amount.toString(),
       method: data.method,
       notes: data.notes,
@@ -576,6 +599,98 @@ ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (re
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: "Failed to add order items" });
+  }
+});
+
+ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const [laundry] = await db.select().from(laundries).where(eq(laundries.id, laundryId));
+    const [customer] = order.customerId
+      ? await db.select().from(customers).where(eq(customers.id, order.customerId))
+      : [null];
+
+    const [items, adjustments, allPayments] = await Promise.all([
+      db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
+      db.select().from(priceAdjustments).where(eq(priceAdjustments.orderId, order.id)).orderBy(priceAdjustments.createdAt),
+      db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)).orderBy(paymentRecords.recordedAt),
+    ]);
+
+    const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
+    const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
+
+    const basePrice = parseFloat(order.price || "0");
+    const extraCharge = parseFloat(order.extraCharge || "0");
+    const discount = parseFloat(order.discount || "0");
+    const totalDue = basePrice + extraCharge - discount;
+    const amountPaid = parseFloat(order.amountPaid || "0");
+    const balance = Math.max(0, totalDue - amountPaid);
+
+    const latestPayment = allPayments.length > 0 ? allPayments[allPayments.length - 1] : null;
+
+    res.json({
+      receipt: latestPayment ? {
+        receiptNumber: latestPayment.receiptNumber,
+        recordedAt: latestPayment.recordedAt,
+        amount: parseFloat(latestPayment.amount),
+        method: latestPayment.method,
+        notes: latestPayment.notes,
+        remainingBalance: parseFloat(latestPayment.remainingBalance),
+        recordedBy: latestPayment.recordedBy,
+      } : null,
+      laundry: {
+        businessName: laundry?.businessName ?? "",
+        phone: laundry?.phone ?? "",
+        address: businessProfile.address ?? "",
+        email: businessProfile.email ?? "",
+        logoUrl: businessProfile.logoUrl ?? "",
+        receiptHeaderName: brandingSettings.receiptHeaderName ?? laundry?.businessName ?? "",
+        receiptFooterText: brandingSettings.receiptFooterText ?? "",
+        brandColor: brandingSettings.brandColor ?? "",
+      },
+      customer: {
+        fullName: order.customerName,
+        phone: order.phone,
+        address: order.address ?? customer?.address ?? "",
+      },
+      order: {
+        id: order.id,
+        orderId: order.orderId,
+        serviceType: order.serviceType,
+        shirts: order.shirts,
+        trousers: order.trousers,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        additionalNotes: order.additionalNotes,
+        createdAt: order.createdAt,
+      },
+      items,
+      priceAdjustments: adjustments,
+      pricing: {
+        basePrice,
+        extraCharge,
+        discount,
+        totalDue,
+        amountPaid,
+        balance,
+      },
+      allPayments: allPayments.map(p => ({
+        id: p.id,
+        receiptNumber: p.receiptNumber,
+        amount: parseFloat(p.amount),
+        method: p.method,
+        recordedBy: p.recordedBy,
+        recordedAt: p.recordedAt,
+        remainingBalance: parseFloat(p.remainingBalance),
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to get receipt" });
   }
 });
 

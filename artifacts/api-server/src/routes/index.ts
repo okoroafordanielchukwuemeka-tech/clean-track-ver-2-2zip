@@ -14,6 +14,7 @@ import { settingsRouter } from "./settings.js";
 import { messageTemplatesRouter } from "./message-templates.js";
 import { expenseCategoriesRouter } from "./expense-categories.js";
 import { discountApprovalsRouter } from "./discount-approvals.js";
+import { receiptsRouter } from "./receipts.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 export const router = Router();
@@ -37,3 +38,4 @@ router.use("/expenditures", requireOwner, expendituresRouter);
 router.use("/expense-categories", requireOwner, expenseCategoriesRouter);
 router.use("/message-templates", requireOwner, messageTemplatesRouter);
 router.use("/discount-approvals", requireAuth, discountApprovalsRouter);
+router.use("/receipts", requireOwner, receiptsRouter);

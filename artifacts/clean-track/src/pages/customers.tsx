@@ -12,9 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ReceiptView } from "@/components/receipt-view";
 import {
   Users, Search, Plus, Eye, Phone, AlertTriangle,
   ShoppingBag, Crown, RefreshCw, ArrowRight, Pencil, Trash2, CheckCircle,
+  Printer, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,6 +66,7 @@ export default function Customers() {
   const [showDelete, setShowDelete] = useState(false);
   const [createForm, setCreateForm] = useState<CustomerInput>({ fullName: "", phone: "" });
   const [editForm, setEditForm] = useState<CustomerUpdateInput & { id?: number }>({});
+  const [profileTab, setProfileTab] = useState<"orders" | "receipts">("orders");
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ["customers", search, tag],
@@ -79,6 +82,12 @@ export default function Customers() {
     queryKey: ["customers", selectedId],
     queryFn: () => api.customers.get(selectedId!),
     enabled: selectedId != null,
+  });
+
+  const { data: customerReceiptsData, isLoading: receiptsLoading } = useQuery({
+    queryKey: ["customerReceipts", profile?.phone],
+    queryFn: () => api.receipts.list({ search: profile!.phone, limit: 50, page: 1 }),
+    enabled: isOwner && profile != null && profileTab === "receipts",
   });
 
   const backfillMutation = useMutation({
@@ -279,7 +288,7 @@ export default function Customers() {
         </CardContent>
       </Card>
 
-      <Dialog open={selectedId != null} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
+      <Dialog open={selectedId != null} onOpenChange={(open) => { if (!open) { setSelectedId(null); setProfileTab("orders"); } }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           {profileLoading || !profile ? (
             <div className="p-8 text-center text-muted-foreground">Loading profile...</div>
@@ -388,84 +397,157 @@ export default function Customers() {
                 </div>
               )}
 
-              {profile.orders.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-sm mb-2">Order History ({profile.orders.length})</h3>
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">Order ID</TableHead>
-                          <TableHead className="text-xs">Service</TableHead>
-                          <TableHead className="text-xs">Items</TableHead>
-                          <TableHead className="text-xs">Status</TableHead>
-                          <TableHead className="text-xs">Price</TableHead>
-                          <TableHead className="text-xs">Balance</TableHead>
-                          <TableHead className="text-xs">Date</TableHead>
-                          <TableHead className="text-xs"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {profile.orders.slice(0, 10).map((o) => {
-                          const totalDue = (Number(o.price) || 0) + (Number(o.extraCharge) || 0) - (Number(o.discount) || 0);
-                          const balance = Math.max(0, totalDue - Number(o.amountPaid || 0));
-                          const remainingS = Math.max(0, o.shirts - (o.shirtsPickedUp || 0));
-                          const remainingT = Math.max(0, o.trousers - (o.trousersPickedUp || 0));
-                          return (
-                            <TableRow key={o.id}>
-                              <TableCell className="font-mono text-xs">{o.orderId}</TableCell>
-                              <TableCell className="text-xs capitalize">{o.serviceType}</TableCell>
-                              <TableCell className="text-xs">
-                                {o.shirts}S / {o.trousers}T
-                                {(remainingS > 0 || remainingT > 0) && (
-                                  <span className="text-orange-500 ml-1">({remainingS}S/{remainingT}T left)</span>
-                                )}
-                              </TableCell>
-                              <TableCell>{statusBadge(o.status)}</TableCell>
-                              <TableCell className="text-xs">{fmt(totalDue)}</TableCell>
-                              <TableCell className="text-xs">
-                                {balance > 0 ? (
-                                  <span className="text-red-600">{fmt(balance)}</span>
-                                ) : (
-                                  <span className="text-green-600 flex items-center gap-0.5">
-                                    <CheckCircle className="h-3 w-3" />Paid
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {new Date(o.createdAt).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  asChild
-                                  onClick={() => setSelectedId(null)}
-                                >
-                                  <Link to={`/orders/${o.id}`}>
-                                    <ArrowRight className="h-3.5 w-3.5" />
-                                  </Link>
-                                </Button>
-                              </TableCell>
+              <Tabs value={profileTab} onValueChange={(v) => setProfileTab(v as "orders" | "receipts")}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="orders" className="flex-1 gap-1.5">
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    Orders ({profile.orders.length})
+                  </TabsTrigger>
+                  {isOwner && (
+                    <TabsTrigger value="receipts" className="flex-1 gap-1.5">
+                      <FileText className="h-3.5 w-3.5" />
+                      Receipts
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+
+                {/* Orders Tab */}
+                <div className={profileTab === "orders" ? "mt-3" : "hidden"}>
+                  {profile.orders.length > 0 ? (
+                    <div>
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs">Order ID</TableHead>
+                              <TableHead className="text-xs">Service</TableHead>
+                              <TableHead className="text-xs">Items</TableHead>
+                              <TableHead className="text-xs">Status</TableHead>
+                              <TableHead className="text-xs">Price</TableHead>
+                              <TableHead className="text-xs">Balance</TableHead>
+                              <TableHead className="text-xs">Date</TableHead>
+                              <TableHead className="text-xs"></TableHead>
                             </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  {profile.orders.length > 10 && (
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      Showing 10 of {profile.orders.length} orders
-                    </p>
+                          </TableHeader>
+                          <TableBody>
+                            {profile.orders.slice(0, 10).map((o) => {
+                              const totalDue = (Number(o.price) || 0) + (Number(o.extraCharge) || 0) - (Number(o.discount) || 0);
+                              const balance = Math.max(0, totalDue - Number(o.amountPaid || 0));
+                              const remainingS = Math.max(0, o.shirts - (o.shirtsPickedUp || 0));
+                              const remainingT = Math.max(0, o.trousers - (o.trousersPickedUp || 0));
+                              return (
+                                <TableRow key={o.id}>
+                                  <TableCell className="font-mono text-xs">{o.orderId}</TableCell>
+                                  <TableCell className="text-xs capitalize">{o.serviceType}</TableCell>
+                                  <TableCell className="text-xs">
+                                    {o.shirts}S / {o.trousers}T
+                                    {(remainingS > 0 || remainingT > 0) && (
+                                      <span className="text-orange-500 ml-1">({remainingS}S/{remainingT}T left)</span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>{statusBadge(o.status)}</TableCell>
+                                  <TableCell className="text-xs">{fmt(totalDue)}</TableCell>
+                                  <TableCell className="text-xs">
+                                    {balance > 0 ? (
+                                      <span className="text-red-600">{fmt(balance)}</span>
+                                    ) : (
+                                      <span className="text-green-600 flex items-center gap-0.5">
+                                        <CheckCircle className="h-3 w-3" />Paid
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {new Date(o.createdAt).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      asChild
+                                      onClick={() => setSelectedId(null)}
+                                    >
+                                      <Link to={`/orders/${o.id}`}>
+                                        <ArrowRight className="h-3.5 w-3.5" />
+                                      </Link>
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {profile.orders.length > 10 && (
+                        <p className="text-xs text-muted-foreground text-center mt-2">
+                          Showing 10 of {profile.orders.length} orders
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-muted-foreground text-sm">
+                      No orders linked to this customer yet
+                    </div>
                   )}
                 </div>
-              )}
 
-              {!profile.orders.length && (
-                <div className="text-center py-6 text-muted-foreground text-sm">
-                  No orders linked to this customer yet
-                </div>
-              )}
+                {/* Receipts Tab — owner only */}
+                {isOwner && (
+                  <div className={profileTab === "receipts" ? "mt-3" : "hidden"}>
+                    {receiptsLoading ? (
+                      <div className="py-8 text-center text-muted-foreground text-sm">Loading receipts…</div>
+                    ) : !customerReceiptsData?.receipts?.length ? (
+                      <div className="py-8 text-center text-muted-foreground text-sm">
+                        No receipts found for this customer
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="border rounded-lg overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs">Receipt #</TableHead>
+                                <TableHead className="text-xs">Order</TableHead>
+                                <TableHead className="text-xs">Amount</TableHead>
+                                <TableHead className="text-xs">Method</TableHead>
+                                <TableHead className="text-xs">Date</TableHead>
+                                <TableHead className="text-xs"></TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {customerReceiptsData.receipts.map((r) => (
+                                <TableRow key={r.receiptNumber}>
+                                  <TableCell className="font-mono text-xs text-primary">{r.receiptNumber}</TableCell>
+                                  <TableCell className="font-mono text-xs">{r.orderId}</TableCell>
+                                  <TableCell className="text-xs font-semibold">{fmt(Number(r.amount))}</TableCell>
+                                  <TableCell className="text-xs capitalize">{r.paymentMethod.replace("_", " ")}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">
+                                    {new Date(r.recordedAt).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Print receipt"
+                                      onClick={() => window.open(`/receipts/print/${encodeURIComponent(r.receiptNumber)}`, "_blank")}
+                                    >
+                                      <Printer className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {customerReceiptsData.total > 50 && (
+                          <p className="text-xs text-muted-foreground text-center">
+                            Showing 50 of {customerReceiptsData.total} receipts
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Tabs>
 
               <div className="flex justify-between items-center pt-2 border-t">
                 {isOwner ? (

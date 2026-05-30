@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus, TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock } from "lucide-react";
+import { ReceiptView } from "@/components/receipt-view";
+import { ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus, TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock, Receipt, Printer, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
@@ -98,6 +99,7 @@ export default function OrderDetail() {
   const [showDelete, setShowDelete] = useState(false);
   const [showPickup, setShowPickup] = useState(false);
   const [showAddAdj, setShowAddAdj] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentInput>({ amount: 0, method: "cash" });
   const [pickupForm, setPickupForm] = useState({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
   const [itemPickupQtys, setItemPickupQtys] = useState<Map<number, number>>(new Map());
@@ -130,6 +132,12 @@ export default function OrderDetail() {
     queryKey: ["orders", orderId, "audit-log"],
     queryFn: () => api.orders.auditLog(orderId),
     enabled: !!orderId,
+  });
+
+  const { data: receiptData, isLoading: receiptLoading } = useQuery({
+    queryKey: ["orders", orderId, "receipt"],
+    queryFn: () => api.receipts.getForOrder(orderId),
+    enabled: !!orderId && showReceipt,
   });
 
   const updateMutation = useMutation({
@@ -276,6 +284,20 @@ export default function OrderDetail() {
           {paymentBadge(order.paymentStatus)}
           {order.isVerified && (
             <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />Verified</Badge>
+          )}
+          {payments.length > 0 && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setShowReceipt(true)}>
+                <Eye className="h-4 w-4 mr-1" />
+                Receipt
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                window.open(`/receipts/print/${encodeURIComponent(payments[payments.length - 1]?.receiptNumber ?? "")}`, "_blank");
+              }}>
+                <Printer className="h-4 w-4 mr-1" />
+                Print
+              </Button>
+            </>
           )}
           {canRecordPickup && (
             <Button size="sm" onClick={() => setShowPickup(true)}>
@@ -626,6 +648,7 @@ export default function OrderDetail() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Receipt #</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Method</TableHead>
                 <TableHead>Balance After</TableHead>
@@ -637,23 +660,32 @@ export default function OrderDetail() {
             <TableBody>
               {payments.map((p) => (
                 <TableRow key={p.id}>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{p.receiptNumber ?? "—"}</TableCell>
                   <TableCell className="font-medium">{formatCurrency(Number(p.amount))}</TableCell>
                   <TableCell className="capitalize">{p.method}</TableCell>
                   <TableCell>{formatCurrency(Number(p.remainingBalance))}</TableCell>
                   <TableCell>{p.notes || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{new Date(p.recordedAt).toLocaleDateString()}</TableCell>
-                  {isOwner && (
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deletePaymentMutation.mutate(p.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  )}
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {p.receiptNumber && (
+                        <Button variant="ghost" size="icon" title="Print receipt"
+                          onClick={() => window.open(`/receipts/print/${encodeURIComponent(p.receiptNumber!)}`, "_blank")}>
+                          <Printer className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {isOwner && (
+                        <Button variant="ghost" size="icon" onClick={() => deletePaymentMutation.mutate(p.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {!payments.length && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">No payments recorded</TableCell>
+                  <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No payments recorded</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -720,6 +752,37 @@ export default function OrderDetail() {
           </Button>
         </div>
       )}
+
+      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+          <div className="flex items-center justify-between gap-2 p-4 border-b bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Receipt className="h-4 w-4" />
+              <p className="font-semibold">Order Receipt — {order.orderId}</p>
+            </div>
+            <div className="flex gap-2">
+              {receiptData?.allPayments && receiptData.allPayments.length > 0 && receiptData.allPayments[receiptData.allPayments.length - 1].receiptNumber && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  const rn = receiptData.allPayments[receiptData.allPayments.length - 1].receiptNumber!;
+                  window.open(`/receipts/print/${encodeURIComponent(rn)}`, "_blank");
+                }}>
+                  <Printer className="h-4 w-4 mr-1" />
+                  Print / PDF
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="p-4">
+            {receiptLoading ? (
+              <div className="py-12 text-center text-muted-foreground">Loading receipt…</div>
+            ) : receiptData ? (
+              <ReceiptView data={receiptData} showAllPayments />
+            ) : (
+              <div className="py-12 text-center text-muted-foreground">No payment data available for this order.</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showPickup} onOpenChange={(v) => {
         if (!v) { setItemPickupQtys(new Map()); setPickupNotes(""); setPickupForm({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" }); }

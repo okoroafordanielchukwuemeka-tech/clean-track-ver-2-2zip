@@ -14,6 +14,7 @@ import {
   Receipt,
   Settings,
   Percent,
+  FileText,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -48,6 +49,7 @@ export function Layout() {
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/orders", label: "Orders", icon: ShoppingCart },
     { to: "/customers", label: "Customers", icon: UserCircle },
+    { to: "/receipts", label: "Receipts", icon: FileText },
     { to: "/batches", label: "Batches", icon: Package },
     { to: "/expenditures", label: "Expenditures", icon: Receipt },
     { to: "/discount-approvals", label: "Discounts", icon: Percent, badge: pending > 0 ? pending : undefined },
