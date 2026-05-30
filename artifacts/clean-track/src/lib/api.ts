@@ -51,6 +51,8 @@ export const api = {
     deletePayment: (id: number, paymentId: number) => request<void>("DELETE", `/orders/${id}/payments/${paymentId}`),
     items: (id: number) => request<OrderItem[]>("GET", `/orders/${id}/items`),
     addItems: (id: number, data: { items: OrderItemInput[] }) => request<Order>("POST", `/orders/${id}/items`, data),
+    priceAdjustments: (id: number) => request<PriceAdjustment[]>("GET", `/orders/${id}/price-adjustments`),
+    addPriceAdjustment: (id: number, data: PriceAdjustmentInput) => request<PriceAdjustment>("POST", `/orders/${id}/price-adjustments`, data),
   },
   services: {
     list: (params?: Record<string, string>) => {
@@ -84,7 +86,7 @@ export const api = {
   },
   pickups: {
     list: (orderId: number) => request<PickupRecord[]>("GET", `/orders/${orderId}/pickups`),
-    record: (orderId: number, data: PickupInput) => request<{ pickup: PickupRecord; order: { status: string; shirtsPickedUp: number; trousersPickedUp: number; remainingShirts: number; remainingTrousers: number; allPickedUp: boolean; fullyPaid: boolean } }>("POST", `/orders/${orderId}/pickups`, data),
+    record: (orderId: number, data: PickupInput) => request<PickupResponse>("POST", `/orders/${orderId}/pickups`, data),
   },
   customers: {
     list: (params?: { search?: string; tag?: string }) => {
@@ -226,23 +228,30 @@ export interface Order {
   processingDueAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  itemCount?: number;
+  items?: OrderItem[];
+  priceAdjustments?: PriceAdjustment[];
 }
 
 export interface OrderInput {
   customerName: string;
   phone: string;
   address?: string;
+  customerId?: number;
   serviceType?: "standard" | "express" | "premium";
-  shirts: number;
-  trousers: number;
+  items?: { serviceId: number; quantity: number }[];
+  shirts?: number;
+  trousers?: number;
   additionalNotes?: string;
   price?: number;
   extraCharge?: number;
+  extraChargeReason?: string;
   discount?: number;
+  discountReason?: string;
 }
 
 export interface OrderUpdate {
-  status?: "pending" | "processing" | "ready";
+  status?: "pending" | "processing" | "ready" | "partial_pickup" | "completed";
   paymentStatus?: "unpaid" | "partial" | "paid";
   price?: number;
   extraCharge?: number;
@@ -277,6 +286,7 @@ export interface OrderItem {
   serviceType: "standard" | "express" | "premium";
   name: string;
   quantity: number;
+  quantityPickedUp: number;
   unitPrice: number;
   totalPrice: number;
   createdAt: string;
@@ -288,6 +298,61 @@ export interface OrderItemInput {
   name: string;
   quantity: number;
   unitPrice: number;
+}
+
+export interface PriceAdjustment {
+  id: number;
+  orderId: number;
+  laundryId?: number | null;
+  type: "discount" | "extra_charge";
+  amount: string;
+  reason: string;
+  appliedBy: string;
+  createdAt: string;
+}
+
+export interface PriceAdjustmentInput {
+  type: "discount" | "extra_charge";
+  amount: number;
+  reason: string;
+}
+
+export interface PickupItemInput {
+  orderItemId: number;
+  quantity: number;
+}
+
+export interface PickupInput {
+  items?: PickupItemInput[];
+  shirtsPickedUp?: number;
+  trousersPickedUp?: number;
+  notes?: string;
+}
+
+export interface PickupResponse {
+  pickup: PickupRecord;
+  order: {
+    status: string;
+    shirtsPickedUp: number;
+    trousersPickedUp: number;
+    remainingShirts: number;
+    remainingTrousers: number;
+    allPickedUp: boolean;
+    fullyPaid: boolean;
+    items?: { id: number; name: string; quantity: number; quantityPickedUp: number; remaining: number }[] | null;
+  };
+}
+
+export interface PickupRecord {
+  id: number;
+  laundryId?: number | null;
+  orderId: number;
+  shirtsPickedUp: number;
+  trousersPickedUp: number;
+  itemPickups?: { orderItemId: number; quantity: number; name: string }[] | null;
+  notes?: string | null;
+  processedBy?: number | null;
+  createdAt: string;
 }
 
 export interface OrdersSummary {
@@ -303,23 +368,6 @@ export interface OrdersSummary {
   totalRevenue: number;
   pendingRevenue: number;
   collectedRevenue: number;
-}
-
-export interface PickupRecord {
-  id: number;
-  laundryId?: number | null;
-  orderId: number;
-  shirtsPickedUp: number;
-  trousersPickedUp: number;
-  notes?: string | null;
-  processedBy?: number | null;
-  createdAt: string;
-}
-
-export interface PickupInput {
-  shirtsPickedUp: number;
-  trousersPickedUp: number;
-  notes?: string;
 }
 
 export interface Service {

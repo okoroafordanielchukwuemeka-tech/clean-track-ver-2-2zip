@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { CreateOrderDialog } from "@/components/create-order-dialog";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency, type UrgencyInfo } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
@@ -124,6 +125,7 @@ export default function WorkerStation() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [, setTick] = useState(0);
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 60_000);
@@ -187,12 +189,18 @@ export default function WorkerStation() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Worker Station</h1>
-        <p className="text-sm text-muted-foreground">
-          Logged in as <strong>{user?.name}</strong>
-          {user?.role && <span className="ml-1 capitalize">({user.role})</span>}
-        </p>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Worker Station</h1>
+          <p className="text-sm text-muted-foreground">
+            Logged in as <strong>{user?.name}</strong>
+            {user?.role && <span className="ml-1 capitalize">({user.role})</span>}
+          </p>
+        </div>
+        <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0">
+          <Plus className="h-4 w-4" />
+          New Order
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -369,7 +377,11 @@ export default function WorkerStation() {
                       <span className="font-mono text-xs text-muted-foreground">{order.orderId}</span>
                       <Badge variant="success" className="text-xs">Ready</Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{order.shirts}S / {order.trousers}T · {order.serviceType}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {(order.itemCount ?? 0) > 0
+                        ? `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
+                        : `${order.shirts}S / ${order.trousers}T`} · {order.serviceType}
+                    </p>
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
                     <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
@@ -390,6 +402,8 @@ export default function WorkerStation() {
           </CardContent>
         </Card>
       )}
+
+      <CreateOrderDialog open={showCreate} onOpenChange={setShowCreate} />
     </div>
   );
 }

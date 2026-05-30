@@ -1,21 +1,18 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type OrderInput, type SlaSettings } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
 import { Plus, Search, Eye, AlertTriangle, ArrowUpDown } from "lucide-react";
-import { toast } from "sonner";
 import { CountdownTimer } from "@/components/countdown-timer";
-import { UrgencyBadge } from "@/components/urgency-badge";
 import { computeDueAt, getUrgency } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
+import { CreateOrderDialog } from "@/components/create-order-dialog";
 
 function statusBadge(status: string) {
   const map: Record<string, any> = {
@@ -42,21 +39,15 @@ function formatCurrency(v: number | null | undefined) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
 }
 
-type SortKey = "urgency" | "date" | "status";
+type SortKey = "urgency" | "date";
 
 export default function Orders() {
-  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("urgency");
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState<Partial<OrderInput>>({
-    serviceType: "standard",
-    shirts: 0,
-    trousers: 0,
-  });
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["orders"],
@@ -68,24 +59,12 @@ export default function Orders() {
     queryFn: () => api.settings.getSla(),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: OrderInput) => api.orders.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["orders"] });
-      setShowCreate(false);
-      setForm({ serviceType: "standard", shirts: 0, trousers: 0 });
-      toast.success("Order created successfully");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   const ordersWithUrgency = orders.map(o => {
     const dueAt = computeDueAt(o.createdAt, o.serviceType, sla, o.processingDueAt);
-    const urgency = getUrgency(dueAt);
-    return { ...o, _urgency: urgency };
+    return { ...o, _urgency: getUrgency(dueAt) };
   });
 
-  const filtered = ordersWithUrgency.filter((o) => {
+  const filtered = ordersWithUrgency.filter(o => {
     const matchSearch =
       !search ||
       o.customerName.toLowerCase().includes(search.toLowerCase()) ||
@@ -99,12 +78,11 @@ export default function Orders() {
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortKey === "urgency") return a._urgency.hoursRemaining - b._urgency.hoursRemaining;
-    if (sortKey === "date") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    return 0;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const overdueCount = ordersWithUrgency.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
-  const urgentCount = ordersWithUrgency.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;
+  const overdueCount = ordersWithUrgency.filter(o => o._urgency.level === "overdue" && o.status !== "completed").length;
+  const urgentCount = ordersWithUrgency.filter(o => o._urgency.level === "urgent" && o.status !== "completed").length;
 
   return (
     <div className="space-y-6">
@@ -115,14 +93,12 @@ export default function Orders() {
             <div className="flex items-center gap-3 mt-1">
               {overdueCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-500">
-                  <AlertTriangle className="h-3 w-3" />
-                  {overdueCount} overdue
+                  <AlertTriangle className="h-3 w-3" />{overdueCount} overdue
                 </span>
               )}
               {urgentCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500">
-                  <AlertTriangle className="h-3 w-3" />
-                  {urgentCount} urgent
+                  <AlertTriangle className="h-3 w-3" />{urgentCount} urgent
                 </span>
               )}
             </div>
@@ -147,9 +123,7 @@ export default function Orders() {
               />
             </div>
             <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Urgency" />
-              </SelectTrigger>
+              <SelectTrigger className="w-36"><SelectValue placeholder="Urgency" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Urgency</SelectItem>
                 <SelectItem value="overdue">🔴 Overdue</SelectItem>
@@ -159,9 +133,7 @@ export default function Orders() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
@@ -172,9 +144,7 @@ export default function Orders() {
               </SelectContent>
             </Select>
             <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Payment" />
-              </SelectTrigger>
+              <SelectTrigger className="w-36"><SelectValue placeholder="Payment" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Payments</SelectItem>
                 <SelectItem value="unpaid">Unpaid</SelectItem>
@@ -220,22 +190,26 @@ export default function Orders() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sorted.map((order) => {
+                  {sorted.map(order => {
                     const urg = order._urgency;
                     const isActive = !["completed", "partial_pickup"].includes(order.status);
+                    const hasItems = (order.itemCount ?? 0) > 0;
                     return (
                       <TableRow key={order.id} className={cn(isActive ? urg.rowClass : "")}>
                         <TableCell className="pr-0">
-                          {isActive && (
-                            <span className={cn("block h-2 w-2 rounded-full mx-auto", urg.dotClass)} />
-                          )}
+                          {isActive && <span className={cn("block h-2 w-2 rounded-full mx-auto", urg.dotClass)} />}
                         </TableCell>
                         <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
                         <TableCell className="font-medium">{order.customerName}</TableCell>
                         <TableCell>
                           <span className="capitalize text-sm">{order.serviceType}</span>
                         </TableCell>
-                        <TableCell className="text-sm">{order.shirts}S / {order.trousers}T</TableCell>
+                        <TableCell className="text-sm">
+                          {hasItems
+                            ? <span className="text-primary font-medium">{order.itemCount} item{order.itemCount !== 1 ? "s" : ""}</span>
+                            : `${order.shirts}S / ${order.trousers}T`
+                          }
+                        </TableCell>
                         <TableCell>{statusBadge(order.status)}</TableCell>
                         <TableCell>{paymentBadge(order.paymentStatus)}</TableCell>
                         <TableCell>{formatCurrency(order.price as any)}</TableCell>
@@ -271,100 +245,10 @@ export default function Orders() {
         </CardContent>
       </Card>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>New Order</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Customer Name *</Label>
-              <Input
-                value={form.customerName ?? ""}
-                onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-                placeholder="Full name"
-              />
-            </div>
-            <div>
-              <Label>Phone *</Label>
-              <Input
-                value={form.phone ?? ""}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="+234..."
-              />
-            </div>
-            <div>
-              <Label>Address</Label>
-              <Input
-                value={form.address ?? ""}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                placeholder="Optional"
-              />
-            </div>
-            <div>
-              <Label>Service Type</Label>
-              <Select value={form.serviceType ?? "standard"} onValueChange={(v) => setForm({ ...form, serviceType: v as any })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="standard">Standard {sla ? `(${sla.standardTurnaroundHours}h SLA)` : ""}</SelectItem>
-                  <SelectItem value="express">Express {sla ? `(${sla.expressTurnaroundHours}h SLA)` : ""}</SelectItem>
-                  <SelectItem value="premium">Premium {sla ? `(${sla.premiumTurnaroundHours}h SLA)` : ""}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Shirts</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.shirts ?? 0}
-                  onChange={(e) => setForm({ ...form, shirts: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>Trousers</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.trousers ?? 0}
-                  onChange={(e) => setForm({ ...form, trousers: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Price (₦)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={form.price ?? ""}
-                onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || undefined })}
-                placeholder="Optional"
-              />
-            </div>
-            <div>
-              <Label>Additional Notes</Label>
-              <Input
-                value={form.additionalNotes ?? ""}
-                onChange={(e) => setForm({ ...form, additionalNotes: e.target.value })}
-                placeholder="Optional notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (!form.customerName || !form.phone) { toast.error("Name and phone are required"); return; }
-                createMutation.mutate(form as OrderInput);
-              }}
-              disabled={createMutation.isPending}
-            >
-              {createMutation.isPending ? "Creating..." : "Create Order"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateOrderDialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+      />
     </div>
   );
 }

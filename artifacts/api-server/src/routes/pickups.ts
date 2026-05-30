@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { pickupRecords, orders } from "@workspace/db/schema";
+import { pickupRecords, orders, orderItems } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -8,8 +8,12 @@ import { AuthRequest } from "../middleware/auth.js";
 export const pickupsRouter = Router({ mergeParams: true });
 
 const pickupInputSchema = z.object({
-  shirtsPickedUp: z.number().int().min(0).default(0),
-  trousersPickedUp: z.number().int().min(0).default(0),
+  items: z.array(z.object({
+    orderItemId: z.number().int(),
+    quantity: z.number().int().min(1),
+  })).optional(),
+  shirtsPickedUp: z.number().int().min(0).optional().default(0),
+  trousersPickedUp: z.number().int().min(0).optional().default(0),
   notes: z.string().optional(),
 });
 
@@ -40,46 +44,86 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
 
     const data = pickupInputSchema.parse(req.body);
 
-    if (data.shirtsPickedUp === 0 && data.trousersPickedUp === 0) {
-      return res.status(400).json({ error: "At least one item must be picked up" });
-    }
-
     const [order] = await db.select().from(orders)
       .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     if (order.status !== "ready" && order.status !== "partial_pickup") {
-      return res.status(400).json({ error: "Order must be ready or partially picked up before recording a pickup" });
+      return res.status(400).json({ error: "Order must be ready or partially picked up" });
     }
-
-    const currentShirtsPickedUp = (order.shirtsPickedUp ?? 0) + data.shirtsPickedUp;
-    const currentTrousersPickedUp = (order.trousersPickedUp ?? 0) + data.trousersPickedUp;
-
-    const maxShirts = Math.min(currentShirtsPickedUp, order.shirts);
-    const maxTrousers = Math.min(currentTrousersPickedUp, order.trousers);
-
-    const remainingShirts = order.shirts - maxShirts;
-    const remainingTrousers = order.trousers - maxTrousers;
-    const allPickedUp = remainingShirts <= 0 && remainingTrousers <= 0;
 
     const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
     const amountPaid = parseFloat(order.amountPaid || "0");
     const fullyPaid = totalDue <= 0 || amountPaid >= totalDue;
+
+    const allOrderItems = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+
+    let allPickedUp = false;
+    let newShirtsPickedUp = order.shirtsPickedUp;
+    let newTrousersPickedUp = order.trousersPickedUp;
+    let remainingShirts = Math.max(0, order.shirts - order.shirtsPickedUp);
+    let remainingTrousers = Math.max(0, order.trousers - order.trousersPickedUp);
+    let itemPickupsJson: { orderItemId: number; quantity: number; name: string }[] | null = null;
+    let responseItems: { id: number; name: string; quantity: number; quantityPickedUp: number; remaining: number }[] | null = null;
+
+    if (data.items && data.items.length > 0 && allOrderItems.length > 0) {
+      for (const itemReq of data.items) {
+        const oi = allOrderItems.find(i => i.id === itemReq.orderItemId);
+        if (!oi) {
+          return res.status(400).json({ error: `Order item ${itemReq.orderItemId} not found` });
+        }
+        const remaining = oi.quantity - oi.quantityPickedUp;
+        if (itemReq.quantity > remaining) {
+          return res.status(400).json({ error: `Only ${remaining} of "${oi.name}" remaining to pick up` });
+        }
+      }
+
+      const updatedPickedUp = new Map(allOrderItems.map(oi => [oi.id, oi.quantityPickedUp]));
+      for (const itemReq of data.items) {
+        const oi = allOrderItems.find(i => i.id === itemReq.orderItemId)!;
+        const newQty = oi.quantityPickedUp + itemReq.quantity;
+        await db.update(orderItems).set({ quantityPickedUp: newQty }).where(eq(orderItems.id, oi.id));
+        updatedPickedUp.set(oi.id, newQty);
+      }
+
+      allPickedUp = allOrderItems.every(oi => (updatedPickedUp.get(oi.id) ?? 0) >= oi.quantity);
+
+      itemPickupsJson = data.items.map(req => {
+        const oi = allOrderItems.find(i => i.id === req.orderItemId)!;
+        return { orderItemId: req.orderItemId, quantity: req.quantity, name: oi.name };
+      });
+
+      responseItems = allOrderItems.map(oi => {
+        const newPickedUp = updatedPickedUp.get(oi.id) ?? 0;
+        return { id: oi.id, name: oi.name, quantity: oi.quantity, quantityPickedUp: newPickedUp, remaining: Math.max(0, oi.quantity - newPickedUp) };
+      });
+    } else {
+      if ((data.shirtsPickedUp ?? 0) === 0 && (data.trousersPickedUp ?? 0) === 0) {
+        return res.status(400).json({ error: "At least one item must be picked up" });
+      }
+
+      newShirtsPickedUp = Math.min(order.shirtsPickedUp + (data.shirtsPickedUp ?? 0), order.shirts);
+      newTrousersPickedUp = Math.min(order.trousersPickedUp + (data.trousersPickedUp ?? 0), order.trousers);
+      remainingShirts = Math.max(0, order.shirts - newShirtsPickedUp);
+      remainingTrousers = Math.max(0, order.trousers - newTrousersPickedUp);
+      allPickedUp = remainingShirts <= 0 && remainingTrousers <= 0;
+    }
 
     const newStatus = allPickedUp && fullyPaid ? "completed" : "partial_pickup";
 
     const [pickup] = await db.insert(pickupRecords).values({
       laundryId,
       orderId,
-      shirtsPickedUp: data.shirtsPickedUp,
-      trousersPickedUp: data.trousersPickedUp,
+      shirtsPickedUp: data.shirtsPickedUp ?? 0,
+      trousersPickedUp: data.trousersPickedUp ?? 0,
+      itemPickups: itemPickupsJson,
       notes: data.notes,
       processedBy: workerId,
     }).returning();
 
     await db.update(orders).set({
-      shirtsPickedUp: maxShirts,
-      trousersPickedUp: maxTrousers,
+      shirtsPickedUp: newShirtsPickedUp,
+      trousersPickedUp: newTrousersPickedUp,
       status: newStatus,
       updatedAt: new Date(),
     }).where(eq(orders.id, orderId));
@@ -88,12 +132,13 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
       pickup,
       order: {
         status: newStatus,
-        shirtsPickedUp: maxShirts,
-        trousersPickedUp: maxTrousers,
+        shirtsPickedUp: newShirtsPickedUp,
+        trousersPickedUp: newTrousersPickedUp,
         remainingShirts,
         remainingTrousers,
         allPickedUp,
         fullyPaid,
+        items: responseItems,
       },
     });
   } catch (err) {

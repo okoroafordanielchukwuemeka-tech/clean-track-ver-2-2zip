@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers, laundries, services } from "@workspace/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments } from "@workspace/db/schema";
+import { eq, desc, and, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { emitEvent } from "../lib/events.js";
@@ -53,7 +53,9 @@ const orderInputSchema = z.object({
   additionalNotes: z.string().optional(),
   price: z.number().optional(),
   extraCharge: z.number().optional(),
+  extraChargeReason: z.string().optional(),
   discount: z.number().optional(),
+  discountReason: z.string().optional(),
 });
 
 const orderUpdateSchema = z.object({
@@ -82,7 +84,22 @@ ordersRouter.get("/", async (req: AuthRequest, res) => {
       .orderBy(desc(orders.createdAt))
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
-    res.json(result);
+
+    if (result.length === 0) return res.json([]);
+
+    const orderIds = result.map(o => o.id);
+    const itemCounts = await db
+      .select({ orderId: orderItems.orderId, n: count(orderItems.id) })
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds))
+      .groupBy(orderItems.orderId);
+
+    const countMap: Record<number, number> = {};
+    for (const row of itemCounts) {
+      if (row.orderId !== null) countMap[row.orderId] = Number(row.n);
+    }
+
+    res.json(result.map(o => ({ ...o, itemCount: countMap[o.id] ?? 0 })));
   } catch {
     res.status(500).json({ error: "Failed to list orders" });
   }
@@ -139,7 +156,15 @@ ordersRouter.get("/:id", async (req: AuthRequest, res) => {
     const [order] = await db.select().from(orders)
       .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
     if (!order) return res.status(404).json({ error: "Order not found" });
-    res.json(order);
+
+    const [items, adjustments] = await Promise.all([
+      db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
+      db.select().from(priceAdjustments)
+        .where(eq(priceAdjustments.orderId, order.id))
+        .orderBy(priceAdjustments.createdAt),
+    ]);
+
+    res.json({ ...order, items, priceAdjustments: adjustments });
   } catch {
     res.status(500).json({ error: "Failed to get order" });
   }
@@ -180,7 +205,6 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
 
     let computedPrice = data.price;
     let insertedItems: typeof orderItems.$inferSelect[] = [];
-
     let resolvedItems: Array<{ serviceId: number; name: string; quantity: number; unitPrice: number; lineTotal: number }> = [];
 
     if (data.items && data.items.length > 0) {
@@ -192,7 +216,7 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       for (const item of data.items) {
         const svc = serviceMap.get(item.serviceId);
         if (!svc) {
-          return res.status(400).json({ error: `Service ID ${item.serviceId} not found or is inactive for this laundry` });
+          return res.status(400).json({ error: `Service ID ${item.serviceId} not found or is inactive` });
         }
         const priceField = data.serviceType === "express" ? svc.expressPrice
           : data.serviceType === "premium" ? svc.premiumPrice
@@ -232,6 +256,33 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
         totalPrice: item.lineTotal.toString(),
       }));
       insertedItems = await db.insert(orderItems).values(itemRows).returning();
+    }
+
+    const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];
+    const appliedBy = req.auth?.name ?? req.auth?.email ?? "system";
+
+    if (data.discount && data.discount > 0 && data.discountReason) {
+      adjustmentRows.push({
+        orderId: order.id,
+        laundryId,
+        type: "discount",
+        amount: data.discount.toString(),
+        reason: data.discountReason,
+        appliedBy,
+      });
+    }
+    if (data.extraCharge && data.extraCharge > 0 && data.extraChargeReason) {
+      adjustmentRows.push({
+        orderId: order.id,
+        laundryId,
+        type: "extra_charge",
+        amount: data.extraCharge.toString(),
+        reason: data.extraChargeReason,
+        appliedBy,
+      });
+    }
+    if (adjustmentRows.length > 0) {
+      await db.insert(priceAdjustments).values(adjustmentRows);
     }
 
     const itemSummary = insertedItems.length > 0
@@ -454,5 +505,66 @@ ordersRouter.post("/:id/items", async (req: AuthRequest, res) => {
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: "Failed to add order items" });
+  }
+});
+
+ordersRouter.get("/:id/price-adjustments", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const adjustments = await db.select().from(priceAdjustments)
+      .where(eq(priceAdjustments.orderId, order.id))
+      .orderBy(priceAdjustments.createdAt);
+    res.json(adjustments);
+  } catch {
+    res.status(500).json({ error: "Failed to list price adjustments" });
+  }
+});
+
+ordersRouter.post("/:id/price-adjustments", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const schema = z.object({
+      type: z.enum(["discount", "extra_charge"]),
+      amount: z.number().positive(),
+      reason: z.string().min(1, "Reason is required"),
+    });
+    const data = schema.parse(req.body);
+
+    const [order] = await db.select().from(orders)
+      .where(and(eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const appliedBy = req.auth?.name ?? req.auth?.email ?? "system";
+    const [adjustment] = await db.insert(priceAdjustments).values({
+      orderId: order.id,
+      laundryId,
+      type: data.type,
+      amount: data.amount.toString(),
+      reason: data.reason,
+      appliedBy,
+    }).returning();
+
+    const currentDiscount = parseFloat(order.discount || "0");
+    const currentExtraCharge = parseFloat(order.extraCharge || "0");
+
+    if (data.type === "discount") {
+      await db.update(orders).set({
+        discount: (currentDiscount + data.amount).toString(),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, order.id));
+    } else {
+      await db.update(orders).set({
+        extraCharge: (currentExtraCharge + data.amount).toString(),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, order.id));
+    }
+
+    res.status(201).json(adjustment);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+    res.status(500).json({ error: "Failed to add price adjustment" });
   }
 });

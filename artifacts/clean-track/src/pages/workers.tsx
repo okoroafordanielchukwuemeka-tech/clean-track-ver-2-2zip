@@ -72,9 +72,9 @@ export default function Workers() {
     if (!form.name) { toast.error("Name is required"); return; }
     const data: WorkerInput = {
       name: form.name,
-      phone: form.phone || undefined,
-      role: form.role ?? "worker",
-      pin: form.pin || undefined,
+      phone: form.phone || "",
+      role: (form.role ?? "worker") as "admin" | "worker",
+      pin: form.pin || "",
       isActive: form.isActive ?? true,
     };
     if (editId) updateMutation.mutate({ id: editId, data });
@@ -121,7 +121,7 @@ export default function Workers() {
                         {w.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>{w.pin ? "••••" : "—"}</TableCell>
+                    <TableCell>{"••••"}</TableCell>
                     <TableCell>
                       <Badge variant={w.isActive ? "success" : "secondary"}>
                         {w.isActive ? "Active" : "Inactive"}
