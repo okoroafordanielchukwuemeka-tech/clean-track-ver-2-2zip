@@ -1,0 +1,199 @@
+Before building WhatsApp, SMS, subscriptions, or multi-branch support, complete the Receipt & Invoice System for CleanTrack.
+
+IMPORTANT:
+
+Do NOT build full multi-branch support yet.
+
+However, audit the database and architecture and make the system branch-ready for future expansion.
+
+The goal is:
+
+Laundry Business
+→ Single Store Today
+
+But easy upgrade later to:
+
+Laundry Business
+→ Multiple Branches
+
+without requiring a database rewrite.
+
+=====================================
+PHASE 1 — RECEIPT SYSTEM AUDIT
+==============================
+
+First audit:
+
+1. Current payment system
+2. Current order totals
+3. Current balance calculations
+4. Current customer records
+5. Current branding settings
+
+Explain:
+
+* What already exists
+* What can be reused
+* What is missing
+
+Do not skip the audit.
+
+=====================================
+PHASE 2 — PROFESSIONAL RECEIPTS
+===============================
+
+Build a complete receipt system.
+
+Each payment must generate a receipt.
+
+Receipt should contain:
+
+Receipt Number
+Order Number
+Customer Name
+Customer Phone
+Date & Time
+Payment Method
+Amount Paid
+Balance Remaining
+Recorded By
+Laundry Name
+Laundry Address
+Laundry Phone
+Laundry Logo (if uploaded)
+
+Show:
+
+Items
+Quantities
+Unit Prices
+Total Order Value
+
+Discounts
+Extra Charges
+
+Final Amount
+
+Payment History Summary
+
+Receipt Status:
+
+Paid
+Partial Payment
+Unpaid
+
+=====================================
+PHASE 3 — PDF & PRINTING
+========================
+
+Owner and workers should be able to:
+
+View Receipt
+Print Receipt
+Download PDF
+
+Order Detail page should have:
+
+Generate Receipt
+Print Receipt
+Download PDF
+
+Customer profile should show:
+
+All receipts generated for that customer
+
+=====================================
+PHASE 4 — RECEIPT HISTORY
+=========================
+
+Create:
+
+/receipts
+
+Owner access.
+
+Search by:
+
+Receipt Number
+Customer Name
+Phone
+Order Number
+
+Filters:
+
+Today
+7 Days
+30 Days
+Custom Range
+
+Show:
+
+Total Receipts
+Total Collected
+Outstanding Balance
+
+=====================================
+PHASE 5 — BRANCH-READY AUDIT
+============================
+
+Do NOT implement branches.
+
+Do NOT change current workflow.
+
+Only prepare for future scaling.
+
+Audit:
+
+Orders
+Workers
+Customers
+Expenses
+Receipts
+Notifications
+
+Explain:
+
+How branchId could later be added.
+
+Identify:
+
+Any future blockers.
+
+Provide recommendations.
+
+No UI changes for branches yet.
+
+=====================================
+PHASE 6 — TESTING
+=================
+
+Create test scenarios:
+
+Fully Paid Order
+Partially Paid Order
+Multiple Payments
+Discounted Order
+Surcharge Order
+
+Verify:
+
+Receipt accuracy
+Balance accuracy
+PDF generation
+Print formatting
+
+=====================================
+FINAL REPORT
+============
+
+Provide:
+
+1. What was built
+2. What was tested
+3. Bugs discovered
+4. Bugs fixed
+5. Branch-readiness assessment
+6. Remaining launch blockers
+7. Updated launch readiness score out of 100
+
+Do not mark complete until all receipt workflows have been verified.
