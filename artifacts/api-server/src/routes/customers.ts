@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { customers, orders } from "@workspace/db/schema";
+import { customers, orders, paymentRecords } from "@workspace/db/schema";
 import { eq, and, desc, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -264,6 +264,41 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to update customer" });
+  }
+});
+
+customersRouter.get("/:id/receipts", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const customerId = parseInt(req.params.id);
+    const [customer] = await db.select({ id: customers.id })
+      .from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    const rows = await db
+      .select({
+        id: paymentRecords.id,
+        receiptNumber: paymentRecords.receiptNumber,
+        orderId: orders.orderId,
+        customerName: orders.customerName,
+        phone: orders.phone,
+        amount: paymentRecords.amount,
+        method: paymentRecords.method,
+        remainingBalance: paymentRecords.remainingBalance,
+        recordedBy: paymentRecords.recordedBy,
+        recordedAt: paymentRecords.recordedAt,
+        paymentStatus: orders.paymentStatus,
+      })
+      .from(paymentRecords)
+      .innerJoin(orders, and(eq(paymentRecords.orderId, orders.id), eq(orders.customerId, customerId)))
+      .where(eq(paymentRecords.laundryId, laundryId))
+      .orderBy(desc(paymentRecords.recordedAt))
+      .limit(100);
+
+    res.json({ receipts: rows, total: rows.length });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch customer receipts" });
   }
 });
 

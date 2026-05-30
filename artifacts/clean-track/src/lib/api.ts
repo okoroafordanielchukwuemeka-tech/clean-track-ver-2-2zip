@@ -170,7 +170,7 @@ export const api = {
     },
     getByNumber: (receiptNumber: string) => request<import("@/components/receipt-view").ReceiptData>("GET", `/receipts/${encodeURIComponent(receiptNumber)}`),
     getForOrder: (orderId: number) => request<import("@/components/receipt-view").ReceiptData>("GET", `/orders/${orderId}/receipt`),
-    getCustomerReceipts: (customerId: number) => request<ReceiptListResponse>("GET", `/receipts?customerId=${customerId}`),
+    getCustomerReceipts: (customerId: number) => request<ReceiptListResponse>("GET", `/customers/${customerId}/receipts`),
   },
 };
 

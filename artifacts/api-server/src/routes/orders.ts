@@ -462,19 +462,32 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
     const remainingBalance = Math.max(0, totalDue - amountPaid);
     const paymentStatus = remainingBalance <= 0 ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
 
-    const receiptNumber = await generateReceiptNumber(laundryId);
-
-    const [payment] = await db.insert(paymentRecords).values({
-      orderId: order.id,
-      laundryId,
-      receiptNumber,
-      amount: data.amount.toString(),
-      method: data.method,
-      notes: data.notes,
-      remainingBalance: remainingBalance.toString(),
-      recordedBy: actorName(req.auth!),
-      workerId: req.auth!.type === "worker" ? (req.auth!.workerId ?? null) : null,
-    }).returning();
+    // Retry on unique-constraint collision (concurrent inserts same day)
+    let payment: any;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const receiptNumber = await generateReceiptNumber(laundryId);
+      try {
+        const [inserted] = await db.insert(paymentRecords).values({
+          orderId: order.id,
+          laundryId,
+          receiptNumber,
+          amount: data.amount.toString(),
+          method: data.method,
+          notes: data.notes,
+          remainingBalance: remainingBalance.toString(),
+          recordedBy: actorName(req.auth!),
+          workerId: req.auth!.type === "worker" ? (req.auth!.workerId ?? null) : null,
+        }).returning();
+        payment = inserted;
+        break;
+      } catch (insertErr: any) {
+        if (attempt < 4 && insertErr?.code === "23505" && insertErr?.constraint?.includes("receipt_number")) {
+          continue; // unique violation on receipt number — retry
+        }
+        throw insertErr;
+      }
+    }
+    if (!payment) throw new Error("Failed to generate unique receipt number after retries");
 
     await db.update(orders).set({
       amountPaid: amountPaid.toString(),

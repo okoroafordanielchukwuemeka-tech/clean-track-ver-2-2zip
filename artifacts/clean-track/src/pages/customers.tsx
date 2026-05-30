@@ -85,8 +85,8 @@ export default function Customers() {
   });
 
   const { data: customerReceiptsData, isLoading: receiptsLoading } = useQuery({
-    queryKey: ["customerReceipts", profile?.phone],
-    queryFn: () => api.receipts.list({ search: profile!.phone, limit: "50", offset: "0" }),
+    queryKey: ["customerReceipts", profile?.id],
+    queryFn: () => api.receipts.getCustomerReceipts(profile!.id),
     enabled: profile != null && profileTab === "receipts",
   });
 
