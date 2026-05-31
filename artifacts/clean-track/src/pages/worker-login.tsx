@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { WashingMachine, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 
-const DEMO_WORKER_PHONE = "08065968661";
+const DEMO_WORKER_PHONE = "08034191399";
 const DEMO_WORKER_PIN = "1234";
 
 export default function WorkerLogin() {
