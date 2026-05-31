@@ -16,21 +16,24 @@ discountApprovalsRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { status } = req.query;
+    const workerBranchId = req.auth!.branchId;
 
-    let query = db.select().from(discountApprovals)
-      .where(eq(discountApprovals.laundryId, laundryId))
-      .$dynamic();
+    const baseConditions: any[] = [eq(discountApprovals.laundryId, laundryId)];
+    if (status) baseConditions.push(eq(discountApprovals.status, status as "pending" | "approved" | "rejected"));
 
-    if (status) {
-      query = query.where(
-        and(
-          eq(discountApprovals.laundryId, laundryId),
-          eq(discountApprovals.status, status as "pending" | "approved" | "rejected"),
-        )
-      );
+    let results = await db.select().from(discountApprovals)
+      .where(and(...baseConditions))
+      .orderBy(desc(discountApprovals.createdAt));
+
+    // If worker, filter to only their branch's orders
+    if (workerBranchId) {
+      const branchOrders = await db.select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.laundryId, laundryId), eq(orders.branchId, workerBranchId)));
+      const branchOrderIds = new Set(branchOrders.map(o => o.id));
+      results = results.filter(r => branchOrderIds.has(r.orderId));
     }
 
-    const results = await query.orderBy(desc(discountApprovals.createdAt));
     res.json(results);
   } catch {
     res.status(500).json({ error: "Failed to list discount approvals" });

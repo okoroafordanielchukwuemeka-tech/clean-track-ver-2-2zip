@@ -2,3 +2,5 @@
 - [Expenditures & Profitability](expenditures-profitability.md) — EXPENSE_CATEGORIES const exported from schema; profit = collectedRevenue - totalExpenses; requireOwner guards write endpoints
 - [UI Components Available](ui-components.md) — shadcn/ui components are hand-built; always check artifacts/clean-track/src/components/ui/ before importing; alert-dialog was missing and had to be created manually from @radix-ui/react-alert-dialog
 - [SLA & Urgency System](sla-urgency.md) — processingDueAt stored at order creation from laundry SLA settings; frontend falls back to createdAt + defaults for old orders; 4 urgency levels: safe/attention/urgent/overdue
+- [Branch Isolation & Analytics Auth](branch-isolation.md) — all ID-based routes enforce branchId; analytics uses requireAuth (not requireOwner) so workers get branch-scoped data via getEffectiveBranchId()
+- [Demo Environment](demo-environment.md) — seed script at scripts/seed-demo.ts; owner: demo@cleantrack.ng / Demo@1234; 5 branches, 20 workers, 200 customers, 1000 orders

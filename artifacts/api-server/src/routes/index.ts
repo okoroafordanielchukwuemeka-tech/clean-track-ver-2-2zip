@@ -32,7 +32,8 @@ router.use("/notifications", requireAuth, notificationsRouter);
 router.use("/settings", requireAuth, settingsRouter);
 
 // Owner-only routes (financials, management, configuration)
-router.use("/analytics", requireOwner, analyticsRouter);
+// Analytics: workers access their own branch data; owners see all (or filter by ?branchId)
+router.use("/analytics", requireAuth, analyticsRouter);
 router.use("/workers", requireOwner, workersRouter);
 router.use("/batches", requireOwner, batchesRouter);
 router.use("/expenditures", requireOwner, expendituresRouter);

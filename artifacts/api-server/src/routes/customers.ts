@@ -210,13 +210,17 @@ customersRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
+    const workerBranchId = req.auth!.branchId;
 
-    const [customer] = await db.select().from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));
+    const custGetConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
+    if (workerBranchId) custGetConditions.push(eq(customers.branchId, workerBranchId));
+    const [customer] = await db.select().from(customers).where(and(...custGetConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
+    const custOrderConditions: any[] = [eq(orders.customerId, customerId), eq(orders.laundryId, laundryId)];
+    if (workerBranchId) custOrderConditions.push(eq(orders.branchId, workerBranchId));
     const customerOrders = await db.select().from(orders)
-      .where(and(eq(orders.customerId, customerId), eq(orders.laundryId, laundryId)))
+      .where(and(...custOrderConditions))
       .orderBy(desc(orders.createdAt));
 
     res.json({
@@ -254,6 +258,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
+    const workerBranchId = req.auth!.branchId;
     const data = customerUpdateSchema.parse(req.body);
 
     if (data.phone) {
@@ -264,8 +269,10 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
       }
     }
 
+    const custPatchConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
+    if (workerBranchId) custPatchConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.update(customers).set(data)
-      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)))
+      .where(and(...custPatchConditions))
       .returning();
     if (!customer) return res.status(404).json({ error: "Customer not found" });
     res.json(customer);

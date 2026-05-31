@@ -37,11 +37,27 @@ function orderTotalDue(o: any) {
   return parseFloat(o.price || "0") + parseFloat(o.extraCharge || "0") - parseFloat(o.discount || "0");
 }
 
+/** Returns the effective branchId for filtering: worker's branch, or owner's ?branchId param, or null for all */
+function getEffectiveBranchId(req: AuthRequest): number | null {
+  if (req.auth!.branchId) return req.auth!.branchId;
+  const param = (req.query as any).branchId;
+  return param ? parseInt(param as string) : null;
+}
+
 analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
-    const allBatches = await db.select().from(batches).where(eq(batches.laundryId, laundryId));
+    const effectiveBranchId = getEffectiveBranchId(req);
+
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+
+    const batchConditions: any[] = [eq(batches.laundryId, laundryId)];
+
+    const [allOrders, allBatches] = await Promise.all([
+      db.select().from(orders).where(and(...orderConditions)),
+      db.select().from(batches).where(and(...batchConditions)),
+    ]);
 
     const now = new Date();
     const startOfWeek = new Date(now);
@@ -70,9 +86,9 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const monthExpenses = await db.select().from(expenditures).where(
-      and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, thirtyDaysAgo))
-    );
+    // expenditures are laundry-wide (no branchId column)
+    const monthExpenses = await db.select().from(expenditures)
+      .where(and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, thirtyDaysAgo)));
     const totalExpenses = monthExpenses.reduce((s, e) => s + parseFloat(e.amount), 0);
     const totalRevenue = allOrders.reduce((sum, o) => sum + orderTotalDue(o), 0);
     const collectedRevenue = allOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0);
@@ -99,7 +115,11 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
 analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const effectiveBranchId = getEffectiveBranchId(req);
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+
+    const allOrders = await db.select().from(orders).where(and(...orderConditions));
     const dailyMap: Record<string, { count: number; revenue: number }> = {};
     const now = new Date();
     for (let i = 13; i >= 0; i--) {
@@ -123,20 +143,24 @@ analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
 analyticsRouter.get("/full", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const effectiveBranchId = getEffectiveBranchId(req);
     const period = (req.query.period as string) || "7d";
     const since = periodToDate(period);
     const prevSince = new Date(since.getTime() - (Date.now() - since.getTime()));
 
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    const allOrders = await db.select().from(orders).where(and(...orderConditions));
+
     const periodOrders = allOrders.filter(o => new Date(o.createdAt) >= since);
     const prevOrders = allOrders.filter(o => {
       const d = new Date(o.createdAt);
       return d >= prevSince && d < since;
     });
 
-    const expensesInPeriod = await db.select().from(expenditures).where(
-      and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, since))
-    );
+    // expenditures are laundry-wide (no branchId column)
+    const expensesInPeriod = await db.select().from(expenditures)
+      .where(and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, since)));
     const totalExpenses = expensesInPeriod.reduce((s, e) => s + parseFloat(e.amount), 0);
     const expensesByCategory: Record<string, number> = {};
     for (const e of expensesInPeriod) {
@@ -248,8 +272,18 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
 analyticsRouter.get("/customers", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const allCustomers = await db.select().from(customers).where(eq(customers.laundryId, laundryId));
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const effectiveBranchId = getEffectiveBranchId(req);
+
+    const custConditions: any[] = [eq(customers.laundryId, laundryId)];
+    if (effectiveBranchId) custConditions.push(eq(customers.branchId, effectiveBranchId));
+
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+
+    const [allCustomers, allOrders] = await Promise.all([
+      db.select().from(customers).where(and(...custConditions)),
+      db.select().from(orders).where(and(...orderConditions)),
+    ]);
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -309,9 +343,19 @@ analyticsRouter.get("/customers", async (req: AuthRequest, res) => {
 analyticsRouter.get("/workers", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const allWorkers = await db.select().from(workers).where(eq(workers.laundryId, laundryId));
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
-    const allPickups = await db.select().from(pickupRecords).where(eq(pickupRecords.laundryId, laundryId));
+    const effectiveBranchId = getEffectiveBranchId(req);
+
+    const workerConditions: any[] = [eq(workers.laundryId, laundryId)];
+    if (effectiveBranchId) workerConditions.push(eq(workers.branchId, effectiveBranchId));
+
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+
+    const [allWorkers, allOrders, allPickups] = await Promise.all([
+      db.select().from(workers).where(and(...workerConditions)),
+      db.select().from(orders).where(and(...orderConditions)),
+      db.select().from(pickupRecords).where(eq(pickupRecords.laundryId, laundryId)),
+    ]);
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -349,6 +393,8 @@ analyticsRouter.get("/workers", async (req: AuthRequest, res) => {
 analyticsRouter.get("/sla", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const effectiveBranchId = getEffectiveBranchId(req);
+
     const [laundry] = await db
       .select({
         standardTurnaroundHours: laundries.standardTurnaroundHours,
@@ -358,7 +404,9 @@ analyticsRouter.get("/sla", async (req: AuthRequest, res) => {
       .from(laundries)
       .where(eq(laundries.id, laundryId));
 
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    const allOrders = await db.select().from(orders).where(and(...orderConditions));
     const now = new Date();
 
     const DEFAULT_HOURS: Record<string, number> = {

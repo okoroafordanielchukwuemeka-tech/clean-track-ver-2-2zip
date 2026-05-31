@@ -23,9 +23,11 @@ pickupsRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const orderId = parseInt(req.params.orderId);
+    const workerBranchId = req.auth!.branchId;
+    const pickupGetConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
+    if (workerBranchId) pickupGetConditions.push(eq(orders.branchId, workerBranchId));
 
-    const [order] = await db.select().from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
+    const [order] = await db.select().from(orders).where(and(...pickupGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     const records = await db.select().from(pickupRecords)
@@ -43,11 +45,13 @@ pickupsRouter.post("/", async (req: AuthRequest, res) => {
     const laundryId = req.auth!.laundryId;
     const orderId = parseInt(req.params.orderId);
     const workerId = req.auth!.type === "worker" ? req.auth!.workerId : undefined;
+    const workerBranchId = req.auth!.branchId;
 
     const data = pickupInputSchema.parse(req.body);
 
-    const [order] = await db.select().from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
+    const pickupPostConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
+    if (workerBranchId) pickupPostConditions.push(eq(orders.branchId, workerBranchId));
+    const [order] = await db.select().from(orders).where(and(...pickupPostConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     if (order.status !== "ready" && order.status !== "partial_pickup") {

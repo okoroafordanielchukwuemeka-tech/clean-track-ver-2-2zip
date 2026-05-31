@@ -1,0 +1,312 @@
+PHASE: Worker Discount Workflow + Full Branch Isolation Audit
+
+Before building Customer Statements, PDF Statements, PDF Receipts, WhatsApp, SMS, or any new feature, perform a COMPLETE implementation audit and validation of the discount workflow and multi-branch security model.
+
+DO NOT skip testing.
+
+DO NOT assume anything works.
+
+DO NOT build future features yet.
+
+First verify whether workers can easily request discounts from the Order Detail page.
+
+Audit:
+
+1. Can a worker open an order and request a discount directly from the UI?
+
+2. Can the worker enter:
+
+   * discount amount
+   * reason for discount
+
+3. Does the UI clearly show:
+
+   * auto-approved discounts
+   * pending approval discounts
+   * approved discounts
+   * rejected discounts
+
+4. Does the worker receive feedback after submitting?
+
+5. Does the order show discount history?
+
+6. Does the owner see discount requests immediately?
+
+If any part is missing:
+
+Implement the COMPLETE worker discount workflow.
+
+Required UX:
+
+Worker opens order
+→ Click "Request Discount"
+→ Enter amount
+→ Enter reason
+→ Submit
+
+System checks:
+
+Discount <= autoApprovalThreshold
+→ auto apply
+
+Discount > autoApprovalThreshold
+→ create approval request
+
+Display status:
+
+AUTO APPROVED
+PENDING APPROVAL
+APPROVED
+REJECTED
+
+Verify the owner settings page controls all discount rules.
+
+Confirm:
+
+1. Auto Approval Threshold
+2. Maximum Discount Per Order
+3. Maximum Discount Percentage
+
+Run live tests:
+
+Threshold = ₦500
+
+Test:
+
+₦200 discount
+→ must auto approve
+
+₦500 discount
+→ must auto approve
+
+₦501 discount
+→ must create approval request
+
+₦2,000 discount
+→ approval request
+
+Attempt discount above max limit
+
+Verify rejection behavior.
+
+Provide screenshots or evidence.
+
+This is critical.
+
+Create:
+
+Branch A
+Branch B
+
+Create:
+
+Owner
+Worker A
+Worker B
+
+Create:
+
+Orders
+Customers
+Receipts
+Payments
+
+inside both branches.
+
+Then verify:
+
+WORKER A:
+
+Can view Branch A orders
+Cannot view Branch B orders
+
+Can view Branch A customers
+Cannot view Branch B customers
+
+Can record payments for Branch A
+Cannot record payments for Branch B
+
+Can record pickups for Branch A
+Cannot record pickups for Branch B
+
+Can view Branch A receipts
+Cannot view Branch B receipts
+
+Can create orders only in Branch A
+
+WORKER B:
+
+Repeat same tests.
+
+OWNER:
+
+Can see:
+
+* all branches
+* branch filtered data
+* combined data
+
+Attempt direct API attacks.
+
+Using Worker A token:
+
+Try:
+
+GET Branch B order
+
+GET Branch B customer
+
+GET Branch B receipt
+
+PATCH Branch B order
+
+POST payment to Branch B order
+
+POST pickup to Branch B order
+
+DELETE Branch B data
+
+Expected:
+
+HTTP 403
+
+OR
+
+HTTP 404
+
+No data leakage.
+
+Verify analytics.
+
+Branch A worker:
+
+Revenue totals must only include Branch A.
+
+Order counts must only include Branch A.
+
+Customer counts must only include Branch A.
+
+No combined totals.
+
+Verify no cross-branch leakage exists.
+
+Generate:
+
+5 branches
+
+20 workers
+
+200 customers
+
+1000 orders
+
+Payments
+
+Receipts
+
+Discount requests
+
+Approval requests
+
+Run all security tests again.
+
+Verify:
+
+No branch leakage
+
+No receipt duplication
+
+No pricing corruption
+
+No discount corruption
+
+No permission bypass
+
+DEMO ACCOUNT REQUIREMENT
+
+After completing all tests, create and provide a fully populated demo environment so I can review the system and data structure.
+
+Requirements:
+
+1. Create a Demo Owner account with access to all branches.
+
+2. Populate all 5 branches with realistic sample data including:
+
+   * Customers
+   * Orders
+   * Payments
+   * Receipts
+   * Completed orders
+   * Pending orders
+   * Delivered orders
+   * Discount requests
+   * Approved discounts
+   * Rejected discounts
+
+3. Ensure each branch has different data so branch isolation and reporting can be visually verified.
+
+4. Provide demo login credentials:
+
+   * Demo Owner
+   * Demo Worker for Branch A
+   * Demo Worker for Branch B
+
+5. The Demo Owner account must be able to view:
+
+   * All branches combined
+   * Individual branch reports
+   * Orders from every branch
+   * Revenue summaries
+   * Customer lists
+   * Discount approval history
+
+6. Include enough sample records to demonstrate:
+
+   * Multi-branch operations
+   * Analytics dashboards
+   * Discount workflows
+   * Payment tracking
+   * Receipt generation
+
+7. Provide a summary of demo data including:
+
+   * Number of branches
+   * Number of workers
+   * Number of customers
+   * Number of orders
+   * Revenue totals per branch
+   * Total revenue across all branches
+
+8. Confirm that demo accounts are safe for testing and contain only sample data.
+
+Provide:
+
+1. Worker Discount Workflow Status
+
+2. Owner Discount Controls Status
+
+3. Branch Isolation Status
+
+4. Security Audit Results
+
+5. Failed Tests
+
+6. Fixed Issues
+
+7. Remaining Risks
+
+8. Launch Readiness Score
+
+9. Demo Account Credentials
+
+10. Demo Data Summary
+
+DO NOT START:
+
+* Customer Statements
+* PDF Statements
+* PDF Receipts
+* WhatsApp Integration
+* SMS Integration
+
+until ALL tests above pass successfully and the demo environment has been created and verified.
