@@ -10,6 +10,12 @@ Script is idempotent: re-running skips already-created records (checks by email 
 ## Owner credentials
 - Email: `demo@cleantrack.ng`
 - Password: `Demo@1234`
+- Login endpoint: `POST /api/auth/owner-login` (NOT `/api/auth/login`)
+
+## Worker login
+- Endpoint: `POST /api/auth/worker-login` with `{ phone, pin }`
+- PINs assigned round-robin: ["1234","5678","2222","3333","4444","5555","6666","7777","8888","9999"]
+- Verified: phone=08086235845, pin=3333 (Branch 1 / Lagos Island)
 
 ## Data structure
 - 1 laundry: "CleanTrack Demo Laundry"
@@ -24,8 +30,3 @@ Script is idempotent: re-running skips already-created records (checks by email 
 - autoApprovalThreshold: ₦500 (≤500 → auto-approved, >500 → pending)
 - maxDiscountPerOrder: ₦5,000
 - maxDiscountPercentage: 20%
-
-## Known worker credentials (from last seed run)
-- Branch A (Lagos Island): Phone `08072773142` | PIN `1234`
-- Branch B (Ikeja): Phone `08045589928` | PIN `4444`
-(These may differ after a re-seed since names/phones are random — check seeder output)

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -95,7 +95,7 @@ const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({
 ordersRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const { status, paymentStatus, limit = "50", offset = "0", branchId: branchParam } = req.query;
+    const { status, paymentStatus, limit = "500", offset = "0", branchId: branchParam } = req.query;
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
@@ -704,6 +704,17 @@ ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)).orderBy(paymentRecords.recordedAt),
     ]);
 
+    const latestPayment = allPayments.length > 0 ? allPayments[allPayments.length - 1] : null;
+
+    const [orderBranch, cashierWorker] = await Promise.all([
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
+        : Promise.resolve(null),
+      latestPayment?.workerId
+        ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, latestPayment.workerId)).then(r => r[0] ?? null)
+        : Promise.resolve(null),
+    ]);
+
     const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
     const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
 
@@ -714,8 +725,6 @@ ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
     const amountPaid = parseFloat(order.amountPaid || "0");
     const balance = Math.max(0, totalDue - amountPaid);
 
-    const latestPayment = allPayments.length > 0 ? allPayments[allPayments.length - 1] : null;
-
     res.json({
       receipt: latestPayment ? {
         receiptNumber: latestPayment.receiptNumber,
@@ -725,6 +734,7 @@ ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
         notes: latestPayment.notes,
         remainingBalance: parseFloat(latestPayment.remainingBalance),
         recordedBy: latestPayment.recordedBy,
+        cashierName: cashierWorker?.name ?? latestPayment.recordedBy ?? null,
       } : null,
       laundry: {
         businessName: laundry?.businessName ?? "",
@@ -736,6 +746,11 @@ ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
         receiptFooterText: brandingSettings.receiptFooterText ?? "",
         brandColor: brandingSettings.brandColor ?? "",
       },
+      branch: orderBranch ? {
+        id: orderBranch.id,
+        name: orderBranch.name,
+        address: orderBranch.address ?? "",
+      } : null,
       customer: {
         fullName: order.customerName,
         phone: order.phone,
@@ -744,6 +759,7 @@ ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
       order: {
         id: order.id,
         orderId: order.orderId,
+        branchId: order.branchId,
         serviceType: order.serviceType,
         shirts: order.shirts,
         trousers: order.trousers,

@@ -195,6 +195,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
       order: {
         id: order.id,
         orderId: order.orderId,
+        branchId: order.branchId,
         serviceType: order.serviceType,
         shirts: order.shirts,
         trousers: order.trousers,
