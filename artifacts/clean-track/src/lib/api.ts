@@ -385,6 +385,7 @@ export interface PickupRecord {
   itemPickups?: { orderItemId: number; quantity: number; name: string }[] | null;
   notes?: string | null;
   processedBy?: number | null;
+  recordedBy?: string | null;
   createdAt: string;
 }
 

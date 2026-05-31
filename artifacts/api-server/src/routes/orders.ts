@@ -12,18 +12,19 @@ export const ordersRouter = Router();
 
 const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
 
-async function generateReceiptNumber(): Promise<string> {
+async function generateReceiptNumber(offset = 0): Promise<string> {
   const today = new Date();
   const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
   const prefix = `RCT-${datePart}-`;
+  const fromPos = prefix.length + 1; // 1-indexed SQL position of the numeric suffix
   // Query globally across all laundries/branches so receipt numbers are unique system-wide
   const [row] = await db
     .select({
-      maxSuffix: sql<string>`COALESCE(MAX(CAST(SUBSTRING(${paymentRecords.receiptNumber} FROM ${prefix.length + 1}) AS INTEGER)), 0)`,
+      maxSuffix: sql<number>`COALESCE(MAX(CAST(SUBSTRING(${paymentRecords.receiptNumber} FROM ${sql.raw(String(fromPos))}) AS INTEGER)), 0)`,
     })
     .from(paymentRecords)
     .where(sql`${paymentRecords.receiptNumber} LIKE ${prefix + "%"}`);
-  const next = (Number(row?.maxSuffix ?? 0) + 1).toString().padStart(4, "0");
+  const next = (Number(row?.maxSuffix ?? 0) + 1 + offset).toString().padStart(4, "0");
   return `${prefix}${next}`;
 }
 
@@ -135,10 +136,13 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
       unpaid: result.filter(o => o.paymentStatus === "unpaid").length,
       partial: result.filter(o => o.paymentStatus === "partial").length,
       paid: result.filter(o => o.paymentStatus === "paid").length,
-      totalRevenue: result.reduce((sum, o) => sum + parseFloat(o.price || "0"), 0),
+      totalRevenue: result.reduce((sum, o) => sum + parseFloat(o.price || "0") + parseFloat(o.extraCharge || "0") - parseFloat(o.discount || "0"), 0),
       outstandingBalance: result
         .filter(o => o.paymentStatus !== "paid")
-        .reduce((sum, o) => sum + parseFloat(o.price || "0") - parseFloat(o.amountPaid || "0"), 0),
+        .reduce((sum, o) => {
+          const totalDue = parseFloat(o.price || "0") + parseFloat(o.extraCharge || "0") - parseFloat(o.discount || "0");
+          return sum + Math.max(0, totalDue - parseFloat(o.amountPaid || "0"));
+        }, 0),
     });
   } catch {
     res.status(500).json({ error: "Failed to get order summary" });
@@ -376,6 +380,17 @@ ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     if (beforeOrder) {
+      if (data.status === "processing" && beforeOrder.status !== "processing") {
+        emitEvent({
+          laundryId,
+          eventType: "order_processing",
+          title: "Order Now Processing",
+          message: `Order #${order.orderId} for ${order.customerName} is now being processed.`,
+          severity: "info",
+          relatedOrderId: order.id,
+        }).catch(() => {});
+      }
+
       if (data.status === "ready" && beforeOrder.status !== "ready") {
         emitEvent({
           laundryId,
@@ -481,7 +496,7 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
     // Retry on unique-constraint collision (concurrent inserts same day)
     let payment: any;
     for (let attempt = 0; attempt < 5; attempt++) {
-      const receiptNumber = await generateReceiptNumber();
+      const receiptNumber = await generateReceiptNumber(attempt);
       try {
         const [inserted] = await db.insert(paymentRecords).values({
           orderId: order.id,
@@ -536,8 +551,9 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
     }).catch(() => {});
 
     res.status(201).json(payment);
-  } catch (err) {
+  } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    console.error("[payment record] err:", err?.message, err?.code, err?.constraint);
     res.status(500).json({ error: "Failed to record payment" });
   }
 });
@@ -551,16 +567,28 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
     const [order] = await db.select().from(orders).where(and(...delPmtConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const [deleted] = await db.delete(paymentRecords)
-      .where(eq(paymentRecords.id, parseInt(req.params.paymentId)))
+      .where(and(eq(paymentRecords.id, parseInt(req.params.paymentId)), eq(paymentRecords.orderId, order.id)))
       .returning();
     if (!deleted) return res.status(404).json({ error: "Payment not found" });
+
+    // Recalculate order balance after deleting this payment
+    const remaining = await db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id));
+    const newAmountPaid = remaining.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+    const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
+    const newPaymentStatus = totalDue <= 0 || newAmountPaid >= totalDue ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
+
+    await db.update(orders).set({
+      amountPaid: newAmountPaid.toString(),
+      paymentStatus: newPaymentStatus,
+      updatedAt: new Date(),
+    }).where(eq(orders.id, order.id));
 
     logAction({
       auth: req.auth!,
       laundryId,
       action: "payment_deleted",
       orderId: order.id,
-      metadata: { paymentId: deleted.id, amount: deleted.amount, orderId: order.orderId },
+      metadata: { paymentId: deleted.id, amount: deleted.amount, newAmountPaid, newPaymentStatus, orderId: order.orderId },
     }).catch(() => {});
 
     res.status(204).send();

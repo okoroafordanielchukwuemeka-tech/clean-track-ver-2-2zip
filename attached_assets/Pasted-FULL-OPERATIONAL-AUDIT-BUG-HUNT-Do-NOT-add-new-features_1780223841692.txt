@@ -1,0 +1,165 @@
+FULL OPERATIONAL AUDIT & BUG HUNT
+
+Do NOT add new features yet.
+
+First perform a complete audit of the current system and verify all existing functionality before moving to Customer Statements, PDF Receipts, PDF Statements, or WhatsApp/SMS automation.
+
+My manual testing found a few areas that need investigation.
+
+PHASE 1 — PAYMENT RECORDING AUDIT
+
+Verify the worker payment flow end-to-end.
+
+Test with a worker account:
+
+* Open an order
+* Record cash payment
+* Record transfer payment
+* Record POS payment
+* Record partial payment
+* Record final balance payment
+
+For every test verify:
+
+* API response
+* Database record creation
+* Remaining balance calculation
+* Receipt generation
+* Audit log entry
+* Notification generation
+
+If any failure exists, identify root cause and fix it.
+
+Provide proof of successful payment creation.
+
+---
+
+PHASE 2 — NOTIFICATION AUDIT
+
+Perform a complete notification audit.
+
+Verify notifications are generated for:
+
+* Order created
+* Order assigned
+* Order processing
+* Order ready
+* Payment recorded
+* Partial pickup
+* Completed pickup
+* Discount request
+* Discount approval
+* Discount rejection
+
+Check:
+
+* Database records
+* API responses
+* Frontend display
+* Real-time refresh behavior
+
+If notifications exist but are not visible in the UI, fix the UI.
+
+If notifications are not generated, fix the backend.
+
+---
+
+PHASE 3 — BRANCH VISIBILITY AUDIT
+
+Verify the owner can clearly see branch data.
+
+Check:
+
+* Orders page
+* Customers page
+* Dashboard
+* Analytics
+* Receipts
+* Discount approvals
+
+Confirm:
+
+* Branch selector works
+* "All Branches" view works
+* Individual branch filtering works
+* Counts and totals update correctly when changing branches
+
+Provide screenshots and evidence.
+
+---
+
+PHASE 4 — AUDIT TRAIL VISIBILITY
+
+Verify the owner can visually see:
+
+* Who recorded a payment
+* Who processed a pickup
+* Who approved a discount
+* Who rejected a discount
+* Who modified an order
+
+Do not just verify database fields.
+
+Confirm these are visible in the frontend UI.
+
+If missing from the UI, add the missing display.
+
+---
+
+PHASE 5 — DISCOUNT WORKFLOW AUDIT
+
+Verify all discount rules work exactly as configured.
+
+Test:
+
+₦200 discount
+₦500 discount
+₦501 discount
+₦1000 discount
+₦2000 discount
+
+Confirm:
+
+* Auto-approved discounts apply instantly.
+* Approval-required discounts enter the queue.
+* Approved discounts update totals correctly.
+* Rejected discounts do not affect totals.
+
+Provide evidence.
+
+---
+
+PHASE 6 — REGRESSION TEST
+
+Perform a complete regression test after all fixes.
+
+Verify:
+
+* Orders
+* Customers
+* Payments
+* Pickups
+* Receipts
+* Branch isolation
+* Worker permissions
+* Analytics
+* Notifications
+* Discount approvals
+
+Attempt to break the system.
+
+Look for hidden bugs, permission leaks, broken UI states, failed API calls, missing data, incorrect totals, and branch-isolation weaknesses.
+
+Do not stop at the first success.
+
+Act like a QA engineer trying to find production bugs.
+
+Deliver a final report with:
+
+1. Bugs found
+2. Bugs fixed
+3. Bugs not fixed
+4. Security concerns
+5. UI concerns
+6. Production readiness score
+7. Recommendation whether the system is ready to move to Customer Statements and PDF generation.

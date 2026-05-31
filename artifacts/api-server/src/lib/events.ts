@@ -4,6 +4,7 @@ import { notifications } from "@workspace/db/schema";
 export type EventType =
   | "new_order"
   | "order_assigned"
+  | "order_processing"
   | "due_soon"
   | "overdue"
   | "payment_received"

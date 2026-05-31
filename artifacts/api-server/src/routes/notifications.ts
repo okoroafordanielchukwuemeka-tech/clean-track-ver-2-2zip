@@ -144,11 +144,27 @@ notificationsRouter.get("/", async (req: AuthRequest, res) => {
 
 notificationsRouter.get("/count", async (req: AuthRequest, res) => {
   try {
-    const { laundryId } = req.auth!;
+    const auth = req.auth!;
+    const { laundryId, type, workerId } = auth;
+
+    const baseConditions: any[] = [
+      eq(notifications.laundryId, laundryId),
+      eq(notifications.isRead, false),
+    ];
+
+    if (type === "worker") {
+      baseConditions.push(
+        or(
+          and(eq(notifications.targetType, "worker"), workerId ? eq(notifications.targetWorkerId, workerId) : undefined),
+          eq(notifications.targetType, "all")
+        )
+      );
+    }
+
     const unread = await db
       .select()
       .from(notifications)
-      .where(and(eq(notifications.laundryId, laundryId), eq(notifications.isRead, false)));
+      .where(and(...baseConditions));
     res.json({ count: unread.length });
   } catch {
     res.status(500).json({ error: "Failed to get count" });

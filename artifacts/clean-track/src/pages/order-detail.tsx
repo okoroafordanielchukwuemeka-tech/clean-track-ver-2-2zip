@@ -29,6 +29,9 @@ const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; b
   discount_applied: { label: "Discount Applied", icon: Percent, color: "text-green-600", bg: "bg-green-100 dark:bg-green-950/40" },
   surcharge_applied: { label: "Surcharge Applied", icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-100 dark:bg-orange-950/40" },
   pickup_recorded: { label: "Pickup Recorded", icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950/40" },
+  pickup_completed: { label: "Pickup Completed", icon: ShoppingBag, color: "text-green-600", bg: "bg-green-100 dark:bg-green-950/40" },
+  pickup_partial: { label: "Partial Pickup", icon: ShoppingBag, color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-950/40" },
+  order_processing: { label: "Order Processing", icon: Activity, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-950/40" },
 };
 
 function getActionConfig(action: string) {
@@ -66,6 +69,15 @@ function buildTimelineDetail(entry: AuditLogEntry): string | null {
       return `${m.itemCount ?? 0} item type${Number(m.itemCount) !== 1 ? "s" : ""} · Total: ₦${Number(m.newTotal ?? 0).toLocaleString()}`;
     case "order_created":
       return `${m.customerName ?? ""} · ${m.serviceType ?? ""} · ₦${Number(m.price ?? 0).toLocaleString()}`;
+    case "pickup_completed":
+      return `All items picked up`;
+    case "pickup_partial": {
+      const items = m.itemPickups as { name: string; quantity: number }[] | undefined;
+      if (items && items.length > 0) return items.map(i => `${i.quantity}× ${i.name}`).join(", ");
+      const s = Number(m.shirtsPickedUp ?? 0);
+      const t = Number(m.trousersPickedUp ?? 0);
+      return `${s} shirt${s !== 1 ? "s" : ""}, ${t} trouser${t !== 1 ? "s" : ""}`;
+    }
     default:
       return null;
   }
@@ -612,6 +624,7 @@ export default function OrderDetail() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Items</TableHead>
+                  <TableHead>Processed By</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Date & Time</TableHead>
                 </TableRow>
@@ -624,6 +637,11 @@ export default function OrderDetail() {
                         ? <span className="text-sm">{p.itemPickups.map(i => `${i.quantity}× ${i.name}`).join(", ")}</span>
                         : <span className="text-sm">{p.shirtsPickedUp} shirt{p.shirtsPickedUp !== 1 ? "s" : ""}, {p.trousersPickedUp} trouser{p.trousersPickedUp !== 1 ? "s" : ""}</span>
                       }
+                    </TableCell>
+                    <TableCell>
+                      {p.recordedBy
+                        ? <span className="flex items-center gap-1 text-sm"><User className="h-3 w-3 text-muted-foreground" />{p.recordedBy}</span>
+                        : <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{p.notes || "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -651,6 +669,7 @@ export default function OrderDetail() {
                 <TableHead>Receipt #</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Method</TableHead>
+                <TableHead>Recorded By</TableHead>
                 <TableHead>Balance After</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead>Date</TableHead>
@@ -663,6 +682,11 @@ export default function OrderDetail() {
                   <TableCell className="font-mono text-xs text-muted-foreground">{p.receiptNumber ?? "—"}</TableCell>
                   <TableCell className="font-medium">{formatCurrency(Number(p.amount))}</TableCell>
                   <TableCell className="capitalize">{p.method}</TableCell>
+                  <TableCell>
+                    {p.recordedBy
+                      ? <span className="flex items-center gap-1 text-sm"><User className="h-3 w-3 text-muted-foreground" />{p.recordedBy}</span>
+                      : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell>{formatCurrency(Number(p.remainingBalance))}</TableCell>
                   <TableCell>{p.notes || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{new Date(p.recordedAt).toLocaleDateString()}</TableCell>
