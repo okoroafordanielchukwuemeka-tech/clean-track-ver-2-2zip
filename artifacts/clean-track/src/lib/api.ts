@@ -14,6 +14,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
 
   if (res.status === 401) {
+    const err = await res.json().catch(() => ({ error: "Unauthorized" }));
+    if (path.startsWith("/auth/")) {
+      throw new Error(err.error || "Invalid credentials");
+    }
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem("ct_user");
     window.location.href = "/login";
