@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { WashingMachine, Eye, EyeOff } from "lucide-react";
+import { WashingMachine, Eye, EyeOff, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
+
+const DEMO_EMAIL = "demo@cleantrack.ng";
+const DEMO_PASSWORD = "Demo@1234";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -36,6 +39,20 @@ export default function Login() {
     }
   };
 
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await api.auth.ownerLogin({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
+      login(res.token, res.user);
+      toast.success("Welcome to the Clean Track demo!");
+      navigate("/dashboard", { replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Demo login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -45,6 +62,28 @@ export default function Login() {
           </div>
           <h1 className="text-3xl font-bold text-white">Clean Track</h1>
           <p className="text-slate-400 mt-1">Sign in to your laundry workspace</p>
+        </div>
+
+        <div className="bg-blue-950/60 border border-blue-700/50 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <FlaskConical className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-blue-300">Demo Account</p>
+              <p className="text-xs text-blue-400/80 mt-0.5">
+                <span className="font-mono">{DEMO_EMAIL}</span>
+                <span className="mx-1.5 opacity-50">·</span>
+                <span className="font-mono">{DEMO_PASSWORD}</span>
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleDemoLogin}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-500 text-white shrink-0 text-xs h-7 px-3"
+            >
+              Try Demo
+            </Button>
+          </div>
         </div>
 
         <Card className="border-slate-700 bg-slate-800/50 backdrop-blur">
