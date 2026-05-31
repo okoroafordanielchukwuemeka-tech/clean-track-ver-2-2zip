@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
-import { api, type CustomerWithMetrics, type CustomerProfile, type CustomerInput, type CustomerUpdateInput } from "@/lib/api";
+import { api, type CustomerWithMetrics, type CustomerProfile, type CustomerInput, type CustomerUpdateInput, type CustomerStatement } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,10 @@ import { ReceiptView } from "@/components/receipt-view";
 import {
   Users, Search, Plus, Eye, Phone, AlertTriangle,
   ShoppingBag, Crown, RefreshCw, ArrowRight, Pencil, Trash2, CheckCircle,
-  Printer, FileText,
+  Printer, FileText, Calendar, TrendingDown, TrendingUp, Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useBranch } from "@/context/branch-context";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
@@ -66,16 +67,20 @@ export default function Customers() {
   const [showDelete, setShowDelete] = useState(false);
   const [createForm, setCreateForm] = useState<CustomerInput>({ fullName: "", phone: "" });
   const [editForm, setEditForm] = useState<CustomerUpdateInput & { id?: number }>({});
-  const [profileTab, setProfileTab] = useState<"orders" | "receipts">("orders");
+  const [profileTab, setProfileTab] = useState<"orders" | "receipts" | "statement">("orders");
+  const [statementPeriod, setStatementPeriod] = useState<"30d" | "90d" | "custom">("90d");
+  const [statementFrom, setStatementFrom] = useState<string>("");
+  const [statementTo, setStatementTo] = useState<string>("");
+
+  const { activeBranchId } = useBranch();
 
   const { data: customers = [], isLoading } = useQuery({
-    queryKey: ["customers", search, tag],
-    queryFn: () => api.customers.list(
-      Object.fromEntries(
-        Object.entries({ search: search || undefined, tag: tag !== "all" ? tag : undefined })
-          .filter(([, v]) => v != null)
-      ) as any
-    ),
+    queryKey: ["customers", search, tag, activeBranchId],
+    queryFn: () => api.customers.list({
+      search: search || undefined,
+      tag: tag !== "all" ? tag : undefined,
+      branchId: activeBranchId,
+    }),
   });
 
   const { data: profile, isLoading: profileLoading } = useQuery({
@@ -88,6 +93,24 @@ export default function Customers() {
     queryKey: ["customerReceipts", profile?.id],
     queryFn: () => api.receipts.getCustomerReceipts(profile!.id),
     enabled: profile != null && profileTab === "receipts",
+  });
+
+  const stmtParams = (() => {
+    if (statementPeriod === "30d") {
+      const from = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+      return { from, to: new Date().toISOString().split("T")[0] };
+    }
+    if (statementPeriod === "90d") {
+      const from = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+      return { from, to: new Date().toISOString().split("T")[0] };
+    }
+    return { from: statementFrom || undefined, to: statementTo || undefined };
+  })();
+
+  const { data: statement, isLoading: stmtLoading } = useQuery({
+    queryKey: ["customerStatement", profile?.id, stmtParams.from, stmtParams.to],
+    queryFn: () => api.customers.statement(profile!.id, stmtParams),
+    enabled: profile != null && profileTab === "statement",
   });
 
   const backfillMutation = useMutation({
@@ -397,7 +420,7 @@ export default function Customers() {
                 </div>
               )}
 
-              <Tabs value={profileTab} onValueChange={(v) => setProfileTab(v as "orders" | "receipts")}>
+              <Tabs value={profileTab} onValueChange={(v) => setProfileTab(v as "orders" | "receipts" | "statement")}>
                 <TabsList className="w-full">
                   <TabsTrigger value="orders" className="flex-1 gap-1.5">
                     <ShoppingBag className="h-3.5 w-3.5" />
@@ -406,6 +429,10 @@ export default function Customers() {
                   <TabsTrigger value="receipts" className="flex-1 gap-1.5">
                     <FileText className="h-3.5 w-3.5" />
                     Receipts
+                  </TabsTrigger>
+                  <TabsTrigger value="statement" className="flex-1 gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Statement
                   </TabsTrigger>
                 </TabsList>
 
@@ -484,6 +511,176 @@ export default function Customers() {
                   ) : (
                     <div className="text-center py-6 text-muted-foreground text-sm">
                       No orders linked to this customer yet
+                    </div>
+                  )}
+                </div>
+
+                {/* Statement Tab */}
+                <div className={profileTab === "statement" ? "mt-3 space-y-3" : "hidden"}>
+                  {/* Period selector */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex rounded-md border overflow-hidden text-xs">
+                      {(["30d", "90d", "custom"] as const).map(p => (
+                        <button
+                          key={p}
+                          onClick={() => setStatementPeriod(p)}
+                          className={`px-3 py-1.5 font-medium transition-colors ${statementPeriod === p ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                        >
+                          {p === "30d" ? "30 Days" : p === "90d" ? "90 Days" : "Custom"}
+                        </button>
+                      ))}
+                    </div>
+                    {statementPeriod === "custom" && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Input
+                          type="date"
+                          className="h-7 text-xs w-36"
+                          value={statementFrom}
+                          onChange={e => setStatementFrom(e.target.value)}
+                        />
+                        <span className="text-muted-foreground">to</span>
+                        <Input
+                          type="date"
+                          className="h-7 text-xs w-36"
+                          value={statementTo}
+                          onChange={e => setStatementTo(e.target.value)}
+                        />
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-auto h-7 text-xs gap-1"
+                      onClick={() => {
+                        const printWindow = window.open("", "_blank");
+                        if (!printWindow || !statement) return;
+                        const rows = statement.entries.map(e => `
+                          <tr>
+                            <td>${new Date(e.date).toLocaleDateString("en-NG")}</td>
+                            <td>${e.orderId}</td>
+                            <td>${e.type.replace("_", " ")}</td>
+                            <td>${e.description}</td>
+                            <td style="text-align:right">${e.charge > 0 ? e.charge.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
+                            <td style="text-align:right">${e.credit > 0 ? e.credit.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
+                            <td style="text-align:right;${e.balance > 0 ? "color:#dc2626" : "color:#16a34a"}">${e.balance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td>
+                          </tr>`).join("");
+                        printWindow.document.write(`<!DOCTYPE html><html><head><title>Statement — ${statement.customer.fullName}</title>
+                        <style>body{font-family:sans-serif;font-size:12px;padding:20px}h1{font-size:18px;margin-bottom:4px}p{color:#666;margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}th{background:#f9fafb;font-weight:600}tfoot td{font-weight:700;background:#f3f4f6}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px}</style>
+                        </head><body>
+                        <h1>Customer Statement</h1>
+                        <p><strong>${statement.customer.fullName}</strong> · ${statement.customer.phone}</p>
+                        <p>Period: ${new Date(statement.period.from).toLocaleDateString("en-NG")} – ${new Date(statement.period.to).toLocaleDateString("en-NG")}</p>
+                        <table><thead><tr><th>Date</th><th>Order</th><th>Type</th><th>Description</th><th>Charges</th><th>Credits</th><th>Balance</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                        <tfoot><tr><td colspan="4">Summary</td><td style="text-align:right">${statement.summary.totalCharged.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right">${statement.summary.totalPaid.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right;${statement.summary.closingBalance > 0 ? "color:#dc2626" : "color:#16a34a"}">${statement.summary.closingBalance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td></tr></tfoot>
+                        </table></body></html>`);
+                        printWindow.document.close();
+                        printWindow.print();
+                      }}
+                      disabled={!statement}
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Print / PDF
+                    </Button>
+                  </div>
+
+                  {stmtLoading ? (
+                    <div className="py-8 text-center text-muted-foreground text-sm">Loading statement…</div>
+                  ) : !statement ? (
+                    <div className="py-8 text-center text-muted-foreground text-sm">Select a period to view the statement</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Summary cards */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="p-2.5 bg-muted/30 rounded-lg text-center">
+                          <p className="text-xs text-muted-foreground">Total Charged</p>
+                          <p className="font-semibold text-sm">{fmt(statement.summary.totalCharged)}</p>
+                        </div>
+                        <div className="p-2.5 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
+                          <p className="text-xs text-muted-foreground">Total Paid</p>
+                          <p className="font-semibold text-sm text-green-700 dark:text-green-400">{fmt(statement.summary.totalPaid)}</p>
+                        </div>
+                        <div className={`p-2.5 rounded-lg text-center ${statement.summary.closingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20"}`}>
+                          <p className="text-xs text-muted-foreground">Balance Due</p>
+                          <p className={`font-semibold text-sm ${statement.summary.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
+                            {fmt(statement.summary.closingBalance)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {statement.entries.length === 0 ? (
+                        <div className="py-6 text-center text-muted-foreground text-sm">No activity in this period</div>
+                      ) : (
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/30">
+                                  <TableHead className="text-xs">Date</TableHead>
+                                  <TableHead className="text-xs">Order</TableHead>
+                                  <TableHead className="text-xs">Type</TableHead>
+                                  <TableHead className="text-xs">Description</TableHead>
+                                  <TableHead className="text-xs text-right">Charge</TableHead>
+                                  <TableHead className="text-xs text-right">Credit</TableHead>
+                                  <TableHead className="text-xs text-right">Balance</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {statement.entries.map((e, i) => (
+                                  <TableRow key={i} className={e.type === "pickup" ? "opacity-60" : ""}>
+                                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                      {new Date(e.date).toLocaleDateString("en-NG", { day: "2-digit", month: "short" })}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-xs text-primary">
+                                      <Link to={`/orders/${e.orderDbId}`} className="hover:underline" onClick={() => setSelectedId(null)}>
+                                        {e.orderId}
+                                      </Link>
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
+                                        e.type === "payment" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" :
+                                        e.type === "order" ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" :
+                                        e.type === "discount" ? "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400" :
+                                        e.type === "extra_charge" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400" :
+                                        "bg-muted text-muted-foreground"
+                                      }`}>
+                                        {e.type === "extra_charge" ? "extra" : e.type}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-xs max-w-[140px] truncate" title={e.description}>
+                                      {e.description}
+                                      {e.receiptNumber && (
+                                        <button
+                                          className="ml-1.5 text-primary hover:underline"
+                                          onClick={() => window.open(`/receipts/${encodeURIComponent(e.receiptNumber!)}/print`, "_blank")}
+                                          title="View receipt"
+                                        >
+                                          <Eye className="h-3 w-3 inline" />
+                                        </button>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums">
+                                      {e.charge > 0 ? <span className="text-red-600">{fmt(e.charge)}</span> : ""}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums">
+                                      {e.credit > 0 ? <span className="text-green-600">{fmt(e.credit)}</span> : ""}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-right tabular-nums font-medium">
+                                      <span className={e.balance > 0 ? "text-red-600" : "text-green-600"}>
+                                        {fmt(Math.abs(e.balance))}
+                                        {e.balance < 0 ? " CR" : ""}
+                                      </span>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground text-right">
+                        {statement.summary.orderCount} orders · {statement.summary.paymentCount} payments
+                      </p>
                     </div>
                   )}
                 </div>

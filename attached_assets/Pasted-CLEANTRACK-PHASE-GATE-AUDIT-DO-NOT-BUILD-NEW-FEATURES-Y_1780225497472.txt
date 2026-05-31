@@ -1,0 +1,284 @@
+CLEANTRACK PHASE-GATE AUDIT (DO NOT BUILD NEW FEATURES YET)
+
+Goal:
+Before building Customer Statements, PDF Statements, PDF Receipts, WhatsApp automation, SMS automation, or any other new feature, perform a complete real-world owner acceptance audit and fix every issue discovered.
+
+This is a production-readiness verification task, not a feature-building task.
+
+========================================
+PHASE 1 — OWNER ACCEPTANCE AUDIT
+================================
+
+Use the existing demo accounts.
+
+Owner:
+[demo@cleantrack.ng](mailto:demo@cleantrack.ng)
+Demo@1234
+
+Use at least two workers from different branches.
+
+Perform the entire workflow exactly as a real laundry would:
+
+1. Create customer
+2. Create order
+3. Add items
+4. Move order to Processing
+5. Record payment
+6. Record partial payment
+7. Record remaining balance payment
+8. Request discount
+9. Auto-approved discount test
+10. Approval-required discount test
+11. Owner approves discount
+12. Owner rejects discount
+13. Record pickup
+14. Partial pickup
+15. Complete pickup
+16. Generate receipt
+17. View customer profile
+18. View audit timeline
+19. View notifications
+
+For every step provide:
+
+* Expected result
+* Actual result
+* Screenshot
+* Any bug found
+* Severity (Critical / High / Medium / Low)
+
+========================================
+PHASE 2 — HANDWRITTEN REVIEW VERIFICATION
+=========================================
+
+Investigate every issue from the owner's handwritten review.
+
+Issue A:
+Owner says notifications are not being received.
+
+Verify:
+
+* Discount request notification
+* Payment notification
+* Pickup notification
+* Order processing notification
+* Overdue order notification
+
+Show evidence.
+
+If working:
+prove with screenshots.
+
+If broken:
+fix and retest.
+
+---
+
+Issue B:
+Owner cannot easily understand branch visibility.
+
+Verify:
+
+* Owner can see all branches
+* Owner can filter by branch
+* Owner can view orders per branch
+* Owner can view customers per branch
+* Owner can view revenue per branch
+
+If any workflow is confusing:
+
+improve UX.
+
+---
+
+Issue C:
+Worker payment recording previously failed.
+
+Perform live testing with worker accounts.
+
+Test:
+
+* Cash payment
+* Transfer payment
+* POS payment
+* Partial payment
+* Full payment
+
+If any failure occurs:
+
+identify root cause,
+fix,
+retest.
+
+---
+
+Issue D:
+Verify pickup workflow.
+
+Owner reported confusion around pickup.
+
+Test:
+
+* Partial pickup
+* Full pickup
+* Pickup history
+* Pickup attribution
+
+Confirm:
+
+who processed pickup is visible everywhere.
+
+========================================
+PHASE 3 — AUDIT TRAIL VERIFICATION
+==================================
+
+Verify owner can always identify:
+
+* Who created order
+* Who edited order
+* Who recorded payment
+* Who deleted payment
+* Who requested discount
+* Who approved discount
+* Who rejected discount
+* Who processed pickup
+
+Check:
+
+1. Order Detail Page
+2. Audit Timeline
+3. Receipts
+4. Customer History
+5. Reports
+
+If attribution is missing anywhere:
+
+fix it.
+
+========================================
+PHASE 4 — BRANCH ISOLATION SECURITY AUDIT
+=========================================
+
+Perform a fresh security audit.
+
+Verify workers cannot access:
+
+* Orders from another branch
+* Customers from another branch
+* Payments from another branch
+* Receipts from another branch
+* Analytics from another branch
+* Discount approvals from another branch
+
+Attempt direct URL access.
+
+Attempt API access.
+
+Attempt ID enumeration.
+
+Provide proof.
+
+========================================
+PHASE 5 — BRANCH FILTERING UX AUDIT
+===================================
+
+Review the branch experience as if you are a laundry owner managing 5 stores.
+
+Questions:
+
+* Can I quickly switch branches?
+* Can I see branch performance?
+* Can I identify which branch an order belongs to?
+* Can I identify which branch generated a receipt?
+* Can I identify which branch generated revenue?
+
+Document all UX weaknesses.
+
+Fix only high-impact UX issues.
+
+========================================
+PHASE 6 — CUSTOMER STATEMENTS
+=============================
+
+ONLY START THIS PHASE AFTER ALL AUDITS PASS.
+
+Build Customer Statements.
+
+Requirements:
+
+Customer Statement must include:
+
+* Customer name
+* Phone
+* Address
+* Branch
+* Statement date range
+* Opening balance
+* Orders
+* Payments
+* Pickups
+* Discounts
+* Outstanding balance
+* Running balance
+
+Filters:
+
+* Last 30 days
+* Last 90 days
+* Custom date range
+
+Exports:
+
+* PDF
+* Print
+
+Customer profile must have:
+
+Statements tab
+
+with:
+
+View Statement
+Download PDF
+Print Statement
+
+========================================
+PHASE 7 — PDF RECEIPT VERIFICATION
+==================================
+
+Verify existing receipt system.
+
+Confirm:
+
+* Receipt number
+* Branch name
+* Worker name
+* Customer name
+* Order details
+* Payment method
+* Date
+* Amount
+
+Add PDF export if missing.
+
+Add Print Receipt if missing.
+
+========================================
+DELIVERABLE
+===========
+
+Provide:
+
+1. Full audit report
+2. Screenshots
+3. Bugs found
+4. Bugs fixed
+5. Security findings
+6. UX findings
+7. Customer Statement implementation summary
+8. PDF Receipt verification summary
+9. Remaining production blockers
+
+DO NOT BUILD WHATSAPP OR SMS AUTOMATION YET.
+
+Only proceed to WhatsApp/SMS automation after every audit item passes and Customer Statements are complete.

@@ -149,6 +149,23 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
   }
 });
 
+ordersRouter.get("/recent", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const { branchId: branchParam } = req.query;
+    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
+    const conditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    const recentOrders = await db.select().from(orders)
+      .where(and(...conditions))
+      .orderBy(desc(orders.createdAt))
+      .limit(10);
+    res.json(recentOrders);
+  } catch {
+    res.status(500).json({ error: "Failed to get recent orders" });
+  }
+});
+
 ordersRouter.get("/:id", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;

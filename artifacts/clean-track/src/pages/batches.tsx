@@ -10,9 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { Plus, Eye, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useBranch } from "@/context/branch-context";
 
 export default function Batches() {
   const qc = useQueryClient();
+  const { activeBranchId } = useBranch();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
 
@@ -22,8 +24,8 @@ export default function Batches() {
   });
 
   const { data: orders = [] } = useQuery({
-    queryKey: ["orders"],
-    queryFn: () => api.orders.list({ status: "pending" }),
+    queryKey: ["orders", "pending", activeBranchId],
+    queryFn: () => api.orders.list({ status: "pending", ...(activeBranchId ? { branchId: String(activeBranchId) } : {}) }),
   });
 
   const createMutation = useMutation({

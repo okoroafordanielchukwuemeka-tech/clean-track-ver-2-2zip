@@ -13,6 +13,7 @@ import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
 import { CreateOrderDialog } from "@/components/create-order-dialog";
+import { useBranch } from "@/context/branch-context";
 
 function statusBadge(status: string) {
   const map: Record<string, any> = {
@@ -48,10 +49,11 @@ export default function Orders() {
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("urgency");
   const [showCreate, setShowCreate] = useState(false);
+  const { activeBranchId } = useBranch();
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ["orders"],
-    queryFn: () => api.orders.list(),
+    queryKey: ["orders", activeBranchId],
+    queryFn: () => api.orders.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
   });
 
   const { data: sla } = useQuery({

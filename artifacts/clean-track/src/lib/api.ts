@@ -53,7 +53,10 @@ export const api = {
     update: (id: number, data: Partial<OrderUpdate>) => request<Order>("PATCH", `/orders/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/orders/${id}`),
     summary: () => request<OrdersSummary>("GET", "/orders/summary"),
-    recent: () => request<Order[]>("GET", "/orders/recent"),
+    recent: (branchId?: number | null) => {
+      const qs = branchId ? `?branchId=${branchId}` : "";
+      return request<Order[]>("GET", `/orders/recent${qs}`);
+    },
     payments: (id: number) => request<PaymentRecord[]>("GET", `/orders/${id}/payments`),
     recordPayment: (id: number, data: PaymentInput) => request<PaymentRecord>("POST", `/orders/${id}/payments`, data),
     deletePayment: (id: number, paymentId: number) => request<void>("DELETE", `/orders/${id}/payments/${paymentId}`),
@@ -91,9 +94,19 @@ export const api = {
   analytics: {
     overview: () => request<AnalyticsOverview>("GET", "/analytics/overview"),
     daily: () => request<DailyStats[]>("GET", "/analytics/daily"),
-    full: (period: AnalyticsPeriod) => request<FullAnalytics>("GET", `/analytics/full?period=${period}`),
-    customerAnalytics: () => request<CustomerAnalytics>("GET", "/analytics/customers"),
-    workerAnalytics: () => request<WorkerAnalytics>("GET", "/analytics/workers"),
+    full: (period: AnalyticsPeriod, branchId?: number | null) => {
+      const qs = new URLSearchParams({ period } as any);
+      if (branchId) qs.set("branchId", String(branchId));
+      return request<FullAnalytics>("GET", `/analytics/full?${qs}`);
+    },
+    customerAnalytics: (branchId?: number | null) => {
+      const qs = branchId ? `?branchId=${branchId}` : "";
+      return request<CustomerAnalytics>("GET", `/analytics/customers${qs}`);
+    },
+    workerAnalytics: (branchId?: number | null) => {
+      const qs = branchId ? `?branchId=${branchId}` : "";
+      return request<WorkerAnalytics>("GET", `/analytics/workers${qs}`);
+    },
   },
   workers: {
     list: () => request<Worker[]>("GET", "/workers"),
@@ -107,8 +120,9 @@ export const api = {
     record: (orderId: number, data: PickupInput) => request<PickupResponse>("POST", `/orders/${orderId}/pickups`, data),
   },
   customers: {
-    list: (params?: { search?: string; tag?: string }) => {
-      const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    list: (params?: { search?: string; tag?: string; branchId?: number | null }) => {
+      const cleaned = params ? Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) : {};
+      const qs = Object.keys(cleaned).length ? "?" + new URLSearchParams(cleaned).toString() : "";
       return request<CustomerWithMetrics[]>("GET", `/customers${qs}`);
     },
     get: (id: number) => request<CustomerProfile>("GET", `/customers/${id}`),
@@ -116,6 +130,10 @@ export const api = {
     update: (id: number, data: CustomerUpdateInput) => request<Customer>("PATCH", `/customers/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/customers/${id}`),
     backfill: () => request<{ created: number; linked: number; message: string }>("POST", "/customers/backfill"),
+    statement: (id: number, params?: { from?: string; to?: string }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as any)).toString() : "";
+      return request<CustomerStatement>("GET", `/customers/${id}/statement${qs}`);
+    },
   },
   notifications: {
     list: (unread?: boolean) => {
@@ -565,6 +583,33 @@ export interface CustomerWithMetrics extends Customer, CustomerMetrics {}
 
 export interface CustomerProfile extends CustomerWithMetrics {
   orders: Order[];
+}
+
+export interface StatementEntry {
+  date: string;
+  type: "order" | "payment" | "discount" | "extra_charge" | "pickup";
+  description: string;
+  orderId: string;
+  orderDbId: number;
+  receiptNumber?: string | null;
+  charge: number;
+  credit: number;
+  balance: number;
+  recordedBy?: string | null;
+  method?: string | null;
+}
+
+export interface CustomerStatement {
+  customer: { id: number; fullName: string; phone: string; address?: string | null };
+  period: { from: string; to: string };
+  entries: StatementEntry[];
+  summary: {
+    totalCharged: number;
+    totalPaid: number;
+    closingBalance: number;
+    orderCount: number;
+    paymentCount: number;
+  };
 }
 
 export interface CustomerInput {

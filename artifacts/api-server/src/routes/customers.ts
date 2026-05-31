@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { customers, orders, paymentRecords } from "@workspace/db/schema";
-import { eq, and, desc, ilike, or } from "drizzle-orm";
+import { customers, orders, paymentRecords, pickupRecords, priceAdjustments } from "@workspace/db/schema";
+import { eq, and, desc, ilike, or, gte, lte, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -314,6 +314,162 @@ customersRouter.get("/:id/receipts", async (req: AuthRequest, res) => {
     res.json({ receipts: rows, total: rows.length });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer receipts" });
+  }
+});
+
+customersRouter.get("/:id/statement", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const customerId = parseInt(req.params.id);
+    const { from, to } = req.query as { from?: string; to?: string };
+
+    const [customer] = await db.select().from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+    const fromDate = from ? new Date(from) : new Date(Date.now() - 90 * 86400000);
+    const toDate = to ? new Date(to) : new Date();
+    toDate.setHours(23, 59, 59, 999);
+
+    const orderConditions: any[] = [
+      eq(orders.customerId, customerId),
+      eq(orders.laundryId, laundryId),
+      gte(orders.createdAt, fromDate),
+      lte(orders.createdAt, toDate),
+    ];
+    const customerOrders = await db.select().from(orders)
+      .where(and(...orderConditions))
+      .orderBy(desc(orders.createdAt));
+
+    const orderIds = customerOrders.map(o => o.id);
+
+    const payments = orderIds.length
+      ? await db.select().from(paymentRecords)
+          .where(and(inArray(paymentRecords.orderId, orderIds), gte(paymentRecords.recordedAt, fromDate), lte(paymentRecords.recordedAt, toDate)))
+      : [];
+
+    const pickups = orderIds.length
+      ? await db.select().from(pickupRecords)
+          .where(and(inArray(pickupRecords.orderId, orderIds), gte(pickupRecords.createdAt, fromDate), lte(pickupRecords.createdAt, toDate)))
+      : [];
+
+    const adjustments = orderIds.length
+      ? await db.select().from(priceAdjustments)
+          .where(and(inArray(priceAdjustments.orderId, orderIds), gte(priceAdjustments.createdAt, fromDate), lte(priceAdjustments.createdAt, toDate)))
+      : [];
+
+    const orderMap = new Map(customerOrders.map(o => [o.id, o]));
+
+    type Entry = {
+      date: string;
+      type: "order" | "payment" | "discount" | "extra_charge" | "pickup";
+      description: string;
+      orderId: string;
+      orderDbId: number;
+      receiptNumber?: string | null;
+      charge: number;
+      credit: number;
+      balance: number;
+      recordedBy?: string | null;
+      method?: string | null;
+    };
+
+    const rawEntries: Omit<Entry, "balance">[] = [];
+
+    for (const o of customerOrders) {
+      const price = parseFloat(o.price as string || "0");
+      const extra = parseFloat(o.extraCharge as string || "0");
+      const discount = parseFloat(o.discount as string || "0");
+      const baseCharge = price + extra - discount;
+      rawEntries.push({
+        date: o.createdAt.toISOString(),
+        type: "order",
+        description: `Order created — ${o.serviceType} (${o.shirts}S / ${o.trousers}T)`,
+        orderId: o.orderId,
+        orderDbId: o.id,
+        charge: baseCharge,
+        credit: 0,
+        recordedBy: null,
+        method: null,
+      });
+    }
+
+    for (const p of payments) {
+      const o = orderMap.get(p.orderId);
+      rawEntries.push({
+        date: p.recordedAt.toISOString(),
+        type: "payment",
+        description: `Payment received via ${p.method}${p.notes ? " — " + p.notes : ""}`,
+        orderId: o?.orderId ?? `#${p.orderId}`,
+        orderDbId: p.orderId,
+        receiptNumber: p.receiptNumber,
+        charge: 0,
+        credit: parseFloat(p.amount as string),
+        recordedBy: p.recordedBy,
+        method: p.method,
+      });
+    }
+
+    for (const adj of adjustments) {
+      const o = orderMap.get(adj.orderId);
+      rawEntries.push({
+        date: adj.createdAt.toISOString(),
+        type: adj.type as "discount" | "extra_charge",
+        description: `${adj.type === "discount" ? "Discount" : "Extra charge"} — ${adj.reason}`,
+        orderId: o?.orderId ?? `#${adj.orderId}`,
+        orderDbId: adj.orderId,
+        charge: adj.type === "extra_charge" ? parseFloat(adj.amount as string) : 0,
+        credit: adj.type === "discount" ? parseFloat(adj.amount as string) : 0,
+        recordedBy: adj.appliedBy,
+        method: null,
+      });
+    }
+
+    for (const pk of pickups) {
+      const o = orderMap.get(pk.orderId);
+      const items = [
+        pk.shirtsPickedUp > 0 ? `${pk.shirtsPickedUp}S` : "",
+        pk.trousersPickedUp > 0 ? `${pk.trousersPickedUp}T` : "",
+      ].filter(Boolean).join(" / ");
+      rawEntries.push({
+        date: pk.createdAt.toISOString(),
+        type: "pickup",
+        description: `Pickup — ${items || "items collected"}${pk.notes ? " (" + pk.notes + ")" : ""}`,
+        orderId: o?.orderId ?? `#${pk.orderId}`,
+        orderDbId: pk.orderId,
+        charge: 0,
+        credit: 0,
+        recordedBy: pk.recordedBy,
+        method: null,
+      });
+    }
+
+    rawEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let runningBalance = 0;
+    const entries: Entry[] = rawEntries.map(e => {
+      runningBalance += e.charge - e.credit;
+      return { ...e, balance: runningBalance };
+    });
+
+    const totalCharged = rawEntries.reduce((s, e) => s + e.charge, 0);
+    const totalPaid = rawEntries.filter(e => e.type === "payment").reduce((s, e) => s + e.credit, 0);
+
+    res.json({
+      customer: { id: customer.id, fullName: customer.fullName, phone: customer.phone, address: customer.address },
+      period: { from: fromDate.toISOString(), to: toDate.toISOString() },
+      entries,
+      summary: {
+        totalCharged,
+        totalPaid,
+        closingBalance: runningBalance,
+        orderCount: customerOrders.length,
+        paymentCount: payments.length,
+      },
+    });
+  } catch (err) {
+    console.error("Statement error:", err);
+    res.status(500).json({ error: "Failed to generate statement" });
   }
 });
 

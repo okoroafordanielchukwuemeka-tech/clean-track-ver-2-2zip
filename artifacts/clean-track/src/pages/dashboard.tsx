@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type AnalyticsPeriod } from "@/lib/api";
+import { useBranch } from "@/context/branch-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,25 +96,26 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Dashboard() {
   const [period, setPeriod] = useState<AnalyticsPeriod>("7d");
+  const { activeBranchId, activeBranch } = useBranch();
 
   const { data: full, isLoading } = useQuery({
-    queryKey: ["analytics", "full", period],
-    queryFn: () => api.analytics.full(period),
+    queryKey: ["analytics", "full", period, activeBranchId],
+    queryFn: () => api.analytics.full(period, activeBranchId),
   });
 
   const { data: custData } = useQuery({
-    queryKey: ["analytics", "customers"],
-    queryFn: () => api.analytics.customerAnalytics(),
+    queryKey: ["analytics", "customers", activeBranchId],
+    queryFn: () => api.analytics.customerAnalytics(activeBranchId),
   });
 
   const { data: workerData } = useQuery({
-    queryKey: ["analytics", "workers"],
-    queryFn: () => api.analytics.workerAnalytics(),
+    queryKey: ["analytics", "workers", activeBranchId],
+    queryFn: () => api.analytics.workerAnalytics(activeBranchId),
   });
 
   const { data: recent } = useQuery({
-    queryKey: ["orders", "recent"],
-    queryFn: () => api.orders.recent(),
+    queryKey: ["orders", "recent", activeBranchId],
+    queryFn: () => api.orders.recent(activeBranchId),
   });
 
   const { data: slaData } = useQuery({
@@ -138,7 +140,10 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Operational control center</p>
+          <p className="text-sm text-muted-foreground">
+            {activeBranch ? `Branch: ${activeBranch.name}` : "All branches"}
+            {" · "}Operational control center
+          </p>
         </div>
         <Tabs value={period} onValueChange={(v) => setPeriod(v as AnalyticsPeriod)}>
           <TabsList>

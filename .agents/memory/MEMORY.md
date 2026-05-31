@@ -5,3 +5,5 @@
 - [Branch Isolation & Analytics Auth](branch-isolation.md) — all ID-based routes enforce branchId; analytics uses requireAuth (not requireOwner) so workers get branch-scoped data via getEffectiveBranchId()
 - [Demo Environment](demo-environment.md) — seed script at scripts/seed-demo.ts; owner: demo@cleantrack.ng / Demo@1234; 5 branches, 20 workers, 200 customers, 1000 orders
 - [Receipt Number Generation](receipt-number-generation.md) — generateReceiptNumber uses sql.raw() for SUBSTRING FROM position; plain ${n} in Drizzle sql template silently fails the integer cast
+- [Branch Filtering Pattern](branch-filtering-pattern.md) — frontend pages must pass activeBranchId from useBranch() into queryKey AND queryFn; api.ts functions accept branchId? param; /orders/recent was missing backend route (added)
+- [Customer Statement Feature](customer-statement.md) — GET /customers/:id/statement returns chronological ledger with running balance; all 5 entry types; credit balance shows negative closingBalance; frontend Statement tab with print-to-PDF via window.open
