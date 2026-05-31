@@ -12,22 +12,17 @@ export const ordersRouter = Router();
 
 const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
 
-async function generateReceiptNumber(laundryId: number): Promise<string> {
+async function generateReceiptNumber(): Promise<string> {
   const today = new Date();
   const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
   const prefix = `RCT-${datePart}-`;
-  // Use MAX of existing suffix to avoid collisions from deletions or concurrent inserts
+  // Query globally across all laundries/branches so receipt numbers are unique system-wide
   const [row] = await db
     .select({
       maxSuffix: sql<string>`COALESCE(MAX(CAST(SUBSTRING(${paymentRecords.receiptNumber} FROM ${prefix.length + 1}) AS INTEGER)), 0)`,
     })
     .from(paymentRecords)
-    .where(
-      and(
-        eq(paymentRecords.laundryId, laundryId),
-        sql`${paymentRecords.receiptNumber} LIKE ${prefix + "%"}`,
-      )
-    );
+    .where(sql`${paymentRecords.receiptNumber} LIKE ${prefix + "%"}`);
   const next = (Number(row?.maxSuffix ?? 0) + 1).toString().padStart(4, "0");
   return `${prefix}${next}`;
 }
@@ -99,10 +94,14 @@ const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({
 ordersRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const { status, paymentStatus, limit = "50", offset = "0" } = req.query;
+    const { status, paymentStatus, limit = "50", offset = "0", branchId: branchParam } = req.query;
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
+
+    // Branch scoping: workers are locked to their branch; owners can filter by ?branchId
+    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
+    if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
 
     const [orderList, [{ total }]] = await Promise.all([
       db.select().from(orders)
@@ -122,7 +121,11 @@ ordersRouter.get("/", async (req: AuthRequest, res) => {
 ordersRouter.get("/summary", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const result = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const { branchId: branchParam } = req.query;
+    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
+    const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
+    const result = await db.select().from(orders).where(and(...summaryConditions));
     res.json({
       total: result.length,
       pending: result.filter(o => o.status === "pending").length,
@@ -237,8 +240,11 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
       computedPrice = resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0);
     }
 
+    const orderBranchId = req.auth!.branchId ?? ((req.body as any).branchId ? parseInt((req.body as any).branchId) : undefined);
+
     const [order] = await db.insert(orders).values({
       laundryId,
+      branchId: orderBranchId,
       customerId,
       orderId,
       customerName: data.customerName,
@@ -465,11 +471,12 @@ ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
     // Retry on unique-constraint collision (concurrent inserts same day)
     let payment: any;
     for (let attempt = 0; attempt < 5; attempt++) {
-      const receiptNumber = await generateReceiptNumber(laundryId);
+      const receiptNumber = await generateReceiptNumber();
       try {
         const [inserted] = await db.insert(paymentRecords).values({
           orderId: order.id,
           laundryId,
+          branchId: order.branchId ?? undefined,
           receiptNumber,
           amount: data.amount.toString(),
           method: data.method,

@@ -152,13 +152,18 @@ customersRouter.post("/backfill", async (req: AuthRequest, res) => {
 customersRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const { search, tag } = req.query;
+    const { search, tag, branchId: branchParam } = req.query;
 
-    let query = db.select().from(customers).where(eq(customers.laundryId, laundryId)).$dynamic();
+    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
+
+    const baseConditions: any[] = [eq(customers.laundryId, laundryId)];
+    if (effectiveBranchId) baseConditions.push(eq(customers.branchId, effectiveBranchId));
+
+    let query = db.select().from(customers).where(and(...baseConditions)).$dynamic();
 
     if (search) {
       query = query.where(and(
-        eq(customers.laundryId, laundryId),
+        ...baseConditions,
         or(
           ilike(customers.fullName, `%${search}%`),
           ilike(customers.phone, `%${search}%`)
@@ -168,7 +173,9 @@ customersRouter.get("/", async (req: AuthRequest, res) => {
 
     const allCustomers = await query.orderBy(desc(customers.lastActivityAt));
 
-    const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
+    const ordersConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) ordersConditions.push(eq(orders.branchId, effectiveBranchId));
+    const allOrders = await db.select().from(orders).where(and(...ordersConditions));
     const ordersByCustomer = new Map<number, typeof allOrders>();
     for (const o of allOrders) {
       if (o.customerId) {
@@ -233,6 +240,7 @@ customersRouter.post("/", async (req: AuthRequest, res) => {
 
     const [customer] = await db.insert(customers).values({
       laundryId,
+      branchId: req.auth!.branchId ?? undefined,
       ...data,
     }).returning();
     res.status(201).json({ ...customer, ...computeMetrics([]) });

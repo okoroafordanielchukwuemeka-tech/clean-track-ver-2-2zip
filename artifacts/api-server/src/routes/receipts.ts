@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, paymentRecords, orderItems, customers, laundries, priceAdjustments } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, priceAdjustments, branches, workers } from "@workspace/db/schema";
 import { eq, desc, and, count, ilike, or, gte, lte, sql } from "drizzle-orm";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 
@@ -139,6 +139,15 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)).orderBy(paymentRecords.recordedAt),
     ]);
 
+    const [branch, cashierWorker] = await Promise.all([
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
+        : Promise.resolve(null),
+      payment.workerId
+        ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, payment.workerId)).then(r => r[0] ?? null)
+        : Promise.resolve(null),
+    ]);
+
     const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
     const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
 
@@ -158,6 +167,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
         notes: payment.notes,
         remainingBalance: parseFloat(payment.remainingBalance),
         recordedBy: payment.recordedBy,
+        cashierName: cashierWorker?.name ?? payment.recordedBy ?? null,
       },
       laundry: {
         businessName: laundry?.businessName ?? "",
@@ -169,6 +179,11 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
         receiptFooterText: brandingSettings.receiptFooterText ?? "",
         brandColor: brandingSettings.brandColor ?? "",
       },
+      branch: branch ? {
+        id: branch.id,
+        name: branch.name,
+        address: branch.address ?? "",
+      } : null,
       customer: {
         fullName: order.customerName,
         phone: order.phone,

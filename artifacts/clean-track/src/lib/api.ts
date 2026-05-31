@@ -35,6 +35,14 @@ export const api = {
     workerLogin: (data: WorkerLoginInput) => request<WorkerAuthResponse>("POST", "/auth/worker-login", data),
     me: () => request<AuthUser>("GET", "/auth/me"),
   },
+  branches: {
+    list: () => request<import("@/context/branch-context").Branch[]>("GET", "/branches"),
+    create: (data: { name: string; address?: string }) =>
+      request<import("@/context/branch-context").Branch>("POST", "/branches", data),
+    update: (id: number, data: { name?: string; address?: string }) =>
+      request<import("@/context/branch-context").Branch>("PATCH", `/branches/${id}`, data),
+    delete: (id: number) => request<void>("DELETE", `/branches/${id}`),
+  },
   orders: {
     list: (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : "";

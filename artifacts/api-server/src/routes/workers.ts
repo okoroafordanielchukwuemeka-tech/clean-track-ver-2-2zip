@@ -17,6 +17,7 @@ const workerInputSchema = z.object({
   role: z.enum(["admin", "worker"]).default("worker"),
   pin: z.string().min(4, "PIN must be at least 4 digits"),
   isActive: z.boolean().default(true),
+  branchId: z.number().int().nullable().optional(),
 });
 
 const workerUpdateSchema = z.object({
@@ -25,6 +26,7 @@ const workerUpdateSchema = z.object({
   role: z.enum(["admin", "worker"]).optional(),
   pin: z.string().min(4).optional(),
   isActive: z.boolean().optional(),
+  branchId: z.number().int().nullable().optional(),
 });
 
 workersRouter.get("/", async (req: AuthRequest, res) => {
@@ -33,6 +35,7 @@ workersRouter.get("/", async (req: AuthRequest, res) => {
     const result = await db.select({
       id: workers.id,
       laundryId: workers.laundryId,
+      branchId: workers.branchId,
       name: workers.name,
       phone: workers.phone,
       role: workers.role,
@@ -56,6 +59,7 @@ workersRouter.get("/:id", async (req: AuthRequest, res) => {
     const [worker] = await db.select({
       id: workers.id,
       laundryId: workers.laundryId,
+      branchId: workers.branchId,
       name: workers.name,
       phone: workers.phone,
       role: workers.role,

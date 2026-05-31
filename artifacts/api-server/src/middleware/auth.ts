@@ -7,6 +7,7 @@ export interface AuthPayload {
   ownerId?: number;
   workerId?: number;
   workerRole?: "admin" | "worker";
+  branchId?: number;
   email?: string;
   name?: string;
 }

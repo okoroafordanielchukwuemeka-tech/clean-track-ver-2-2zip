@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/auth-context";
+import { BranchProvider } from "@/context/branch-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Layout } from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
@@ -22,6 +23,7 @@ import NotFound from "@/pages/not-found";
 import DiscountApprovals from "@/pages/discount-approvals";
 import Receipts from "@/pages/receipts";
 import ReceiptPrint from "@/pages/receipt-print";
+import BranchesPage from "@/pages/branches";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,40 +40,43 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/worker-login" element={<WorkerLogin />} />
+        <BranchProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/worker-login" element={<WorkerLogin />} />
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<RootRedirect />} />
-              <Route path="dashboard" element={<ProtectedRoute ownerOnly><Dashboard /></ProtectedRoute>} />
-              <Route path="orders" element={<Orders />} />
-              <Route path="orders/:id" element={<OrderDetail />} />
-              <Route path="batches" element={<ProtectedRoute ownerOnly><Batches /></ProtectedRoute>} />
-              <Route path="batches/:id" element={<ProtectedRoute ownerOnly><BatchDetail /></ProtectedRoute>} />
-              <Route path="services" element={<ProtectedRoute ownerOnly><Services /></ProtectedRoute>} />
-              <Route path="workers" element={<ProtectedRoute ownerOnly><Workers /></ProtectedRoute>} />
-              <Route path="customers" element={<Customers />} />
-              <Route path="discount-approvals" element={<ProtectedRoute ownerOnly><DiscountApprovals /></ProtectedRoute>} />
-              <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
-              <Route path="receipts" element={<ProtectedRoute ownerOnly><Receipts /></ProtectedRoute>} />
-              <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
-              <Route path="worker-station" element={<WorkerStation />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-            <Route path="/receipts/:receiptNumber/print" element={<ReceiptPrint />} />
-          </Routes>
-        </BrowserRouter>
-        <Toaster richColors />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<RootRedirect />} />
+                <Route path="dashboard" element={<ProtectedRoute ownerOnly><Dashboard /></ProtectedRoute>} />
+                <Route path="orders" element={<Orders />} />
+                <Route path="orders/:id" element={<OrderDetail />} />
+                <Route path="batches" element={<ProtectedRoute ownerOnly><Batches /></ProtectedRoute>} />
+                <Route path="batches/:id" element={<ProtectedRoute ownerOnly><BatchDetail /></ProtectedRoute>} />
+                <Route path="services" element={<ProtectedRoute ownerOnly><Services /></ProtectedRoute>} />
+                <Route path="workers" element={<ProtectedRoute ownerOnly><Workers /></ProtectedRoute>} />
+                <Route path="branches" element={<ProtectedRoute ownerOnly><BranchesPage /></ProtectedRoute>} />
+                <Route path="customers" element={<Customers />} />
+                <Route path="discount-approvals" element={<ProtectedRoute ownerOnly><DiscountApprovals /></ProtectedRoute>} />
+                <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
+                <Route path="receipts" element={<ProtectedRoute ownerOnly><Receipts /></ProtectedRoute>} />
+                <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
+                <Route path="worker-station" element={<WorkerStation />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+              <Route path="/receipts/:receiptNumber/print" element={<ReceiptPrint />} />
+            </Routes>
+          </BrowserRouter>
+          <Toaster richColors />
+        </BranchProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

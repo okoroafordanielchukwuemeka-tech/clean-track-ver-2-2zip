@@ -167,6 +167,7 @@ authRouter.post("/worker-login", async (req, res) => {
         type: "worker",
         workerId: worker.id,
         workerRole: worker.role as "admin" | "worker",
+        branchId: worker.branchId ?? undefined,
         name: worker.name,
       },
       "12h"

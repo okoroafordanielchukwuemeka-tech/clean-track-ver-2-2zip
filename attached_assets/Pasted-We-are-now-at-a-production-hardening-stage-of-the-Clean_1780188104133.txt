@@ -1,0 +1,115 @@
+We are now at a production-hardening stage of the CleanTrack SaaS.
+
+DO NOT break existing features. DO NOT rewrite working systems.
+
+We are implementing the next enterprise layer:
+
+=============================
+PHASE 1 — MULTI-BRANCH SYSTEM
+=============================
+
+Convert the system from single-laundry to multi-branch architecture:
+
+1. Add "branches" table:
+   - id
+   - laundryId
+   - name
+   - address
+   - createdAt
+
+2. Every core entity MUST be branch-scoped:
+   - orders
+   - customers
+   - payments
+   - pickups
+   - workers
+
+3. Add branchId to:
+   - orders
+   - customers
+   - workers
+   - receipts
+
+4. Owner can:
+   - create branches
+   - switch active branch in dashboard
+   - view ALL branches analytics
+
+5. Workers:
+   - belong to ONE branch only
+   - only see branch-scoped data
+
+IMPORTANT:
+Existing data must NOT break. Apply safe migrations.
+
+=============================
+PHASE 2 — RECEIPT FINALIZATION
+=============================
+
+Enhance receipt system:
+
+1. Add branch info to receipts:
+   - branch name
+   - branch address
+
+2. Ensure receipts include:
+   - order breakdown
+   - payments
+   - remaining balance
+   - worker name (cashier)
+   - timestamp
+
+3. Ensure receipt numbering is globally unique across branches.
+
+=============================
+PHASE 3 — WORKER INTERFACE FIX AUDIT
+=============================
+
+Before implementing anything new:
+
+1. Audit worker navigation:
+   - confirm workers can navigate freely between:
+     /worker-station
+     /orders
+     /customers
+     /orders/:id
+
+2. Fix any remaining routing bugs:
+   - no unnecessary redirects
+   - no owner-only wrapper blocking valid worker routes
+   - sidebar must match actual permissions
+
+3. Ensure:
+   - workers can record payments
+   - workers can view full order details
+   - workers CANNOT delete or edit pricing
+
+=============================
+PHASE 4 — SAFE VALIDATION TEST
+=============================
+
+After implementation:
+
+1. Create fake test data:
+   - 2 branches
+   - 10 customers per branch
+   - 30 orders per branch
+   - payments + pickups included
+
+2. Simulate full workflow:
+   - order creation
+   - payment
+   - pickup
+   - receipt generation
+   - cross-branch isolation check
+
+3. Output report:
+   - branch isolation check
+   - worker permissions check
+   - receipt correctness check
+
+DO NOT stop after code changes — run full fake order simulation and show results.
+
+=============================
+GOAL:
+Turn CleanTrack into a true multi-branch SaaS system with correct financial isolation and production-grade receipts.

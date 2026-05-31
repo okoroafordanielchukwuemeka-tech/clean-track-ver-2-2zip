@@ -15,12 +15,15 @@ import {
   Settings,
   Percent,
   FileText,
+  GitBranch,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
+import { useBranch } from "@/context/branch-context";
 import { Button } from "@/components/ui/button";
 import { NotificationCenter } from "@/components/notification-center";
+import { BranchSelector } from "@/components/branch-selector";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -34,6 +37,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isOwner, logout } = useAuth();
+  const { activeBranch } = useBranch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { data: pendingCount } = useQuery({
@@ -55,6 +59,7 @@ export function Layout() {
     { to: "/discount-approvals", label: "Discounts", icon: Percent, badge: pending > 0 ? pending : undefined },
     { to: "/services", label: "Services", icon: Wrench },
     { to: "/workers", label: "Workers", icon: Users },
+    { to: "/branches", label: "Branches", icon: GitBranch },
     { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
@@ -89,12 +94,15 @@ export function Layout() {
               {isOwner ? user?.name : "Clean Track"}
             </h1>
             <p className="text-xs text-sidebar-foreground/60">
-              {isOwner ? "Owner Dashboard" : "Worker Station"}
+              {isOwner
+                ? activeBranch ? activeBranch.name : "All Branches"
+                : "Worker Station"}
             </p>
           </div>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <BranchSelector />
           {navItems.map(({ to, label, icon: Icon, badge }: any) => (
             <Link
               key={to}
