@@ -1,0 +1,202 @@
+CLEANTRACK FINAL OWNER & WORKER USABILITY AUDIT
+
+Goal:
+Stop building new features temporarily. Perform a complete production-readiness audit using only the UI as if you are a real laundry owner and a real worker. Do NOT use direct database queries or API shortcuts except to verify bugs discovered through the UI.
+
+Mission:
+Find every usability issue, workflow problem, confusing label, missing message, broken state, inconsistent behavior, slow screen, empty state problem, or action that requires unnecessary clicks.
+
+PHASE 1 — OWNER ACCEPTANCE TEST
+
+Login using the demo owner account.
+
+Perform every workflow from the UI:
+
+1. Dashboard
+
+* Verify all cards load correctly.
+* Verify branch switching updates data everywhere.
+* Verify no stale data remains after switching branches.
+* Verify all charts and statistics are accurate.
+
+2. Customers
+
+* Create a customer.
+* Edit a customer.
+* View customer profile.
+* Open Receipts tab.
+* Open Statements tab.
+* Generate statement.
+* Print statement.
+* Verify balances are accurate.
+
+3. Orders
+
+* Create order for new customer.
+* Create order for existing customer.
+* Add multiple items.
+* Add special instructions.
+* Verify pricing calculations.
+* Verify discounts.
+* Verify extra charges.
+
+4. Order Lifecycle
+   Move order through:
+   Pending → Processing → Ready → Picked Up
+
+Verify:
+
+* Timeline updates correctly.
+* Audit log records all actions.
+* Notifications appear correctly.
+* Status badges update everywhere.
+
+5. Payments
+   Test:
+
+* Full payment
+* Partial payment
+* Multiple payments
+* Overpayment
+* Delete payment
+
+Verify:
+
+* Amount paid updates.
+* Balance updates.
+* Payment status updates.
+* Receipts generate correctly.
+
+6. Discounts
+   Test:
+
+* Discount below threshold.
+* Discount equal to threshold.
+* Discount above threshold.
+
+Verify:
+
+* Auto approval rules.
+* Approval queue.
+* Approval notifications.
+* Rejection workflow.
+
+7. Pickups
+   Test:
+
+* Partial pickup.
+* Full pickup.
+
+Verify:
+
+* Pickup history.
+* Audit trail.
+* Remaining quantities.
+* Final status.
+
+8. Branch Management
+
+* Create branch.
+* Edit branch.
+* Delete test branch.
+* Assign workers.
+* Verify branch filtering everywhere.
+
+9. Workers
+
+* Create worker.
+* Assign branch.
+* Edit worker.
+* Suspend worker.
+* Reactivate worker.
+
+10. Reports
+
+* Revenue reports.
+* Branch reports.
+* Customer statements.
+* Receipts.
+
+Verify accuracy.
+
+PHASE 2 — WORKER ACCEPTANCE TEST
+
+Login using demo worker account.
+
+Perform entire workflow from worker perspective.
+
+Verify:
+
+* Only branch data is visible.
+* Cannot access other branches.
+* Can create customer.
+* Can create order.
+* Can update order.
+* Can record payment.
+* Can request discount.
+* Can process pickup.
+* Can view allowed receipts.
+* Can view allowed statements.
+
+Attempt all forbidden actions and confirm they are blocked.
+
+PHASE 3 — UI / UX POLISH AUDIT
+
+Identify:
+
+* Confusing labels.
+* Missing tooltips.
+* Missing loading states.
+* Missing empty states.
+* Poor spacing.
+* Broken responsiveness.
+* Long workflows.
+* Duplicate clicks.
+* Inconsistent button placement.
+* Inconsistent wording.
+* Missing success messages.
+* Missing error messages.
+
+PHASE 4 — PERFORMANCE AUDIT
+
+Using seeded demo data:
+
+* 1000+ orders
+* 200+ customers
+* 20+ workers
+* 5+ branches
+
+Measure:
+
+* Dashboard load speed.
+* Orders page load speed.
+* Customer page load speed.
+* Search speed.
+* Branch switching speed.
+
+Identify bottlenecks.
+
+PHASE 5 — FINAL REPORT
+
+Produce a report with:
+
+CRITICAL
+HIGH
+MEDIUM
+LOW
+
+For every issue found.
+
+For each issue provide:
+
+* Description
+* Impact
+* Root Cause
+* Recommended Fix
+
+Then automatically fix all LOW, MEDIUM, and HIGH issues that are safe to fix.
+
+Do NOT build new features.
+
+Goal:
+Make CleanTrack feel like a polished production SaaS that a real laundry owner can use immediately.

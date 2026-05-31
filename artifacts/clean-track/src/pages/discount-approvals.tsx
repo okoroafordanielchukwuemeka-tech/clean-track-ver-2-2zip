@@ -135,6 +135,15 @@ export default function DiscountApprovals() {
 
   const pending = pendingCount?.count ?? 0;
 
+  const { data: approvedData } = useQuery({
+    queryKey: ["discount-approvals", "approved"],
+    queryFn: () => api.discountApprovals.list("approved"),
+  });
+  const { data: rejectedData } = useQuery({
+    queryKey: ["discount-approvals", "rejected"],
+    queryFn: () => api.discountApprovals.list("rejected"),
+  });
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
@@ -161,7 +170,7 @@ export default function DiscountApprovals() {
           onClick={() => setTab("approved")}>
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold text-green-600">
-              {isLoading && tab !== "approved" ? "—" : tab === "approved" ? approvals.length : "—"}
+              {approvedData?.length ?? "—"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Approved</p>
           </CardContent>
@@ -170,7 +179,7 @@ export default function DiscountApprovals() {
           onClick={() => setTab("rejected")}>
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold text-red-600">
-              {isLoading && tab !== "rejected" ? "—" : tab === "rejected" ? approvals.length : "—"}
+              {rejectedData?.length ?? "—"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">Rejected</p>
           </CardContent>

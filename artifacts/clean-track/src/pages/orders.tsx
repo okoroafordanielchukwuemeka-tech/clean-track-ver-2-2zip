@@ -32,7 +32,8 @@ function statusBadge(status: string) {
 
 function paymentBadge(status: string) {
   const map: Record<string, any> = { unpaid: "destructive", partial: "warning", paid: "success" };
-  return <Badge variant={map[status] || "outline"}>{status}</Badge>;
+  const labels: Record<string, string> = { unpaid: "Unpaid", partial: "Partial", paid: "Paid" };
+  return <Badge variant={map[status] || "outline"}>{labels[status] ?? status}</Badge>;
 }
 
 function formatCurrency(v: number | null | undefined) {
@@ -236,7 +237,9 @@ export default function Orders() {
                   {!sorted.length && (
                     <TableRow>
                       <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
-                        No orders found
+                        {orders.length === 0
+                          ? "No orders yet. Create your first order using the button above."
+                          : "No orders match the current filters. Try adjusting or clearing the filters."}
                       </TableCell>
                     </TableRow>
                   )}

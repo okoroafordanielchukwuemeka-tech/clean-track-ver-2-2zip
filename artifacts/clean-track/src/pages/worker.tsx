@@ -384,25 +384,39 @@ export default function WorkerStation() {
           </h2>
           <div className="rounded-xl border overflow-hidden">
             <div className="divide-y">
-              {sortByUrgency(readyOrders).map(order => (
-                <div key={order.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{order.customerName}</span>
-                      <span className="font-mono text-xs text-muted-foreground">{order.orderId}</span>
-                      <Badge variant="success" className="text-xs">Ready</Badge>
+              {sortByUrgency(readyOrders).map(order => {
+                const isPaid = order.paymentStatus === "paid";
+                const isUnpaid = order.paymentStatus === "unpaid";
+                return (
+                  <div key={order.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">{order.customerName}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{order.orderId}</span>
+                        <Badge variant="success" className="text-xs">Ready</Badge>
+                        {isPaid
+                          ? <Badge variant="success" className="text-xs">Paid</Badge>
+                          : isUnpaid
+                          ? <Badge variant="destructive" className="text-xs">Unpaid</Badge>
+                          : <Badge variant="warning" className="text-xs">Partial</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {(order.itemCount ?? 0) > 0
+                          ? `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
+                          : `${order.shirts}S / ${order.trousers}T`} · {order.serviceType}
+                        {!isPaid && order.amountPaid != null && order.price != null && (
+                          <span className="ml-1 text-red-500 font-medium">
+                            · ₦{Math.max(0, Number(order.price) - Number(order.amountPaid)).toLocaleString()} outstanding
+                          </span>
+                        )}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {(order.itemCount ?? 0) > 0
-                        ? `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
-                        : `${order.shirts}S / ${order.trousers}T`} · {order.serviceType}
-                    </p>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
+                      <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                    <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

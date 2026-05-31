@@ -28,7 +28,7 @@ const fmtShort = (v: number) => {
 };
 
 const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  new Date(d).toLocaleDateString("en-NG", { month: "short", day: "numeric" });
 
 function GrowthBadge({ pct }: { pct: number }) {
   if (pct > 0) return (

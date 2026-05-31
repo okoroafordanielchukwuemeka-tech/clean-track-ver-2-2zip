@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReceiptView } from "@/components/receipt-view";
@@ -112,6 +113,7 @@ export default function OrderDetail() {
   const [showPickup, setShowPickup] = useState(false);
   const [showAddAdj, setShowAddAdj] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentInput>({ amount: 0, method: "cash" });
   const [pickupForm, setPickupForm] = useState({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
   const [itemPickupQtys, setItemPickupQtys] = useState<Map<number, number>>(new Map());
@@ -190,8 +192,10 @@ export default function OrderDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders", orderId, "payments"] });
       qc.invalidateQueries({ queryKey: ["orders", orderId] });
+      setDeletePaymentId(null);
       toast.success("Payment deleted");
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const pickupMutation = useMutation({
@@ -526,6 +530,7 @@ export default function OrderDetail() {
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">Status saves immediately when changed</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -699,7 +704,7 @@ export default function OrderDetail() {
                         </Button>
                       )}
                       {isOwner && (
-                        <Button variant="ghost" size="icon" onClick={() => deletePaymentMutation.mutate(p.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => setDeletePaymentId(p.id)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
@@ -709,7 +714,7 @@ export default function OrderDetail() {
               ))}
               {!payments.length && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No payments recorded</TableCell>
+                  <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">No payments recorded</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -1062,6 +1067,26 @@ export default function OrderDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deletePaymentId !== null} onOpenChange={(v) => { if (!v) setDeletePaymentId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the payment record and update the order balance. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletePaymentId !== null && deletePaymentMutation.mutate(deletePaymentId)}
+            >
+              {deletePaymentMutation.isPending ? "Deleting..." : "Delete Payment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -5,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ArrowLeft, CheckCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,6 +14,7 @@ export default function BatchDetail() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const batchId = parseInt(id!);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const { data: batch, isLoading } = useQuery({
     queryKey: ["batches", batchId],
@@ -23,6 +26,7 @@ export default function BatchDetail() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["batches", batchId] });
       qc.invalidateQueries({ queryKey: ["orders"] });
+      setShowConfirm(false);
       toast.success("Batch completed");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -48,7 +52,7 @@ export default function BatchDetail() {
           {batch.status === "active" && (
             <Button
               size="sm"
-              onClick={() => completeMutation.mutate()}
+              onClick={() => setShowConfirm(true)}
               disabled={completeMutation.isPending}
             >
               <CheckCircle className="h-4 w-4" />
@@ -58,17 +62,11 @@ export default function BatchDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 max-w-xs">
         <Card>
           <CardContent className="p-6">
             <p className="text-sm text-muted-foreground">Total Orders</p>
             <p className="text-2xl font-bold">{batch.orderCount}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">Status</p>
-            <p className="text-2xl font-bold capitalize">{batch.status}</p>
           </CardContent>
         </Card>
       </div>
@@ -123,6 +121,22 @@ export default function BatchDetail() {
           </Table>
         </CardContent>
       </Card>
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete Batch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Marking this batch as completed will close it. You won't be able to add more orders to it. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
+              {completeMutation.isPending ? "Completing..." : "Complete Batch"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
