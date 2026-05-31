@@ -141,6 +141,8 @@ export const api = {
     updateAutomation: (data: Partial<AutomationSettings>) => request<AutomationSettings>("PATCH", "/settings/automation", data),
     getDashboardPreferences: () => request<DashboardPreferences>("GET", "/settings/dashboard-preferences"),
     updateDashboardPreferences: (data: Partial<DashboardPreferences>) => request<DashboardPreferences>("PATCH", "/settings/dashboard-preferences", data),
+    getDiscountSettings: () => request<DiscountSettings>("GET", "/settings/discount-settings"),
+    updateDiscountSettings: (data: Partial<DiscountSettings>) => request<DiscountSettings>("PATCH", "/settings/discount-settings", data),
   },
   workerPermissions: {
     get: (workerId: number) => request<WorkerPermission>("GET", `/workers/${workerId}/permissions`),
@@ -692,6 +694,12 @@ export interface DashboardPreferences {
   showWorkerPerformance?: boolean;
   showNotifications?: boolean;
   showOperationalInsights?: boolean;
+}
+
+export interface DiscountSettings {
+  maxDiscountPerOrder?: number;
+  maxDiscountPercentage?: number;
+  autoApprovalThreshold?: number;
 }
 
 export interface WorkerPermission {

@@ -7,6 +7,7 @@ import {
   type OperationalSettings,
   type AutomationSettings,
   type DashboardPreferences,
+  type DiscountSettings,
   type WorkerPermission,
   type MessageTemplate,
 } from "@/lib/api";
@@ -34,7 +35,7 @@ import { toast } from "sonner";
 import {
   Building2, Palette, Clock, Shield, Bell, MessageSquare, Tag,
   LayoutDashboard, Save, ImageIcon, Plus, Trash2, AlertCircle,
-  RefreshCw, ChevronRight,
+  RefreshCw, ChevronRight, Percent,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,7 @@ const SECTIONS = [
   { id: "branding", label: "Branding", icon: Palette },
   { id: "operational", label: "Operational", icon: Clock },
   { id: "permissions", label: "Worker Permissions", icon: Shield },
+  { id: "discounts", label: "Discount Rules", icon: Percent },
   { id: "automation", label: "Automation Alerts", icon: Bell },
   { id: "templates", label: "Message Templates", icon: MessageSquare },
   { id: "categories", label: "Expense Categories", icon: Tag },
@@ -856,6 +858,206 @@ function ExpenseCategoriesSection() {
   );
 }
 
+function DiscountSettingsSection() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["settings", "discount-settings"],
+    queryFn: () => api.settings.getDiscountSettings(),
+  });
+
+  const [form, setForm] = useState<DiscountSettings>({
+    autoApprovalThreshold: 0,
+    maxDiscountPerOrder: 0,
+    maxDiscountPercentage: 0,
+  });
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setForm({
+        autoApprovalThreshold: data.autoApprovalThreshold ?? 0,
+        maxDiscountPerOrder: data.maxDiscountPerOrder ?? 0,
+        maxDiscountPercentage: data.maxDiscountPercentage ?? 0,
+      });
+      setIsDirty(false);
+    }
+  }, [data]);
+
+  const mutation = useMutation({
+    mutationFn: () => api.settings.updateDiscountSettings(form),
+    onSuccess: (updated) => {
+      qc.setQueryData(["settings", "discount-settings"], updated);
+      setIsDirty(false);
+      toast.success("Discount rules saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const update = (key: keyof DiscountSettings, value: number) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+    setIsDirty(true);
+  };
+
+  if (isLoading) return <SkeletonRows rows={3} />;
+
+  const threshold = form.autoApprovalThreshold ?? 0;
+  const maxAbs = form.maxDiscountPerOrder ?? 0;
+  const maxPct = form.maxDiscountPercentage ?? 0;
+
+  return (
+    <div>
+      <SectionHeader
+        title="Discount Rules"
+        description="Control how worker discounts are handled — what gets auto-applied and what needs your approval."
+      />
+
+      {/* How it works callout */}
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-4 text-sm space-y-1">
+        <p className="font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-2">
+          <Percent className="h-4 w-4" />
+          How it works
+        </p>
+        <p className="text-blue-800 dark:text-blue-400">
+          When a worker requests a discount on an order:
+        </p>
+        <ul className="list-disc list-inside space-y-0.5 text-blue-800 dark:text-blue-400 ml-1">
+          <li>
+            If the discount is <strong>₦{threshold.toLocaleString()} or below</strong> → it is <strong>auto-applied instantly</strong>, no approval needed.
+          </li>
+          <li>
+            If the discount is <strong>above ₦{threshold.toLocaleString()}</strong> → it goes to your <strong>Discounts approval queue</strong> for you to approve or reject.
+          </li>
+          {maxAbs > 0 && (
+            <li>Hard cap: no single discount can exceed <strong>₦{maxAbs.toLocaleString()}</strong> regardless of approval.</li>
+          )}
+          {maxPct > 0 && (
+            <li>Percentage cap: no discount can exceed <strong>{maxPct}%</strong> of the order price.</li>
+          )}
+        </ul>
+      </div>
+
+      <div className="space-y-5">
+        {/* Auto-approval threshold */}
+        <div className="rounded-lg border p-4 space-y-3">
+          <div>
+            <p className="font-medium text-sm">Auto-Approval Threshold</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Discounts at or below this amount are applied immediately without approval.
+              Set to <strong>₦0</strong> to require approval on every discount.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground shrink-0">₦</span>
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              value={form.autoApprovalThreshold ?? 0}
+              onChange={e => update("autoApprovalThreshold", Math.max(0, Number(e.target.value)))}
+              className="w-40"
+              placeholder="0"
+            />
+            <span className="text-xs text-muted-foreground">
+              {threshold === 0
+                ? "All discounts will need your approval"
+                : `Discounts ≤ ₦${threshold.toLocaleString()} auto-apply`}
+            </span>
+          </div>
+          {/* Quick presets */}
+          <div className="flex flex-wrap gap-2">
+            {[0, 200, 500, 1000, 2000, 5000].map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => update("autoApprovalThreshold", v)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                  form.autoApprovalThreshold === v
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                )}
+              >
+                {v === 0 ? "No auto-approve" : `₦${v.toLocaleString()}`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Max discount per order */}
+        <div className="rounded-lg border p-4 space-y-3">
+          <div>
+            <p className="font-medium text-sm">Maximum Discount Per Order</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Absolute ceiling — no discount can exceed this amount. Set to <strong>₦0</strong> to disable this limit.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground shrink-0">₦</span>
+            <Input
+              type="number"
+              min={0}
+              step={100}
+              value={form.maxDiscountPerOrder ?? 0}
+              onChange={e => update("maxDiscountPerOrder", Math.max(0, Number(e.target.value)))}
+              className="w-40"
+              placeholder="0"
+            />
+            <span className="text-xs text-muted-foreground">
+              {maxAbs === 0 ? "No hard cap set" : `Cap: ₦${maxAbs.toLocaleString()}`}
+            </span>
+          </div>
+        </div>
+
+        {/* Max discount percentage */}
+        <div className="rounded-lg border p-4 space-y-3">
+          <div>
+            <p className="font-medium text-sm">Maximum Discount Percentage</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Workers cannot discount more than this percentage of the order price. Set to <strong>0</strong> to disable.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              value={form.maxDiscountPercentage ?? 0}
+              onChange={e => update("maxDiscountPercentage", Math.min(100, Math.max(0, Number(e.target.value))))}
+              className="w-40"
+              placeholder="0"
+            />
+            <span className="text-sm font-medium text-muted-foreground shrink-0">%</span>
+            <span className="text-xs text-muted-foreground">
+              {maxPct === 0 ? "No percentage cap set" : `Cap: ${maxPct}% of order price`}
+            </span>
+          </div>
+          {/* Quick presets */}
+          <div className="flex flex-wrap gap-2">
+            {[0, 10, 20, 30, 50].map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => update("maxDiscountPercentage", v)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                  form.maxDiscountPercentage === v
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                )}
+              >
+                {v === 0 ? "No cap" : `${v}%`}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <SaveRow onSave={() => mutation.mutate()} isPending={mutation.isPending} isDirty={isDirty} />
+    </div>
+  );
+}
+
 const DASHBOARD_TOGGLES: { key: keyof DashboardPreferences; label: string; description: string }[] = [
   { key: "showRevenue", label: "Revenue Card", description: "Show total and collected revenue on the dashboard" },
   { key: "showExpenses", label: "Expenses Card", description: "Show total expenses widget" },
@@ -980,6 +1182,7 @@ export default function SettingsPage() {
               {activeSection === "branding" && <BrandingSection />}
               {activeSection === "operational" && <OperationalSection />}
               {activeSection === "permissions" && <WorkerPermissionsSection />}
+              {activeSection === "discounts" && <DiscountSettingsSection />}
               {activeSection === "automation" && <AutomationSection />}
               {activeSection === "templates" && <MessageTemplatesSection />}
               {activeSection === "categories" && <ExpenseCategoriesSection />}
