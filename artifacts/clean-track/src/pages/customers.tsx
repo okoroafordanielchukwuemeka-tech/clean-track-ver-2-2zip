@@ -251,28 +251,31 @@ export default function Customers() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Orders</TableHead>
-                  <TableHead>Total Spent</TableHead>
+                  <TableHead className="hidden sm:table-cell">Phone</TableHead>
+                  <TableHead className="hidden md:table-cell">Orders</TableHead>
+                  <TableHead className="hidden lg:table-cell">Total Spent</TableHead>
                   <TableHead>Balance</TableHead>
-                  <TableHead>Remaining</TableHead>
-                  <TableHead>Last Order</TableHead>
-                  <TableHead>Tags</TableHead>
+                  <TableHead className="hidden md:table-cell">Remaining</TableHead>
+                  <TableHead className="hidden lg:table-cell">Last Order</TableHead>
+                  <TableHead className="hidden md:table-cell">Tags</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {customers.map((c) => (
                   <TableRow key={c.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setSelectedId(c.id)}>
-                    <TableCell className="font-medium">{c.fullName}</TableCell>
-                    <TableCell className="font-mono text-sm">{c.phone}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium">
+                      <span className="block">{c.fullName}</span>
+                      <span className="sm:hidden text-xs text-muted-foreground font-mono">{c.phone}</span>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell font-mono text-sm">{c.phone}</TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <span className="font-medium">{c.totalOrders}</span>
                       {c.activeOrders > 0 && (
                         <span className="ml-1 text-xs text-muted-foreground">({c.activeOrders} active)</span>
                       )}
                     </TableCell>
-                    <TableCell>{fmt(c.totalSpending)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{fmt(c.totalSpending)}</TableCell>
                     <TableCell>
                       {c.outstandingBalance > 0 ? (
                         <span className="text-red-600 font-medium">{fmt(c.outstandingBalance)}</span>
@@ -280,17 +283,17 @@ export default function Customers() {
                         <span className="text-green-600 text-xs">Clear</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {c.remainingItems > 0 ? (
                         <span className="text-orange-600 font-medium">{c.remainingItems} item{c.remainingItems !== 1 ? "s" : ""}</span>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                       {c.lastOrderDate ? timeAgo(c.lastOrderDate) : "—"}
                     </TableCell>
-                    <TableCell><CustomerTags c={c} /></TableCell>
+                    <TableCell className="hidden md:table-cell"><CustomerTags c={c} /></TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" onClick={() => setSelectedId(c.id)}>
                         <Eye className="h-4 w-4" />

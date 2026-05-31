@@ -285,17 +285,19 @@ export default function OrderDetail() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/orders"><ArrowLeft className="h-4 w-4" /></Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Order {order.orderId}</h1>
-          <p className="text-sm text-muted-foreground">
-            Created {new Date(order.createdAt).toLocaleDateString()}
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild className="shrink-0">
+            <Link to="/orders"><ArrowLeft className="h-4 w-4" /></Link>
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold">Order {order.orderId}</h1>
+            <p className="text-sm text-muted-foreground">
+              Created {new Date(order.createdAt).toLocaleDateString()}
+            </p>
+          </div>
         </div>
-        <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap sm:ml-auto pl-12 sm:pl-0">
           {statusBadge(order.status)}
           {paymentBadge(order.paymentStatus)}
           {order.isVerified && (

@@ -106,13 +106,15 @@ export default function Workers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Workers</h1>
           <p className="text-sm text-muted-foreground">Manage staff access and branch assignments</p>
         </div>
-        <Button onClick={() => { setEditId(null); setForm(emptyForm); setShowDialog(true); }}>
-          <Plus className="h-4 w-4 mr-1" /> Add Worker
+        <Button onClick={() => { setEditId(null); setForm(emptyForm); setShowDialog(true); }} className="shrink-0">
+          <Plus className="h-4 w-4 mr-1" />
+          <span className="hidden sm:inline">Add Worker</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
@@ -128,10 +130,10 @@ export default function Workers() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Phone</TableHead>
+                  <TableHead className="hidden sm:table-cell">Branch</TableHead>
+                  <TableHead className="hidden md:table-cell">Phone</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>PIN</TableHead>
+                  <TableHead className="hidden sm:table-cell">PIN</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -139,8 +141,13 @@ export default function Workers() {
               <TableBody>
                 {workers.map((w) => (
                   <TableRow key={w.id}>
-                    <TableCell className="font-medium">{w.name}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium">
+                      <span className="block">{w.name}</span>
+                      <span className="sm:hidden text-xs text-muted-foreground">
+                        {w.branchId ? branchMap[w.branchId] ?? `Branch ${w.branchId}` : "No branch"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {w.branchId ? (
                         <span className="inline-flex items-center gap-1 text-sm">
                           <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
@@ -150,13 +157,13 @@ export default function Workers() {
                         <span className="text-muted-foreground text-xs">No branch</span>
                       )}
                     </TableCell>
-                    <TableCell>{w.phone || "—"}</TableCell>
+                    <TableCell className="hidden md:table-cell">{w.phone || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={w.role === "admin" ? "default" : "secondary"} className="capitalize">
                         {w.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>{"••••"}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{"••••"}</TableCell>
                     <TableCell>
                       <Badge variant={w.isActive ? "success" : "secondary"}>
                         {w.isActive ? "Active" : "Inactive"}

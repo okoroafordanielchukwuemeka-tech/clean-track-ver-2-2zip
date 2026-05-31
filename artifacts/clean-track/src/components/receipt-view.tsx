@@ -9,6 +9,7 @@ export interface ReceiptData {
     notes?: string | null;
     remainingBalance: number;
     recordedBy?: string | null;
+    cashierName?: string | null;
   } | null;
   laundry: {
     businessName: string;
@@ -20,6 +21,11 @@ export interface ReceiptData {
     receiptFooterText: string;
     brandColor: string;
   };
+  branch?: {
+    id: number;
+    name: string;
+    address?: string;
+  } | null;
   customer: {
     fullName: string;
     phone: string;
@@ -92,7 +98,7 @@ interface ReceiptViewProps {
 }
 
 export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) {
-  const { receipt, laundry, customer, order, items, priceAdjustments, pricing, allPayments } = data;
+  const { receipt, laundry, branch, customer, order, items, priceAdjustments, pricing, allPayments } = data;
   const isItemBased = items && items.length > 0;
   const headerName = laundry.receiptHeaderName || laundry.businessName;
 
@@ -103,7 +109,9 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
           <img src={laundry.logoUrl} alt={headerName} className="receipt-logo" />
         )}
         <h1 className="receipt-business-name">{headerName}</h1>
+        {branch && <p className="receipt-contact" style={{ fontWeight: 600 }}>{branch.name}</p>}
         {laundry.address && <p className="receipt-contact">{laundry.address}</p>}
+        {branch?.address && branch.address !== laundry.address && <p className="receipt-contact">{branch.address}</p>}
         {laundry.phone && <p className="receipt-contact">{laundry.phone}</p>}
         {laundry.email && <p className="receipt-contact">{laundry.email}</p>}
       </div>
@@ -148,10 +156,10 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
             <span>Method</span>
             <span className="receipt-value">{methodLabel(receipt.method)}</span>
           </div>
-          {receipt.recordedBy && (
+          {(receipt.cashierName || receipt.recordedBy) && (
             <div className="receipt-row">
               <span>Received by</span>
-              <span className="receipt-value">{receipt.recordedBy}</span>
+              <span className="receipt-value">{receipt.cashierName || receipt.recordedBy}</span>
             </div>
           )}
           {receipt.notes && (

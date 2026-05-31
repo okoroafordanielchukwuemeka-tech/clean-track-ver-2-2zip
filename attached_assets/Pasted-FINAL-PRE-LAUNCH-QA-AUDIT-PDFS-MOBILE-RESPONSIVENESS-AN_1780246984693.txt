@@ -1,0 +1,195 @@
+FINAL PRE-LAUNCH QA AUDIT — PDFS, MOBILE RESPONSIVENESS, AND COMPLETE OWNER WORKFLOW
+
+IMPORTANT:
+
+Do NOT build any new features.
+
+Do NOT refactor working systems.
+
+Do NOT modify business logic unless a bug is discovered.
+
+Your mission is to perform a complete production-readiness quality assurance audit and fix any issues found.
+
+======================================================
+PHASE 1 — PDF RECEIPT VERIFICATION
+==================================
+
+Test receipt generation using real demo data.
+
+Verify:
+
+1. Receipt opens successfully.
+2. Receipt renders correctly.
+3. Laundry name appears.
+4. Branch name appears.
+5. Receipt number appears.
+6. Customer name appears.
+7. Order number appears.
+8. Cashier/worker name appears.
+9. Payment amount appears.
+10. Payment method appears.
+11. Date and time appear.
+12. Outstanding balance appears if applicable.
+13. Print button works.
+14. Browser print preview works.
+15. Mobile print preview works.
+16. PDF export/download works.
+17. No missing fields.
+18. No null values.
+19. No layout overflow.
+20. No cutoff text.
+
+If any issue exists:
+
+* Fix it.
+* Document root cause.
+* Verify fix.
+
+======================================================
+PHASE 2 — CUSTOMER STATEMENT PDF VERIFICATION
+=============================================
+
+Generate customer statements for multiple customers.
+
+Verify:
+
+1. Statement opens correctly.
+2. Customer details appear.
+3. Statement period appears.
+4. Orders appear correctly.
+5. Payments appear correctly.
+6. Pickups appear correctly.
+7. Discounts appear correctly.
+8. Extra charges appear correctly.
+9. Running balance is correct.
+10. Outstanding debt is correct.
+11. Credit balances display correctly.
+12. Print works.
+13. PDF export works.
+14. Mobile viewing works.
+15. Long statements paginate correctly.
+16. No overlapping text.
+17. No missing transactions.
+
+Test:
+
+* Customer with balance due.
+* Customer fully paid.
+* Customer with credit balance.
+
+Fix any issues discovered.
+
+======================================================
+PHASE 3 — MOBILE RESPONSIVENESS AUDIT
+=====================================
+
+Audit the entire application using:
+
+A. Small phone width
+B. Standard Android width
+C. iPhone width
+D. Tablet width
+
+Test:
+
+Dashboard
+Orders
+Order Detail
+Customers
+Customer Profile
+Statements
+Receipts
+Workers
+Branches
+Discount Approvals
+Notifications
+Settings
+Worker Station
+Batches
+Expenditures
+
+Check for:
+
+1. Horizontal scrolling.
+2. Overflowing tables.
+3. Hidden buttons.
+4. Truncated text.
+5. Broken modals.
+6. Unusable forms.
+7. Buttons outside viewport.
+8. Poor spacing.
+9. Layout shifts.
+10. Unreadable cards.
+11. Broken navigation.
+12. Touch usability issues.
+
+Fix every LOW, MEDIUM, and HIGH severity issue discovered.
+
+======================================================
+PHASE 4 — COMPLETE REAL OWNER WALKTHROUGH
+=========================================
+
+Act as a real laundry owner.
+
+Without using database shortcuts:
+
+1. Login.
+2. Create customer.
+3. Create order.
+4. Add multiple items.
+5. Add special instructions.
+6. Move order to Processing.
+7. Move order to Ready.
+8. Record payment.
+9. Generate receipt.
+10. Print receipt.
+11. Process pickup.
+12. Generate customer statement.
+13. Print statement.
+14. Review analytics.
+15. Switch branches.
+16. Review workers.
+17. Review notifications.
+
+Document:
+
+* Every friction point.
+* Every unnecessary click.
+* Every confusing label.
+* Every missing message.
+* Every inconsistency.
+
+======================================================
+PHASE 5 — FINAL REPORT
+======================
+
+Provide:
+
+1. Screenshots.
+2. Issues found.
+3. Severity level.
+
+Categories:
+
+CRITICAL
+HIGH
+MEDIUM
+LOW
+
+For every issue:
+
+* Description
+* Root cause
+* Fix applied
+
+Then provide:
+
+FINAL LAUNCH READINESS SCORE /100
+
+Also answer:
+
+"Would a real laundry owner comfortably use this product today?"
+
+Do not build new features.
+
+Focus only on stability, usability, polish, responsiveness, PDFs, and production readiness.

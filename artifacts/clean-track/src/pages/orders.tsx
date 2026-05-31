@@ -89,11 +89,11 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Orders</h1>
           {(overdueCount > 0 || urgentCount > 0) && (
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               {overdueCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-500">
                   <AlertTriangle className="h-3 w-3" />{overdueCount} overdue
@@ -107,9 +107,10 @@ export default function Orders() {
             </div>
           )}
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-2">
+        <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0">
           <Plus className="h-4 w-4" />
-          New Order
+          <span className="hidden sm:inline">New Order</span>
+          <span className="sm:hidden">New</span>
         </Button>
       </div>
 
@@ -183,12 +184,12 @@ export default function Orders() {
                     <TableHead className="w-8"></TableHead>
                     <TableHead>Order ID</TableHead>
                     <TableHead>Customer</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Items</TableHead>
+                    <TableHead className="hidden sm:table-cell">Type</TableHead>
+                    <TableHead className="hidden md:table-cell">Items</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Timer</TableHead>
+                    <TableHead className="hidden sm:table-cell">Payment</TableHead>
+                    <TableHead className="hidden sm:table-cell">Price</TableHead>
+                    <TableHead className="hidden lg:table-cell">Timer</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -203,20 +204,23 @@ export default function Orders() {
                           {isActive && <span className={cn("block h-2 w-2 rounded-full mx-auto", urg.dotClass)} />}
                         </TableCell>
                         <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
-                        <TableCell className="font-medium">{order.customerName}</TableCell>
-                        <TableCell>
+                        <TableCell className="font-medium">
+                          <span className="block">{order.customerName}</span>
+                          <span className="sm:hidden text-xs text-muted-foreground">{formatCurrency(order.price as any)} · {order.paymentStatus}</span>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <span className="capitalize text-sm">{order.serviceType}</span>
                         </TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="hidden md:table-cell text-sm">
                           {hasItems
                             ? <span className="text-primary font-medium">{order.itemCount} item{order.itemCount !== 1 ? "s" : ""}</span>
                             : `${order.shirts}S / ${order.trousers}T`
                           }
                         </TableCell>
                         <TableCell>{statusBadge(order.status)}</TableCell>
-                        <TableCell>{paymentBadge(order.paymentStatus)}</TableCell>
-                        <TableCell>{formatCurrency(order.price as any)}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">{paymentBadge(order.paymentStatus)}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{formatCurrency(order.price as any)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <CountdownTimer
                             createdAt={order.createdAt}
                             serviceType={order.serviceType}
