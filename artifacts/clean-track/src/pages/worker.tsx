@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
+import { useBranch } from "@/context/branch-context";
 import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -129,6 +130,7 @@ function UrgencySection({
 
 export default function WorkerStation() {
   const { user } = useAuth();
+  const { activeBranchId } = useBranch();
   const qc = useQueryClient();
   const [, setTick] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
@@ -139,8 +141,8 @@ export default function WorkerStation() {
   }, []);
 
   const { data: rawOrders = [] } = useQuery({
-    queryKey: ["orders"],
-    queryFn: () => api.orders.list(),
+    queryKey: ["orders", activeBranchId],
+    queryFn: () => api.orders.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
     refetchInterval: 30_000,
   });
 

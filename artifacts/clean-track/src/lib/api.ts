@@ -296,6 +296,7 @@ export interface OrderInput {
   extraChargeReason?: string;
   discount?: number;
   discountReason?: string;
+  branchId?: number;
 }
 
 export interface OrderUpdate {

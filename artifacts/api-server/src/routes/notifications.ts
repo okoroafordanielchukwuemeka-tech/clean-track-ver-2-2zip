@@ -173,11 +173,21 @@ notificationsRouter.get("/count", async (req: AuthRequest, res) => {
 
 notificationsRouter.patch("/read-all", async (req: AuthRequest, res) => {
   try {
-    const { laundryId } = req.auth!;
+    const auth = req.auth!;
+    const { laundryId, type, workerId } = auth;
+    const readAllConditions: any[] = [eq(notifications.laundryId, laundryId)];
+    if (type === "worker") {
+      readAllConditions.push(
+        or(
+          and(eq(notifications.targetType, "worker"), workerId ? eq(notifications.targetWorkerId, workerId) : undefined),
+          eq(notifications.targetType, "all")
+        )
+      );
+    }
     await db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.laundryId, laundryId));
+      .where(and(...readAllConditions));
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Failed to mark all as read" });

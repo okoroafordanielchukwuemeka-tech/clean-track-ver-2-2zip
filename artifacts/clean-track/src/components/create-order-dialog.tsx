@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Service, type CustomerWithMetrics, type SlaSettings } from "@/lib/api";
+import { useBranch } from "@/context/branch-context";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ function groupByCategory(services: Service[]): Record<string, Service[]> {
 
 export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrderDialogProps) {
   const qc = useQueryClient();
+  const { activeBranchId } = useBranch();
   const [step, setStep] = useState(0);
 
   const [customerSearch, setCustomerSearch] = useState("");
@@ -105,6 +107,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         discountReason: discount > 0 ? discountReason : undefined,
         extraCharge: extraCharge > 0 ? extraCharge : undefined,
         extraChargeReason: extraCharge > 0 ? extraChargeReason : undefined,
+        branchId: activeBranchId ?? undefined,
       });
     },
     onSuccess: () => {

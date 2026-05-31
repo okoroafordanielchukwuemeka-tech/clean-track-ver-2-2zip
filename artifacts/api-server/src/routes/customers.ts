@@ -285,10 +285,13 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
 customersRouter.get("/:id/receipts", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const workerBranchId = req.auth!.branchId;
     const customerId = parseInt(req.params.id);
+    const custReceiptConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
+    if (workerBranchId) custReceiptConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.select({ id: customers.id })
       .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));
+      .where(and(...custReceiptConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const rows = await db
@@ -320,11 +323,13 @@ customersRouter.get("/:id/receipts", async (req: AuthRequest, res) => {
 customersRouter.get("/:id/statement", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const workerBranchId = req.auth!.branchId;
     const customerId = parseInt(req.params.id);
     const { from, to } = req.query as { from?: string; to?: string };
 
-    const [customer] = await db.select().from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));
+    const custStmtConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
+    if (workerBranchId) custStmtConditions.push(eq(customers.branchId, workerBranchId));
+    const [customer] = await db.select().from(customers).where(and(...custStmtConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const fromDate = from ? new Date(from) : new Date(Date.now() - 90 * 86400000);

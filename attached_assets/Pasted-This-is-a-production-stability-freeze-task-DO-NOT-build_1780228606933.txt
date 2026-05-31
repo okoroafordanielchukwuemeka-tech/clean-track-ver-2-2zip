@@ -1,0 +1,131 @@
+This is a production stability freeze task.
+
+DO NOT build any new features.
+
+We are ONLY fixing bugs, missing endpoints, and UX inconsistencies discovered during real-world testing.
+
+==================================================
+PHASE 1 — FULL SYSTEM AUDIT (NO FEATURE BUILDING)
+=================================================
+
+Perform a complete end-to-end audit of the system using:
+
+Owner:
+[demo@cleantrack.ng](mailto:demo@cleantrack.ng) / Demo@1234
+
+Worker accounts (all branches)
+
+Run real workflows:
+
+1. Create order
+2. Process order
+3. Record payment (cash, transfer, POS)
+4. Request discount
+5. Approve/reject discount
+6. Record pickup
+7. View customer statement
+8. View receipts
+9. View dashboard analytics
+10. Switch branches
+
+For EACH step:
+
+* confirm API endpoint exists
+* confirm response is correct
+* confirm no null fields
+* confirm no silent failures
+* confirm branch isolation is correct
+
+==================================================
+PHASE 2 — MISSING ENDPOINT AUDIT
+================================
+
+Check for missing or broken endpoints such as:
+
+* /orders/recent
+* /analytics endpoints consistency
+* /notifications/count consistency
+* /customers/:id/statement
+* /receipts endpoints
+* /pickups history endpoints
+
+If any endpoint is missing:
+→ add it
+→ ensure correct branch filtering
+→ ensure auth rules are correct
+
+==================================================
+PHASE 3 — BRANCH ISOLATION HARDENING
+====================================
+
+Re-verify:
+
+Workers MUST NEVER access:
+
+* other branch orders
+* other branch customers
+* other branch payments
+* other branch analytics
+* other branch receipts
+
+If ANY leakage exists:
+fix at backend level (not frontend)
+
+Ensure:
+
+* API-level enforcement (not UI filtering only)
+* 404 on cross-branch access (not 403 leak)
+* no ID enumeration leaks
+
+==================================================
+PHASE 4 — UX CONSISTENCY AUDIT
+==============================
+
+Check:
+
+* Does every page respect branch selector?
+* Does dashboard reflect active branch?
+* Are all filters applied consistently?
+* Are loading states correct?
+* Are null values handled safely?
+
+Fix inconsistencies.
+
+==================================================
+PHASE 5 — DATA INTEGRITY AUDIT
+==============================
+
+Verify:
+
+* No duplicate receipts
+* No negative balances incorrectly calculated
+* Payments always update order balance correctly
+* Discounts never bypass approval rules
+* Pickups never complete incorrectly
+
+==================================================
+PHASE 6 — STABILIZATION (IMPORTANT)
+===================================
+
+ONLY AFTER ALL ABOVE:
+
+* Fix bugs found
+* Do NOT add new features
+* Do NOT add dashboards or exports
+* Do NOT add WhatsApp/SMS
+* Do NOT redesign UI
+
+This is a stabilization-only pass.
+
+==================================================
+DELIVERABLE
+===========
+
+Return:
+
+1. Full audit report
+2. List of broken/missing endpoints
+3. Security issues (if any)
+4. UX inconsistencies
+5. Fixes applied
+6. Confirmation: "SYSTEM IS STABLE FOR PRODUCTION"
