@@ -24,6 +24,7 @@ import DiscountApprovals from "@/pages/discount-approvals";
 import Receipts from "@/pages/receipts";
 import ReceiptPrint from "@/pages/receipt-print";
 import BranchesPage from "@/pages/branches";
+import DemoLogin from "@/pages/demo-login";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/worker-login" element={<WorkerLogin />} />
+              <Route path="/demo-access" element={<DemoLogin />} />
 
               <Route
                 path="/"
