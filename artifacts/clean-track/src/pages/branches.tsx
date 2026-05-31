@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { GitBranch, Plus, Pencil, Trash2, MapPin } from "lucide-react";
+import { GitBranch, Plus, Pencil, Trash2, MapPin, Users, Calendar } from "lucide-react";
 
 export default function BranchesPage() {
   const qc = useQueryClient();
@@ -35,6 +36,27 @@ export default function BranchesPage() {
     queryKey: ["branches"],
     queryFn: () => api.branches.list(),
   });
+
+  const { data: workers = [] } = useQuery({
+    queryKey: ["workers"],
+    queryFn: () => api.workers.list(),
+  });
+
+  const workerCountByBranch = workers.reduce<Record<number, number>>((acc, w) => {
+    if (w.branchId != null) {
+      acc[w.branchId] = (acc[w.branchId] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const activeWorkerCountByBranch = workers.reduce<Record<number, number>>((acc, w) => {
+    if (w.branchId != null && w.isActive) {
+      acc[w.branchId] = (acc[w.branchId] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  const branchToDelete = branches.find(b => b.id === deleteId);
 
   const createMut = useMutation({
     mutationFn: (data: { name: string; address?: string }) => api.branches.create(data),
@@ -99,7 +121,7 @@ export default function BranchesPage() {
             Branches
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage your laundry locations and branches
+            Manage your laundry locations · {branches.length} branch{branches.length !== 1 ? "es" : ""}
           </p>
         </div>
         <Button onClick={() => handleOpen()}>
@@ -109,12 +131,16 @@ export default function BranchesPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-muted-foreground text-sm">Loading branches...</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="border rounded-lg p-5 bg-card h-32 animate-pulse bg-muted" />
+          ))}
+        </div>
       ) : branches.length === 0 ? (
         <div className="border rounded-lg p-8 text-center text-muted-foreground">
           <GitBranch className="h-8 w-8 mx-auto mb-2 opacity-40" />
           <p className="font-medium">No branches yet</p>
-          <p className="text-sm mt-1">Create your first branch to start organizing by location.</p>
+          <p className="text-sm mt-1">Create your first branch to start organising by location.</p>
           <Button className="mt-4" onClick={() => handleOpen()}>
             <Plus className="h-4 w-4 mr-2" />
             Add Branch
@@ -122,37 +148,69 @@ export default function BranchesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {branches.map(branch => (
-            <div key={branch.id} className="border rounded-lg p-4 bg-card space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <GitBranch className="h-4 w-4 text-primary" />
+          {branches.map(branch => {
+            const total = workerCountByBranch[branch.id] ?? 0;
+            const active = activeWorkerCountByBranch[branch.id] ?? 0;
+            return (
+              <div key={branch.id} className="border rounded-xl p-5 bg-card space-y-4 hover:shadow-sm transition-shadow">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <GitBranch className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{branch.name}</p>
+                      {branch.address ? (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{branch.address}</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-0.5">No address set</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">{branch.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(branch.createdAt).toLocaleDateString()}
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpen(branch)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(branch.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-muted/50 rounded-lg p-2.5 text-center">
+                    <p className="text-lg font-bold">{total}</p>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5">
+                      <Users className="h-3 w-3" /> Workers
+                    </p>
+                    {total > 0 && active < total && (
+                      <p className="text-xs text-amber-600 mt-0.5">{active} active</p>
+                    )}
+                    {total > 0 && active === total && (
+                      <p className="text-xs text-green-600 mt-0.5">All active</p>
+                    )}
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-2.5 text-center">
+                    <p className="text-lg font-bold text-muted-foreground">
+                      {new Date(branch.createdAt).toLocaleDateString("en-NG", { month: "short", year: "numeric" })}
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5">
+                      <Calendar className="h-3 w-3" /> Opened
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpen(branch)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(branch.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+
+                {total === 0 && (
+                  <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                    No workers assigned
+                  </Badge>
+                )}
               </div>
-              {branch.address && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="h-3 w-3 shrink-0" />
-                  <span>{branch.address}</span>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -166,14 +224,14 @@ export default function BranchesPage() {
               <Label htmlFor="name">Branch Name *</Label>
               <Input
                 id="name"
-                placeholder="e.g. Main Branch, Ikeja Location"
+                placeholder="e.g. Ikeja Location"
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 required
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="address">Address</Label>
+              <Label htmlFor="address">Address <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input
                 id="address"
                 placeholder="e.g. 12 Allen Avenue, Ikeja"
@@ -196,7 +254,7 @@ export default function BranchesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Branch?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the branch. Existing orders and customers linked to it will remain but will no longer be branch-scoped.
+              This will remove <strong>{branchToDelete?.name}</strong>. Existing orders and customers linked to this branch will remain but will no longer be branch-scoped.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -205,7 +263,7 @@ export default function BranchesPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteId !== null && deleteMut.mutate(deleteId)}
             >
-              Delete
+              Delete Branch
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

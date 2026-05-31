@@ -7,14 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 
 const emptyForm: Partial<WorkerInput> = {
   role: "worker",
   isActive: true,
+  branchId: null,
 };
 
 export default function Workers() {
@@ -28,6 +39,13 @@ export default function Workers() {
     queryKey: ["workers"],
     queryFn: () => api.workers.list(),
   });
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: () => api.branches.list(),
+  });
+
+  const branchMap = Object.fromEntries(branches.map(b => [b.id, b.name]));
 
   const createMutation = useMutation({
     mutationFn: (data: WorkerInput) => api.workers.create(data),
@@ -64,7 +82,7 @@ export default function Workers() {
 
   const openEdit = (w: any) => {
     setEditId(w.id);
-    setForm({ name: w.name, phone: w.phone || "", role: w.role, pin: w.pin || "", isActive: w.isActive });
+    setForm({ name: w.name, phone: w.phone || "", role: w.role, pin: w.pin || "", isActive: w.isActive, branchId: w.branchId ?? null });
     setShowDialog(true);
   };
 
@@ -76,6 +94,7 @@ export default function Workers() {
       role: (form.role ?? "worker") as "admin" | "worker",
       pin: form.pin || "",
       isActive: form.isActive ?? true,
+      branchId: form.branchId ?? null,
     };
     if (editId) updateMutation.mutate({ id: editId, data });
     else createMutation.mutate(data);
@@ -83,12 +102,17 @@ export default function Workers() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  const workerToDelete = workers.find(w => w.id === showDelete);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Workers</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Workers</h1>
+          <p className="text-sm text-muted-foreground">Manage staff access and branch assignments</p>
+        </div>
         <Button onClick={() => { setEditId(null); setForm(emptyForm); setShowDialog(true); }}>
-          <Plus className="h-4 w-4" /> Add Worker
+          <Plus className="h-4 w-4 mr-1" /> Add Worker
         </Button>
       </div>
 
@@ -104,6 +128,7 @@ export default function Workers() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Branch</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>PIN</TableHead>
@@ -115,6 +140,16 @@ export default function Workers() {
                 {workers.map((w) => (
                   <TableRow key={w.id}>
                     <TableCell className="font-medium">{w.name}</TableCell>
+                    <TableCell>
+                      {w.branchId ? (
+                        <span className="inline-flex items-center gap-1 text-sm">
+                          <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                          {branchMap[w.branchId] ?? `Branch ${w.branchId}`}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">No branch</span>
+                      )}
+                    </TableCell>
                     <TableCell>{w.phone || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={w.role === "admin" ? "default" : "secondary"} className="capitalize">
@@ -141,7 +176,7 @@ export default function Workers() {
                 ))}
                 {!workers.length && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                       No workers yet
                     </TableCell>
                   </TableRow>
@@ -158,15 +193,30 @@ export default function Workers() {
             <DialogTitle>{editId ? "Edit Worker" : "Add Worker"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
               <Label>Name *</Label>
               <Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" />
             </div>
-            <div>
-              <Label>Phone</Label>
-              <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+234..." />
+            <div className="space-y-1.5">
+              <Label>Branch</Label>
+              <Select
+                value={form.branchId != null ? String(form.branchId) : "none"}
+                onValueChange={(v) => setForm({ ...form, branchId: v === "none" ? null : parseInt(v) })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No branch assigned</SelectItem>
+                  {branches.map(b => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="080..." />
+            </div>
+            <div className="space-y-1.5">
               <Label>Role</Label>
               <Select value={form.role ?? "worker"} onValueChange={(v) => setForm({ ...form, role: v as any })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -176,7 +226,7 @@ export default function Workers() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label>PIN (4-digit login code)</Label>
               <Input
                 value={form.pin ?? ""}
@@ -200,18 +250,25 @@ export default function Workers() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showDelete != null} onOpenChange={(open) => { if (!open) setShowDelete(null); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Remove Worker</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Are you sure you want to remove this worker?</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => showDelete && deleteMutation.mutate(showDelete)} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? "Removing..." : "Remove"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AlertDialog open={showDelete != null} onOpenChange={(open) => { if (!open) setShowDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Worker?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{workerToDelete?.name}</strong> from your account. Their work history will remain attached to any orders they processed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => showDelete && deleteMutation.mutate(showDelete)}
+            >
+              {deleteMutation.isPending ? "Removing..." : "Remove Worker"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

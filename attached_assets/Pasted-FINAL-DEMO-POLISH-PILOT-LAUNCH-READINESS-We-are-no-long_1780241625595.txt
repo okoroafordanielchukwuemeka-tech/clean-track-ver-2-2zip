@@ -1,0 +1,153 @@
+FINAL DEMO POLISH & PILOT LAUNCH READINESS
+
+We are no longer building major features.
+
+We are preparing Clean Track for real demonstrations to friends, family, pilot customers, and laundry owners.
+
+DO NOT build new features.
+
+DO NOT add WhatsApp, SMS, AI, exports, or customer portals.
+
+Focus only on polish, demo quality, UX quality, realism, and stability.
+
+==================================================
+PHASE 1 — DEMO DATA VALIDATION
+==============================
+
+Seed and verify a realistic demo environment.
+
+Requirements:
+
+* 5 branches
+* 20 workers
+* 200+ customers
+* 1000+ orders
+* payments
+* pickups
+* expenditures
+* discount requests
+* approved discounts
+* rejected discounts
+
+Verify:
+
+* every dashboard card has meaningful values
+* charts are populated
+* analytics are populated
+* statements contain data
+* receipts contain data
+
+No page should look empty.
+
+==================================================
+PHASE 2 — UI / UX POLISH AUDIT
+==============================
+
+Review every screen as a real laundry owner.
+
+Check:
+
+* Dashboard
+* Orders
+* Customers
+* Customer Profile
+* Statements
+* Receipts
+* Analytics
+* Expenditures
+* Branches
+* Workers
+* Settings
+
+Find:
+
+* alignment issues
+* ugly spacing
+* empty states
+* confusing labels
+* inconsistent buttons
+* missing loading states
+* poor mobile responsiveness
+
+Fix all issues discovered.
+
+==================================================
+PHASE 3 — RECEIPT & STATEMENT VALIDATION
+========================================
+
+Verify:
+
+* receipt numbers are unique
+* branch name appears
+* cashier name appears
+* payment method appears
+* balances are correct
+
+Verify customer statements:
+
+* running balance correct
+* discounts reflected
+* payments reflected
+* outstanding debt correct
+
+Fix any inconsistencies.
+
+==================================================
+PHASE 4 — PERFORMANCE CHECK
+===========================
+
+With demo dataset loaded:
+
+* switch branches
+* open orders
+* open customers
+* open statements
+* open receipts
+* open analytics
+
+Identify slow screens.
+
+Optimize any obvious bottlenecks.
+
+==================================================
+PHASE 5 — FRIEND & FAMILY DEMO READINESS
+========================================
+
+Pretend you are showing the app to a laundry owner.
+
+Ask:
+
+"Would this screen impress a customer?"
+
+If not:
+
+* improve presentation
+* improve defaults
+* improve labels
+* improve empty states
+
+without changing business logic.
+
+==================================================
+DELIVERABLE
+===========
+
+Return:
+
+1. Demo readiness report
+2. Screenshots of major pages
+3. UI issues fixed
+4. Performance issues fixed
+5. Remaining known issues
+6. Final Pilot Readiness Score (out of 100)
+
+Only after this passes should we move to:
+
+* PDF Receipt polish
+* PDF Statement polish
+* WhatsApp automation
+* SMS automation
+* Customer notifications
+
+Goal:
+Make Clean Track look and feel like a professional SaaS product ready for pilot customers.

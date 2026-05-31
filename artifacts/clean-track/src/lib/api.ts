@@ -630,6 +630,7 @@ export interface CustomerUpdateInput {
 export interface Worker {
   id: number;
   laundryId?: number | null;
+  branchId?: number | null;
   name: string;
   phone?: string | null;
   role: "admin" | "worker";
@@ -644,6 +645,7 @@ export interface WorkerInput {
   role?: "admin" | "worker";
   pin: string;
   isActive?: boolean;
+  branchId?: number | null;
 }
 
 export type NotificationEventType =
