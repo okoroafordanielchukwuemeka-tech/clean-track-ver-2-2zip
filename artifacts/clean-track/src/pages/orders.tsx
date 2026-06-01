@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
+import { PendingSyncBadge } from "@/components/pending-sync-badge";
+import { usePendingLocalOrders } from "@/hooks/use-pending-local";
+import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +65,9 @@ export default function Orders() {
     queryKey: ["settings", "sla"],
     queryFn: () => api.settings.getSla(),
   });
+
+  const { laundryId } = useAuth();
+  const pendingOrders = usePendingLocalOrders(laundryId);
 
   const ordersWithUrgency = orders.map(o => {
     const dueAt = computeDueAt(o.createdAt, o.serviceType, sla, o.processingDueAt);
@@ -198,6 +204,27 @@ export default function Orders() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {pendingOrders.map(o => (
+                    <TableRow key={o.localId} className="bg-blue-50/40 dark:bg-blue-950/20 opacity-90">
+                      <TableCell className="pr-0">
+                        <span className="block h-2 w-2 rounded-full mx-auto bg-blue-400" />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{o.orderId ?? o.localId.slice(0, 12)}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="block">{o.customerName}</span>
+                        <span className="sm:hidden text-xs text-muted-foreground">{o.phone}</span>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <span className="capitalize text-sm">{o.serviceType}</span>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">—</TableCell>
+                      <TableCell><PendingSyncBadge /></TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">—</TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm">{formatCurrency(o.price ?? 0)}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">—</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  ))}
                   {sorted.map(order => {
                     const urg = order._urgency;
                     const isActive = !["completed", "partial_pickup"].includes(order.status);

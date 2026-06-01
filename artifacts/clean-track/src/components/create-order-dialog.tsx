@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Service, type CustomerWithMetrics, type SlaSettings } from "@/lib/api";
+import { api, type Order, type Service, type CustomerWithMetrics, type SlaSettings } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
+import { useAuth } from "@/context/auth-context";
+import { localDb, type LocalOrder, type LocalOrderItem } from "@/lib/local-db";
+import { enqueueOrderCreate } from "@/lib/queue-service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +47,7 @@ function groupByCategory(services: Service[]): Record<string, Service[]> {
 export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrderDialogProps) {
   const qc = useQueryClient();
   const { activeBranchId } = useBranch();
+  const { laundryId } = useAuth();
   const [step, setStep] = useState(0);
 
   const [customerSearch, setCustomerSearch] = useState("");
@@ -89,11 +93,76 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     enabled: open,
   });
 
-  const createMutation = useMutation({
-    mutationFn: () => {
+  const createMutation = useMutation<Order | null, Error, void>({
+    mutationFn: async () => {
       const itemsArray = Array.from(selectedItems.entries())
         .filter(([, qty]) => qty > 0)
         .map(([serviceId, quantity]) => ({ serviceId, quantity }));
+
+      if (!navigator.onLine) {
+        const localId = crypto.randomUUID();
+        const now = new Date().toISOString();
+
+        const localItems: LocalOrderItem[] = itemsArray.map(({ serviceId, quantity }) => {
+          const svc = services.find(s => s.id === serviceId);
+          const unitPrice = svc ? getUnitPrice(svc, serviceType) : 0;
+          return {
+            localId: crypto.randomUUID(),
+            orderLocalId: localId,
+            orderId: null,
+            serviceId,
+            serviceType,
+            name: svc?.name ?? `Service #${serviceId}`,
+            quantity,
+            quantityPickedUp: 0,
+            unitPrice,
+            totalPrice: unitPrice * quantity,
+            syncStatus: "pending" as const,
+          };
+        });
+
+        const localOrder: LocalOrder = {
+          localId,
+          serverId: null,
+          laundryId: laundryId ?? 0,
+          branchId: activeBranchId,
+          customerLocalId: null,
+          customerId: selectedCustomer?.id ?? null,
+          orderId: `OFL-${localId.slice(0, 8).toUpperCase()}`,
+          customerName: effectiveName,
+          phone: effectivePhone,
+          address: effectiveAddress || null,
+          serviceType,
+          status: "pending",
+          paymentStatus: "unpaid",
+          price: totalDue,
+          extraCharge: extraCharge > 0 ? extraCharge : null,
+          discount: discount > 0 ? discount : null,
+          amountPaid: 0,
+          additionalNotes: additionalNotes || null,
+          syncStatus: "pending_create",
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await enqueueOrderCreate(localId, localOrder, localItems, {
+          customerName: effectiveName,
+          phone: effectivePhone,
+          address: effectiveAddress || null,
+          customerId: selectedCustomer?.id ?? null,
+          serviceType,
+          items: itemsArray,
+          additionalNotes: additionalNotes || null,
+          discount: discount > 0 ? discount : null,
+          discountReason: discount > 0 ? discountReason : null,
+          extraCharge: extraCharge > 0 ? extraCharge : null,
+          extraChargeReason: extraCharge > 0 ? extraChargeReason : null,
+          branchId: activeBranchId,
+          laundryId,
+        });
+        return null;
+      }
+
       return api.orders.create({
         customerName: selectedCustomer ? selectedCustomer.fullName : customerName,
         phone: selectedCustomer ? selectedCustomer.phone : phone,
@@ -111,9 +180,13 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         branchId: activeBranchId ?? undefined,
       });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Order created successfully");
+    onSuccess: (result) => {
+      if (result === null) {
+        toast.info("Saved offline. Will sync automatically when connection returns.");
+      } else {
+        qc.invalidateQueries({ queryKey: ["orders"] });
+        toast.success("Order created successfully");
+      }
       handleClose();
       onSuccess?.();
     },

@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
+import { PendingSyncBadge } from "@/components/pending-sync-badge";
+import { usePendingLocalCustomers } from "@/hooks/use-pending-local";
+import { enqueueCustomerCreate } from "@/lib/queue-service";
+import { localDb, type LocalCustomer } from "@/lib/local-db";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { api, type CustomerWithMetrics, type CustomerProfile, type CustomerInput, type CustomerUpdateInput, type CustomerStatement } from "@/lib/api";
@@ -18,7 +22,7 @@ import { ReceiptView } from "@/components/receipt-view";
 import {
   Users, Search, Plus, Eye, Phone, AlertTriangle,
   ShoppingBag, Crown, RefreshCw, ArrowRight, Pencil, Trash2, CheckCircle,
-  Printer, FileText, Calendar, TrendingDown, TrendingUp, Download,
+  Printer, FileText, Calendar, TrendingDown, TrendingUp, Download, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBranch } from "@/context/branch-context";
@@ -60,7 +64,7 @@ function CustomerTags({ c }: { c: CustomerWithMetrics }) {
 export default function Customers() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isOwner } = useAuth();
+  const { isOwner, laundryId } = useAuth();
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -75,6 +79,7 @@ export default function Customers() {
   const [statementTo, setStatementTo] = useState<string>("");
 
   const { activeBranchId } = useBranch();
+  const pendingCustomers = usePendingLocalCustomers(laundryId);
 
   const { data: customers = [], isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["customers", search, tag, activeBranchId],
@@ -124,13 +129,45 @@ export default function Customers() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: CustomerInput) => api.customers.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["customers"] });
+  const createMutation = useMutation<CustomerWithMetrics | null, Error, CustomerInput>({
+    mutationFn: async (data: CustomerInput) => {
+      if (!navigator.onLine) {
+        const localId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const record: LocalCustomer = {
+          localId,
+          serverId: null,
+          laundryId: laundryId ?? 0,
+          branchId: activeBranchId,
+          fullName: data.fullName,
+          phone: data.phone,
+          address: data.address ?? null,
+          notes: data.notes ?? null,
+          syncStatus: "pending_create",
+          createdAt: now,
+          updatedAt: now,
+        };
+        await enqueueCustomerCreate(localId, record, {
+          fullName: data.fullName,
+          phone: data.phone,
+          address: data.address ?? null,
+          notes: data.notes ?? null,
+          branchId: activeBranchId,
+          laundryId,
+        });
+        return null;
+      }
+      return api.customers.create(data);
+    },
+    onSuccess: (result) => {
       setShowCreate(false);
       setCreateForm({ fullName: "", phone: "" });
-      toast.success("Customer created");
+      if (result === null) {
+        toast.info("Saved offline. Will sync automatically when connection returns.");
+      } else {
+        qc.invalidateQueries({ queryKey: ["customers"] });
+        toast.success("Customer created");
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -243,6 +280,33 @@ export default function Customers() {
           </div>
         </CardContent>
       </Card>
+
+      {pendingCustomers.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20">
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm flex items-center gap-2 text-blue-800 dark:text-blue-300">
+              <Clock className="h-4 w-4" />
+              {pendingCustomers.length} customer{pendingCustomers.length !== 1 ? "s" : ""} saved offline, pending sync
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableBody>
+                {pendingCustomers.map(c => (
+                  <TableRow key={c.localId} className="opacity-90">
+                    <TableCell className="font-medium py-3 pl-4">{c.fullName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground py-3">{c.phone}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground py-3 hidden sm:table-cell">{c.address ?? "—"}</TableCell>
+                    <TableCell className="py-3 pr-4 text-right">
+                      <PendingSyncBadge />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
