@@ -1,15 +1,21 @@
 /**
- * SyncEngine — Phase 1 Skeleton
+ * SyncEngine — Phase 3B
  *
- * This module defines the full structure and public API of the sync engine.
- * No synchronization logic is implemented in Phase 1 — all methods are stubs.
+ * Manages the lifecycle of the background sync process:
+ *  - Starts/stops the 30-second poll timer
+ *  - Listens to online/offline browser events
+ *  - Delegates actual queue processing to queue-service.processQueue()
+ *  - Exposes state (pendingCount, failedCount, status) via subscribe()
  *
- * Phase 2: Implement read caching (pull-down sync, React Query persistence)
- * Phase 3: Implement write queue (enqueue, processQueue, patch-back server IDs)
+ * Phase 3B implements:
+ *   processQueue()  → delegates to queue-service (customers first, orders second)
+ *   sync()          → public trigger (used on reconnect and manual retry)
+ *
  * Phase 4: Implement conflict detection (payment/pickup conflict guards)
  */
 
 import { localDb, type SyncOperation, type SyncQueueEntry } from "./local-db";
+import { processQueue as processQueueFromService } from "./queue-service";
 
 export type SyncStatus = "idle" | "syncing" | "offline" | "error" | "paused";
 
@@ -52,6 +58,7 @@ class SyncEngine {
   private listeners: Set<SyncEventListener> = new Set();
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isRunning = false;
+  private isSyncing = false;
 
   private readonly POLL_INTERVAL_MS = 30_000;
 
@@ -94,11 +101,10 @@ class SyncEngine {
   }
 
   /**
-   * Phase 3: Add a write operation to the sync queue.
-   * @param operation — type of operation (e.g. "create_order")
-   * @param localId — the local UUID of the record being created/updated
-   * @param payload — full request body for the server
-   * @param dependsOn — localIds that must sync successfully before this entry
+   * Add a write operation to the sync queue.
+   * Prefer enqueueCustomerCreate() / enqueueOrderCreate() from queue-service
+   * for the atomic dual-write guarantee. This method is kept for other
+   * operation types (update_order_status, etc.) that do not need it.
    */
   async enqueue(
     operation: SyncOperation,
@@ -106,7 +112,6 @@ class SyncEngine {
     payload: Record<string, unknown>,
     dependsOn: string[] = []
   ): Promise<void> {
-    // TODO Phase 3: implement enqueue logic
     const entry: SyncQueueEntry = {
       clientId: crypto.randomUUID(),
       position: Date.now(),
@@ -126,38 +131,58 @@ class SyncEngine {
   }
 
   /**
-   * Phase 3: Manually trigger a sync attempt (also called on reconnect).
+   * Manually trigger a sync attempt.
+   * Called on reconnect, on manual "Retry" actions, and after enqueue.
+   * No-ops if offline, paused, or already syncing.
    */
   async sync(): Promise<void> {
-    // TODO Phase 3: implement sync logic
     if (!navigator.onLine) return;
-    await this.refreshCounts();
+    if (this.state.status === "paused") return;
+    if (this.isSyncing) return;
+    await this.tick();
   }
 
   /**
-   * Phase 3: Process the next batch of pending queue entries.
-   * Handles dependency ordering, retries, and server-ID patch-back.
+   * Processes the pending queue by delegating to queue-service.processQueue().
+   *
+   * Sync ordering is enforced inside queue-service:
+   *  1. create_customer entries are processed first (no dependsOn)
+   *  2. create_order entries are only processed once all their dependsOn
+   *     localIds are "done"
+   *
+   * State transitions:
+   *  idle → syncing → idle (on completion)
+   *  idle → syncing → error (if processQueue throws)
    */
   private async processQueue(): Promise<void> {
-    // TODO Phase 3: implement queue processing
-    // 1. Fetch pending entries ordered by position
-    // 2. Check dependsOn entries are all "done"
-    // 3. Call the correct API endpoint for each entry
-    // 4. On success: update local record serverId, mark entry "done", write syncLog
-    // 5. On failure: increment attempts, apply exponential backoff, mark "failed" after max retries
-  }
+    if (this.isSyncing) return;
+    this.isSyncing = true;
+    this.updateState({ status: "syncing", currentOperation: "processing queue" });
 
-  /**
-   * Phase 2: Pull fresh data from the server and merge into IndexedDB.
-   * Uses delta sync (since last pull timestamp) to minimise data transfer.
-   */
-  private async pullFromServer(): Promise<void> {
-    // TODO Phase 2: implement pull-down sync
-    // 1. Read metadata.last_orders_sync, metadata.last_customers_sync
-    // 2. Fetch GET /api/orders?since=timestamp&branchId=active
-    // 3. Fetch GET /api/customers?since=timestamp&branchId=active
-    // 4. Merge into localDb.orders and localDb.customers (server wins for synced records)
-    // 5. Update metadata timestamps
+    try {
+      await processQueueFromService();
+
+      const [pendingCount, failedCount] = await Promise.all([
+        this.getPendingCount(),
+        this.getFailedCount(),
+      ]);
+
+      if (pendingCount === 0 && failedCount === 0) {
+        this.emit({ type: "queue_empty" });
+      }
+
+      this.updateState({
+        status: "idle",
+        currentOperation: null,
+        lastSyncedAt: new Date(),
+      });
+    } catch (err) {
+      console.error("[CleanTrack SyncEngine] processQueue threw unexpectedly:", err);
+      this.updateState({ status: "error", currentOperation: null });
+    } finally {
+      this.isSyncing = false;
+      await this.refreshCounts();
+    }
   }
 
   pause(): void {
@@ -178,6 +203,10 @@ class SyncEngine {
    */
   async notifyQueueChanged(): Promise<void> {
     await this.refreshCounts();
+    // Trigger a sync attempt immediately when a new item is enqueued.
+    if (navigator.onLine && this.state.status !== "paused") {
+      this.sync();
+    }
   }
 
   async getPendingCount(): Promise<number> {
