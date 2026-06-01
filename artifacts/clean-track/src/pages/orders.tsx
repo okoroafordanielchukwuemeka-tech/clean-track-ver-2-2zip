@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useCachedQuery } from "@/hooks/use-cached-query";
+import { CachedDataBadge } from "@/components/cached-data-badge";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +54,7 @@ export default function Orders() {
   const [showCreate, setShowCreate] = useState(false);
   const { activeBranchId } = useBranch();
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["orders", activeBranchId],
     queryFn: () => api.orders.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
   });
@@ -91,7 +93,10 @@ export default function Orders() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold">Orders</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold">Orders</h1>
+            <CachedDataBadge show={isViewingCache} />
+          </div>
           {(overdueCount > 0 || urgentCount > 0) && (
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               {overdueCount > 0 && (

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCachedQuery } from "@/hooks/use-cached-query";
+import { CachedDataBadge } from "@/components/cached-data-badge";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
 import { api, type CustomerWithMetrics, type CustomerProfile, type CustomerInput, type CustomerUpdateInput, type CustomerStatement } from "@/lib/api";
@@ -74,7 +76,7 @@ export default function Customers() {
 
   const { activeBranchId } = useBranch();
 
-  const { data: customers = [], isLoading } = useQuery({
+  const { data: customers = [], isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["customers", search, tag, activeBranchId],
     queryFn: () => api.customers.list({
       search: search || undefined,
@@ -167,9 +169,12 @@ export default function Customers() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Users className="h-6 w-6" /> Customers
-        </h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Users className="h-6 w-6" /> Customers
+          </h1>
+          <CachedDataBadge show={isViewingCache} />
+        </div>
         <div className="flex gap-2">
           <Button
             variant="outline"

@@ -9,3 +9,4 @@
 - [Customer Statement Feature](customer-statement.md) — GET /customers/:id/statement returns chronological ledger with running balance; all 5 entry types; credit balance shows negative closingBalance; frontend Statement tab with print-to-PDF via window.open
 - [Orders Pagination](orders-pagination.md) — GET /orders default limit is 500 (was 50); all 1000 orders tested with 0 financial errors; branch filtering adds branchId condition via getEffectiveBranchId()
 - [Receipt Endpoint Consistency](receipt-endpoint-consistency.md) — GET /receipts/:num includes branch object; GET /orders/:id/receipt also must include branch + cashierName; order sub-object in both must include branchId
+- [Phase 2 Read Cache](phase2-read-cache.md) — persistQueryClient() called at module scope (not PersistQueryClientProvider which breaks with React strict-mode); useCachedQuery uses type intersection not interface extends for UseQueryResult

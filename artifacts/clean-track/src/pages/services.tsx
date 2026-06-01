@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCachedQuery } from "@/hooks/use-cached-query";
+import { CachedDataBadge } from "@/components/cached-data-badge";
 import { api, type ServiceInput } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +39,7 @@ export default function Services() {
   const [form, setForm] = useState<Partial<ServiceInput>>(emptyForm);
   const [showDelete, setShowDelete] = useState<number | null>(null);
 
-  const { data: services = [], isLoading } = useQuery({
+  const { data: services = [], isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["services"],
     queryFn: () => api.services.list({ activeOnly: "false" }),
   });
@@ -112,8 +114,11 @@ export default function Services() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Services</h1>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-2xl font-bold">Services</h1>
+          <CachedDataBadge show={isViewingCache} />
+        </div>
         <Button onClick={() => { setEditId(null); setForm(emptyForm); setShowDialog(true); }}>
           <Plus className="h-4 w-4" /> Add Service
         </Button>

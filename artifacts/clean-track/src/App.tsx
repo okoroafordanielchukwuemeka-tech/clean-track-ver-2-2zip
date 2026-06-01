@@ -1,4 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
+import { idbPersister } from "@/lib/idb-persister";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/auth-context";
@@ -26,10 +28,35 @@ import ReceiptPrint from "@/pages/receipt-print";
 import BranchesPage from "@/pages/branches";
 import DemoLogin from "@/pages/demo-login";
 
+const STALE_TIME = 5 * 60 * 1000;       // 5 minutes
+const GC_TIME   = 24 * 60 * 60 * 1000;  // 24 hours
+
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
+    queries: {
+      staleTime: STALE_TIME,
+      gcTime: GC_TIME,
+      retry: 1,
+    },
   },
+});
+
+/**
+ * Phase 2: Wire up IndexedDB persistence at module scope.
+ *
+ * persistQueryClient is NOT a React hook — it is a plain function that
+ * subscribes to queryClient cache changes and writes them to IndexedDB
+ * via idbPersister. On the next page load, restoreClient() is called and
+ * the cache is hydrated before any queries run.
+ *
+ * Using the low-level API (rather than PersistQueryClientProvider) avoids
+ * the React strict-mode hook-validation edge case in the wrapper component.
+ */
+persistQueryClient({
+  queryClient,
+  persister: idbPersister,
+  maxAge: GC_TIME,
+  buster: "ct-v1",
 });
 
 function RootRedirect() {

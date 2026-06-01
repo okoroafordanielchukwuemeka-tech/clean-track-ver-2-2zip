@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useCachedQuery } from "@/hooks/use-cached-query";
+import { CachedDataBadge } from "@/components/cached-data-badge";
 import { useAuth } from "@/context/auth-context";
 import { api, type ReceiptListItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -48,7 +50,7 @@ export default function Receipts() {
     if (customTo) params.to = customTo;
   }
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["receipts", search, dateRange, customFrom, customTo, page],
     queryFn: () => api.receipts.list(params),
     enabled: isOwner,
@@ -77,10 +79,13 @@ export default function Receipts() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Receipt className="h-6 w-6" />
-          Receipts
-        </h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Receipt className="h-6 w-6" />
+            Receipts
+          </h1>
+          <CachedDataBadge show={isViewingCache} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
