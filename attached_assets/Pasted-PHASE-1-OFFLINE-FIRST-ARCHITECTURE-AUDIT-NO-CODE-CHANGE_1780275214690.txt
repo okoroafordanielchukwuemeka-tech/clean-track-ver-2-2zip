@@ -1,0 +1,165 @@
+PHASE 1 — OFFLINE-FIRST ARCHITECTURE AUDIT (NO CODE CHANGES YET)
+
+Act as a Senior SaaS Architect, PWA Engineer, Offline-First Systems Engineer, and Database Reliability Engineer.
+
+CleanTrack is a multi-branch laundry management SaaS that currently runs online.
+
+Before implementing anything, perform a complete offline-readiness audit of the entire codebase.
+
+IMPORTANT:
+
+DO NOT modify code immediately.
+
+DO NOT implement features immediately.
+
+DO NOT create files immediately.
+
+First produce a complete architecture report.
+
+Your mission is to determine whether CleanTrack can safely support offline operation without risking:
+
+* duplicate orders
+* duplicate customers
+* duplicate payments
+* duplicate pickups
+* branch data corruption
+* synchronization conflicts
+* financial inconsistencies
+
+Audit the following:
+
+1. Frontend Architecture
+
+Review:
+
+* React structure
+* API layer
+* React Query usage
+* forms
+* state management
+* branch switching logic
+
+Identify:
+
+* what already works for offline support
+* what must be redesigned
+
+2. Database Architecture
+
+Review:
+
+* PostgreSQL schema
+* customer tables
+* orders
+* payments
+* pickups
+* audit logs
+* notifications
+
+Determine:
+
+* which records require globally unique IDs
+* which records require offline-generated IDs
+* how duplicate prevention should work
+* how synchronization should work
+
+3. Progressive Web App Readiness
+
+Determine:
+
+* service worker strategy
+* asset caching strategy
+* offline page strategy
+* update strategy
+* cache invalidation strategy
+
+4. IndexedDB Design
+
+Design local storage structure for:
+
+* customers
+* orders
+* order items
+* payments
+* pickups
+* status changes
+* sync queue
+
+Provide exact collection design.
+
+5. Offline Queue Design
+
+Determine how queued actions should be stored.
+
+Support:
+
+* create customer
+* create order
+* payment recording
+* pickup recording
+* status updates
+
+Design:
+
+* queue structure
+* retry logic
+* exponential backoff
+* failure handling
+
+6. Synchronization Design
+
+Design:
+
+* automatic sync
+* manual sync button
+* reconnect detection
+* sync monitoring
+
+7. Conflict Resolution
+
+Explain exactly how conflicts should be handled for:
+
+* customer edits
+* order edits
+* payment edits
+* pickup edits
+
+Recommend safest strategy.
+
+8. UI Requirements
+
+Design:
+
+* Offline badge
+* Online badge
+* Pending Sync counter
+* Sync history screen
+* Failed Sync screen
+
+9. Multi-Branch Safety
+
+Verify that offline actions remain branch-safe.
+
+Explain how branch isolation will be maintained during synchronization.
+
+10. Final Deliverables
+
+Produce:
+
+A. Architecture Audit Report
+
+B. Risk Assessment
+
+C. Recommended Offline Strategy
+
+D. Step-by-Step Implementation Plan
+
+E. Estimated Complexity (Low / Medium / High)
+
+F. Estimated Time Required
+
+Do not write code yet.
+
+Do not implement anything yet.
+
+Return only the architecture audit and implementation plan.
