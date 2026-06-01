@@ -24,6 +24,7 @@ import { useBranch } from "@/context/branch-context";
 import { Button } from "@/components/ui/button";
 import { NotificationCenter } from "@/components/notification-center";
 import { BranchSelector } from "@/components/branch-selector";
+import { NetworkStatusBadge } from "@/components/network-status-badge";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -125,6 +126,8 @@ export function Layout() {
             </Link>
           ))}
         </nav>
+
+        <NetworkStatusBadge />
 
         <div className="px-3 py-4 border-t border-sidebar-border">
           <div className="flex items-center gap-2">

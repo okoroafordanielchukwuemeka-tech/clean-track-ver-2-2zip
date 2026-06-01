@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="192" rx="0" fill="#1e3a8a"/>
+  <rect width="512" height="512" rx="96" fill="#1e3a8a"/>
+  <rect x="72" y="104" width="368" height="304" rx="24" fill="#1e40af"/>
+  <rect x="72" y="174" width="368" height="8" fill="#2563eb"/>
+  <circle cx="138" cy="139" r="24" fill="none" stroke="#93c5fd" stroke-width="8"/>
+  <circle cx="138" cy="139" r="8" fill="#93c5fd"/>
+  <circle cx="208" cy="134" r="8" fill="#60a5fa"/>
+  <circle cx="232" cy="134" r="6" fill="#3b82f6" opacity="0.65"/>
+  <circle cx="252" cy="134" r="5" fill="#3b82f6" opacity="0.4"/>
+  <circle cx="256" cy="291" r="107" fill="#172554" stroke="#93c5fd" stroke-width="10"/>
+  <circle cx="256" cy="291" r="78" fill="#0f172a" stroke="#60a5fa" stroke-width="6"/>
+  <path d="M203 283 Q221 263 239 283 Q257 303 275 283 Q293 263 309 283" stroke="#60a5fa" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M203 307 Q221 287 239 307 Q257 327 275 307 Q293 287 309 307" stroke="#93c5fd" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.7"/>
+</svg>
