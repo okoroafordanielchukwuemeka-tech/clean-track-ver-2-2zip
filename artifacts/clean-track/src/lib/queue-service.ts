@@ -1,14 +1,31 @@
 /**
- * Queue Service — Phase 3A
+ * Queue Service — Phase 3A.5
  *
- * High-level typed wrappers around syncEngine.enqueue().
- * Handles the two offline-write surfaces: customer creation and order creation.
+ * High-level typed wrappers for offline write operations.
+ * Handles customer creation and order creation while offline.
  *
- * Phase 3B will implement the actual sync logic in processQueue(),
- * syncCustomer() and syncOrder(). All three are intentional stubs for now.
+ * ATOMICITY GUARANTEE (Phase 3A.5 hardening):
+ * Both enqueue functions write the domain record AND the sync-queue entry
+ * inside a single Dexie transaction. Either both writes succeed or neither
+ * does — a crash mid-flight can never leave a pending_create record without
+ * a corresponding queue entry.
+ *
+ * DEPENDENCY CHAINING (Phase 3A.5 hardening):
+ * enqueueOrderCreate accepts a dependsOn array. When an order is placed for
+ * an offline-created customer, pass [customerLocalId] so Phase 3B processes
+ * the customer before the order.
+ *
+ * Phase 3B will implement processQueue(), syncCustomer(), and syncOrder().
+ * All three remain stubs for now.
  */
 
-import { localDb, type LocalCustomer, type LocalOrder, type LocalOrderItem } from "./local-db";
+import {
+  localDb,
+  type LocalCustomer,
+  type LocalOrder,
+  type LocalOrderItem,
+  type SyncQueueEntry,
+} from "./local-db";
 import { syncEngine } from "./sync-engine";
 
 export interface OfflineCustomerPayload {
@@ -25,6 +42,7 @@ export interface OfflineOrderPayload {
   phone: string;
   address?: string | null;
   customerId?: number | null;
+  customerLocalId?: string | null;
   serviceType: "standard" | "express" | "premium";
   items: Array<{ serviceId: number; quantity: number }>;
   additionalNotes?: string | null;
@@ -37,47 +55,82 @@ export interface OfflineOrderPayload {
 }
 
 /**
- * Writes a pending customer to IndexedDB and adds a create_customer entry to
- * the sync queue. Returns after both writes are confirmed.
+ * Atomically writes a pending customer to IndexedDB and adds a
+ * create_customer entry to the sync queue in a single Dexie transaction.
  */
 export async function enqueueCustomerCreate(
   localId: string,
   record: LocalCustomer,
   payload: OfflineCustomerPayload
 ): Promise<void> {
-  await localDb.customers.add(record);
-  await syncEngine.enqueue(
-    "create_customer",
+  const entry: SyncQueueEntry = {
+    clientId: crypto.randomUUID(),
+    position: Date.now(),
+    operation: "create_customer",
+    payload: payload as unknown as Record<string, unknown>,
     localId,
-    payload as unknown as Record<string, unknown>
+    dependsOn: [],
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  await localDb.transaction(
+    "rw",
+    [localDb.customers, localDb.syncQueue],
+    async () => {
+      await localDb.customers.add(record);
+      await localDb.syncQueue.add(entry);
+    }
   );
+
+  await syncEngine.notifyQueueChanged();
 }
 
 /**
- * Writes a pending order + its line items to IndexedDB (in a single transaction)
- * and adds a create_order entry to the sync queue.
+ * Atomically writes a pending order + its line items to IndexedDB and adds a
+ * create_order entry to the sync queue — all in a single Dexie transaction.
+ *
+ * @param dependsOn — localIds of records that must be synced before this
+ *   order. Pass [customerLocalId] when the customer was also created offline
+ *   in the same session so Phase 3B processes customer before order.
  */
 export async function enqueueOrderCreate(
   localId: string,
   order: LocalOrder,
   items: LocalOrderItem[],
-  payload: OfflineOrderPayload
+  payload: OfflineOrderPayload,
+  dependsOn: string[] = []
 ): Promise<void> {
+  const entry: SyncQueueEntry = {
+    clientId: crypto.randomUUID(),
+    position: Date.now(),
+    operation: "create_order",
+    payload: payload as unknown as Record<string, unknown>,
+    localId,
+    dependsOn,
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
   await localDb.transaction(
     "rw",
-    [localDb.orders, localDb.orderItems],
+    [localDb.orders, localDb.orderItems, localDb.syncQueue],
     async () => {
       await localDb.orders.add(order);
       if (items.length > 0) {
         await localDb.orderItems.bulkAdd(items);
       }
+      await localDb.syncQueue.add(entry);
     }
   );
-  await syncEngine.enqueue(
-    "create_order",
-    localId,
-    payload as unknown as Record<string, unknown>
-  );
+
+  await syncEngine.notifyQueueChanged();
 }
 
 /**
@@ -100,10 +153,7 @@ export async function processQueue(): Promise<void> {
  * Will POST the pending customer to /customers and update localDb.customers.serverId.
  */
 export async function syncCustomer(_localId: string): Promise<void> {
-  // TODO Phase 3B:
-  // const entry = await localDb.syncQueue.where("localId").equals(_localId).first();
-  // const result = await api.customers.create(entry.payload);
-  // await localDb.customers.where("localId").equals(_localId).modify({ serverId: result.id, syncStatus: "synced" });
+  // TODO Phase 3B
 }
 
 /**
@@ -112,9 +162,5 @@ export async function syncCustomer(_localId: string): Promise<void> {
  * and patch back serverId on all related orderItems.
  */
 export async function syncOrder(_localId: string): Promise<void> {
-  // TODO Phase 3B:
-  // const entry = await localDb.syncQueue.where("localId").equals(_localId).first();
-  // const result = await api.orders.create(entry.payload);
-  // await localDb.orders.where("localId").equals(_localId).modify({ serverId: result.id, orderId: result.orderId, syncStatus: "synced" });
-  // await localDb.orderItems.where("orderLocalId").equals(_localId).modify({ orderId: result.id, syncStatus: "synced" });
+  // TODO Phase 3B
 }

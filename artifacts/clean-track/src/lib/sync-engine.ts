@@ -171,6 +171,15 @@ class SyncEngine {
     }
   }
 
+  /**
+   * Called by queue-service after completing an atomic dual-write so the
+   * engine's in-memory pendingCount stays in sync without the engine needing
+   * to own the DB writes itself.
+   */
+  async notifyQueueChanged(): Promise<void> {
+    await this.refreshCounts();
+  }
+
   async getPendingCount(): Promise<number> {
     return localDb.syncQueue
       .where("status")

@@ -5,6 +5,7 @@ import { CachedDataBadge } from "@/components/cached-data-badge";
 import { PendingSyncBadge } from "@/components/pending-sync-badge";
 import { usePendingLocalCustomers } from "@/hooks/use-pending-local";
 import { enqueueCustomerCreate } from "@/lib/queue-service";
+import { getIsOnline } from "@/lib/network-state";
 import { localDb, type LocalCustomer } from "@/lib/local-db";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
@@ -131,13 +132,16 @@ export default function Customers() {
 
   const createMutation = useMutation<CustomerWithMetrics | null, Error, CustomerInput>({
     mutationFn: async (data: CustomerInput) => {
-      if (!navigator.onLine) {
+      if (!getIsOnline()) {
+        if (!laundryId) {
+          throw new Error("Session data is missing. Please reload and try again.");
+        }
         const localId = crypto.randomUUID();
         const now = new Date().toISOString();
         const record: LocalCustomer = {
           localId,
           serverId: null,
-          laundryId: laundryId ?? 0,
+          laundryId: laundryId,
           branchId: activeBranchId,
           fullName: data.fullName,
           phone: data.phone,

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { syncEngine } from "./lib/sync-engine";
+import { runRecovery } from "./lib/recovery";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -11,6 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 syncEngine.start();
+runRecovery().catch(err =>
+  console.error("[CleanTrack] Startup recovery failed:", err)
+);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

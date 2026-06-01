@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { setIsOnline as updateSharedNetworkState } from "@/lib/network-state";
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -30,12 +31,14 @@ export function useNetworkStatus(): NetworkStatus {
   isOnlineRef.current = isOnline;
 
   const markOnline = () => {
+    updateSharedNetworkState(true);
     setIsOnline(true);
     setLastSeenOnlineAt(new Date());
     isOnlineRef.current = true;
   };
 
   const markOffline = () => {
+    updateSharedNetworkState(false);
     setIsOnline(false);
     setWasOffline(true);
     isOnlineRef.current = false;

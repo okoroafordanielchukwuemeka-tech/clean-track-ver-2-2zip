@@ -5,6 +5,7 @@ import { useBranch } from "@/context/branch-context";
 import { useAuth } from "@/context/auth-context";
 import { localDb, type LocalOrder, type LocalOrderItem } from "@/lib/local-db";
 import { enqueueOrderCreate } from "@/lib/queue-service";
+import { getIsOnline } from "@/lib/network-state";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,7 +100,11 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         .filter(([, qty]) => qty > 0)
         .map(([serviceId, quantity]) => ({ serviceId, quantity }));
 
-      if (!navigator.onLine) {
+      if (!getIsOnline()) {
+        if (!laundryId) {
+          throw new Error("Session data is missing. Please reload and try again.");
+        }
+
         const localId = crypto.randomUUID();
         const now = new Date().toISOString();
 
@@ -121,12 +126,36 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
           };
         });
 
+        // Determine whether this order is for an offline-created customer.
+        // When no server customer is selected and a phone number is present,
+        // look up a matching pending_create customer in the local DB.
+        // If found, populate customerLocalId and dependsOn so Phase 3B syncs
+        // the customer before this order.
+        let resolvedCustomerLocalId: string | null = null;
+        let dependsOn: string[] = [];
+
+        if (!selectedCustomer && effectivePhone.trim()) {
+          const localCustomer = await localDb.customers
+            .where("phone")
+            .equals(effectivePhone.trim())
+            .filter(
+              c =>
+                c.syncStatus === "pending_create" &&
+                c.laundryId === laundryId
+            )
+            .first();
+          if (localCustomer) {
+            resolvedCustomerLocalId = localCustomer.localId;
+            dependsOn = [localCustomer.localId];
+          }
+        }
+
         const localOrder: LocalOrder = {
           localId,
           serverId: null,
-          laundryId: laundryId ?? 0,
+          laundryId: laundryId,
           branchId: activeBranchId,
-          customerLocalId: null,
+          customerLocalId: resolvedCustomerLocalId,
           customerId: selectedCustomer?.id ?? null,
           orderId: `OFL-${localId.slice(0, 8).toUpperCase()}`,
           customerName: effectiveName,
@@ -145,21 +174,28 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
           updatedAt: now,
         };
 
-        await enqueueOrderCreate(localId, localOrder, localItems, {
-          customerName: effectiveName,
-          phone: effectivePhone,
-          address: effectiveAddress || null,
-          customerId: selectedCustomer?.id ?? null,
-          serviceType,
-          items: itemsArray,
-          additionalNotes: additionalNotes || null,
-          discount: discount > 0 ? discount : null,
-          discountReason: discount > 0 ? discountReason : null,
-          extraCharge: extraCharge > 0 ? extraCharge : null,
-          extraChargeReason: extraCharge > 0 ? extraChargeReason : null,
-          branchId: activeBranchId,
-          laundryId,
-        });
+        await enqueueOrderCreate(
+          localId,
+          localOrder,
+          localItems,
+          {
+            customerName: effectiveName,
+            phone: effectivePhone,
+            address: effectiveAddress || null,
+            customerId: selectedCustomer?.id ?? null,
+            customerLocalId: resolvedCustomerLocalId,
+            serviceType,
+            items: itemsArray,
+            additionalNotes: additionalNotes || null,
+            discount: discount > 0 ? discount : null,
+            discountReason: discount > 0 ? discountReason : null,
+            extraCharge: extraCharge > 0 ? extraCharge : null,
+            extraChargeReason: extraCharge > 0 ? extraChargeReason : null,
+            branchId: activeBranchId,
+            laundryId,
+          },
+          dependsOn
+        );
         return null;
       }
 
