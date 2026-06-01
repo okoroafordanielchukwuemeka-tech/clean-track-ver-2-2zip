@@ -111,6 +111,7 @@ export default function OrderDetail() {
   const [showPayment, setShowPayment] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showPickup, setShowPickup] = useState(false);
+  const [pickupMode, setPickupMode] = useState<"full" | "partial">("partial");
   const [showAddAdj, setShowAddAdj] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
@@ -317,14 +318,60 @@ export default function OrderDetail() {
               </Button>
             </>
           )}
-          {canRecordPickup && (
-            <Button size="sm" onClick={() => setShowPickup(true)}>
-              <ShoppingBag className="h-4 w-4 mr-1" />
-              Record Pickup
-            </Button>
-          )}
         </div>
       </div>
+
+      {canRecordPickup && (
+        <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/10">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ShoppingBag className="h-4 w-4 text-blue-600" />
+              <span className="font-semibold text-sm text-blue-800 dark:text-blue-300">Ready for Customer Pickup</span>
+              <Badge variant="info" className="ml-auto text-xs">
+                {isItemBased
+                  ? `${totalItemsRemaining} item${totalItemsRemaining !== 1 ? "s" : ""} remaining`
+                  : `${remainingShirts}S / ${remainingTrousers}T remaining`}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => {
+                    if (isItemBased) {
+                      const map = new Map<number, number>();
+                      itemsWithRemaining.filter(i => i.remaining > 0).forEach(i => map.set(i.id, i.remaining));
+                      setItemPickupQtys(map);
+                    } else {
+                      setPickupForm(f => ({ ...f, shirtsPickedUp: remainingShirts, trousersPickedUp: remainingTrousers }));
+                    }
+                    setPickupMode("full");
+                    setShowPickup(true);
+                  }}
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Full Pickup
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1.5 text-center leading-snug">Customer takes all remaining items</p>
+              </div>
+              <div>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => {
+                    setPickupMode("partial");
+                    setShowPickup(true);
+                  }}
+                >
+                  <Package className="h-4 w-4" />
+                  Partial Pickup
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1.5 text-center leading-snug">Customer takes some items, will return for the rest</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isItemBased && (order.status === "partial_pickup" || order.status === "completed" || !allItemsPickedUp) && (
         <Card className={allItemsPickedUp ? "border-green-200 bg-green-50/50 dark:bg-green-950/10" : "border-orange-200 bg-orange-50/50 dark:bg-orange-950/10"}>
@@ -816,16 +863,27 @@ export default function OrderDetail() {
       </Dialog>
 
       <Dialog open={showPickup} onOpenChange={(v) => {
-        if (!v) { setItemPickupQtys(new Map()); setPickupNotes(""); setPickupForm({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" }); }
+        if (!v) {
+          setItemPickupQtys(new Map());
+          setPickupNotes("");
+          setPickupForm({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
+          setPickupMode("partial");
+        }
         setShowPickup(v);
       }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5" /> Record Pickup
+              <ShoppingBag className="h-5 w-5" />
+              {pickupMode === "full" ? "Full Pickup" : "Partial Pickup"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {pickupMode === "partial" && (
+              <p className="text-sm text-muted-foreground -mt-1">
+                Enter how many of each item the customer is taking now. The remainder will stay pending.
+              </p>
+            )}
             {isItemBased ? (
               <>
                 <div className="p-3 bg-muted/50 rounded-lg text-sm space-y-1.5">

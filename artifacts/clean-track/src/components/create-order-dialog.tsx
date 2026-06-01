@@ -56,6 +56,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [serviceType, setServiceType] = useState<"standard" | "express" | "premium">("standard");
+  const [serviceSearch, setServiceSearch] = useState("");
 
   const [selectedItems, setSelectedItems] = useState<Map<number, number>>(new Map());
   const [additionalNotes, setAdditionalNotes] = useState("");
@@ -133,6 +134,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     setPhone("");
     setAddress("");
     setServiceType("standard");
+    setServiceSearch("");
     setSelectedItems(new Map());
     setAdditionalNotes("");
     setDiscount(0);
@@ -400,7 +402,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
           )}
 
           {step === 2 && (
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Select items and quantities.</p>
                 {itemCount > 0 && (
@@ -410,63 +412,104 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
                 )}
               </div>
 
-              {Object.keys(servicesByCategory).length === 0 ? (
-                <div className="py-10 text-center text-muted-foreground text-sm border rounded-xl">
-                  No active services. Add services in the Services catalogue first.
+              {services.filter(s => s.isActive).length > 0 && (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Search services…"
+                    value={serviceSearch}
+                    onChange={e => setServiceSearch(e.target.value)}
+                    autoComplete="off"
+                  />
+                  {serviceSearch && (
+                    <button
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setServiceSearch("")}
+                      tabIndex={-1}
+                      type="button"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-              ) : (
-                Object.entries(servicesByCategory).map(([category, svcs]) => (
-                  <div key={category}>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{category}</p>
-                    <div className="space-y-1.5">
-                      {svcs.map(svc => {
-                        const qty = selectedItems.get(svc.id) ?? 0;
-                        const unitPrice = getUnitPrice(svc, serviceType);
-                        const lineTotal = unitPrice * qty;
-                        return (
-                          <div key={svc.id} className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all",
-                            qty > 0 ? "border-primary/40 bg-primary/5" : "border-transparent bg-muted/40 hover:bg-muted/60"
-                          )}>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium leading-tight">{svc.name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(unitPrice)}</p>
-                            </div>
-                            {qty > 0 && (
-                              <span className="text-xs font-semibold text-primary whitespace-nowrap">
-                                {formatCurrency(lineTotal)}
-                              </span>
-                            )}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => setItemQty(svc.id, qty - 1)}
-                                disabled={qty === 0}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className={cn(
-                                "w-7 text-center text-sm font-bold tabular-nums",
-                                qty > 0 ? "text-primary" : "text-muted-foreground"
-                              )}>{qty}</span>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => setItemQty(svc.id, qty + 1)}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
               )}
+
+              {(() => {
+                const activeServices = services.filter(s => s.isActive);
+                if (activeServices.length === 0) {
+                  return (
+                    <div className="py-10 text-center text-muted-foreground text-sm border rounded-xl">
+                      No active services. Add services in the Services catalogue first.
+                    </div>
+                  );
+                }
+
+                const serviceRow = (svc: Service) => {
+                  const qty = selectedItems.get(svc.id) ?? 0;
+                  const unitPrice = getUnitPrice(svc, serviceType);
+                  const lineTotal = unitPrice * qty;
+                  return (
+                    <div key={svc.id} className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all",
+                      qty > 0 ? "border-primary/40 bg-primary/5" : "border-transparent bg-muted/40 hover:bg-muted/60"
+                    )}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium leading-tight">{svc.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(unitPrice)}</p>
+                      </div>
+                      {qty > 0 && (
+                        <span className="text-xs font-semibold text-primary whitespace-nowrap">
+                          {formatCurrency(lineTotal)}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button variant="outline" size="icon" className="h-7 w-7"
+                          onClick={() => setItemQty(svc.id, qty - 1)} disabled={qty === 0}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className={cn(
+                          "w-7 text-center text-sm font-bold tabular-nums",
+                          qty > 0 ? "text-primary" : "text-muted-foreground"
+                        )}>{qty}</span>
+                        <Button variant="outline" size="icon" className="h-7 w-7"
+                          onClick={() => setItemQty(svc.id, qty + 1)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                };
+
+                if (serviceSearch.trim()) {
+                  const q = serviceSearch.toLowerCase();
+                  const filtered = activeServices.filter(s => s.name.toLowerCase().includes(q));
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="py-8 text-center text-muted-foreground text-sm border rounded-xl">
+                        No services match "<span className="font-medium">{serviceSearch}</span>"
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</p>
+                      {filtered.map(serviceRow)}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-5">
+                    {Object.entries(servicesByCategory).map(([category, svcs]) => (
+                      <div key={category}>
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{category}</p>
+                        <div className="space-y-1.5">{svcs.map(serviceRow)}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               <div>
                 <Label>Notes <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>

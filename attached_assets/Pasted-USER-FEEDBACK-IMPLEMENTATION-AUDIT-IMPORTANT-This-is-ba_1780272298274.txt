@@ -1,0 +1,124 @@
+USER FEEDBACK IMPLEMENTATION AUDIT
+
+IMPORTANT:
+
+This is based on feedback from real demo users.
+
+Do NOT add unrelated features.
+
+Focus only on these two workflow improvements.
+
+User feedback:
+
+"When creating an order, I should be able to search for a service instead of scrolling through the entire list."
+
+Audit the current order creation workflow.
+
+Determine:
+
+1. How services are currently selected.
+2. Whether the control is a plain dropdown.
+3. Whether search/autocomplete already exists.
+4. Whether large service lists become difficult to navigate.
+
+If search is missing:
+
+Replace the service selector with a searchable control.
+
+Requirements:
+
+* Type-to-search.
+* Instant filtering.
+* Keyboard support.
+* Mobile friendly.
+* Fast with large service lists.
+* Search by service name.
+* Preserve existing functionality.
+* No regressions.
+
+Examples:
+
+Typing:
+
+shirt
+
+should immediately filter to:
+
+* Shirt Wash
+* Shirt Dry Clean
+* White Shirt Premium
+
+Typing:
+
+trouser
+
+should filter to matching trouser services.
+
+Provide screenshots before and after.
+
+User feedback:
+
+"I did not know partial pickup existed."
+
+This is a UX failure.
+
+Audit the complete pickup workflow.
+
+Determine:
+
+1. Where the partial pickup action is located.
+2. Whether it is visible without scrolling.
+3. Whether users naturally discover it.
+4. Whether the wording is clear.
+5. Whether it is hidden behind menus or secondary actions.
+6. Whether the feature is available only in certain order states. so its would be able to record partail pick up properly 
+
+If discoverability is poor:
+
+Redesign the pickup action area.
+
+Goals:
+
+* Make Full Pickup visible.
+* Make Partial Pickup visible.
+* Make both actions understandable.
+* Make it obvious when each should be used.
+
+Example:
+
+Pickup Actions
+
+[ Full Pickup ]
+[ Partial Pickup ]
+
+Add concise helper text if necessary.
+
+After implementing improvements:
+
+Perform a real workflow test:
+
+1. Create customer.
+2. Create order.
+3. Add services using search.
+4. Record payment.
+5. Execute partial pickup.
+6. Complete final pickup.
+
+Verify:
+
+* No errors.
+* No regressions.
+* Mobile usability remains good.
+* Keyboard navigation works.
+* Search performs correctly.
+
+Provide:
+
+1. Root cause of each issue.
+2. Screenshots.
+3. UX improvements made.
+4. Any remaining usability concerns.
+
+Do not build unrelated features.
+
+Focus only on service search and partial pickup discoverability.
