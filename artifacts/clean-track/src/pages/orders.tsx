@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
 import { api } from "@/lib/api";
@@ -59,7 +58,7 @@ export default function Orders() {
     queryFn: () => api.orders.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
   });
 
-  const { data: sla } = useQuery({
+  const { data: sla } = useCachedQuery({
     queryKey: ["settings", "sla"],
     queryFn: () => api.settings.getSla(),
   });

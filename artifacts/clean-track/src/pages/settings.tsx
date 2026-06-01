@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
+import { useCachedQuery } from "@/hooks/use-cached-query";
+import { CachedDataBadge } from "@/components/cached-data-badge";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 import {
   api,
   type BusinessProfile,
@@ -107,7 +110,7 @@ function ToggleRow({
 
 function BusinessProfileSection() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["settings", "business-profile"],
     queryFn: () => api.settings.getBusinessProfile(),
   });
@@ -134,11 +137,17 @@ function BusinessProfileSection() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (isLoading) return <SkeletonRows rows={6} />;
+  if (isLoading && !isViewingCache) return <SkeletonRows rows={6} />;
 
   return (
     <div>
-      <SectionHeader title="Business Profile" description="Your laundry's public identity and contact information." />
+      <div className="flex items-start justify-between gap-3 mb-6">
+        <div>
+          <h2 className="text-lg font-semibold">Business Profile</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Your laundry's public identity and contact information.</p>
+        </div>
+        <CachedDataBadge show={isViewingCache} />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Business Name</Label>
@@ -184,7 +193,7 @@ function BusinessProfileSection() {
 
 function BrandingSection() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["settings", "branding"],
     queryFn: () => api.settings.getBranding(),
   });
@@ -211,11 +220,17 @@ function BrandingSection() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (isLoading) return <SkeletonRows rows={3} />;
+  if (isLoading && !isViewingCache) return <SkeletonRows rows={3} />;
 
   return (
     <div>
-      <SectionHeader title="Branding" description="Customize how your laundry appears on receipts and documents." />
+      <div className="flex items-start justify-between gap-3 mb-6">
+        <div>
+          <h2 className="text-lg font-semibold">Branding</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Customize how your laundry appears on receipts and documents.</p>
+        </div>
+        <CachedDataBadge show={isViewingCache} />
+      </div>
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label>Brand Color</Label>
@@ -272,7 +287,7 @@ const OPERATIONAL_TOGGLES: { key: keyof OperationalSettings; label: string; desc
 
 function OperationalSection() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["settings", "operational"],
     queryFn: () => api.settings.getOperational(),
   });
@@ -305,11 +320,17 @@ function OperationalSection() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (isLoading) return <SkeletonRows rows={8} />;
+  if (isLoading && !isViewingCache) return <SkeletonRows rows={8} />;
 
   return (
     <div>
-      <SectionHeader title="Operational Settings" description="Configure turnaround times, working schedule, and operational rules." />
+      <div className="flex items-start justify-between gap-3 mb-6">
+        <div>
+          <h2 className="text-lg font-semibold">Operational Settings</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Configure turnaround times, working schedule, and operational rules.</p>
+        </div>
+        <CachedDataBadge show={isViewingCache} />
+      </div>
 
       <div className="space-y-6">
         <div>
@@ -746,7 +767,7 @@ function MessageTemplatesSection() {
 
 function ExpenseCategoriesSection() {
   const qc = useQueryClient();
-  const { data: categories, isLoading } = useQuery({
+  const { data: categories, isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["expense-categories"],
     queryFn: () => api.expenseCategories.list(),
   });
@@ -781,10 +802,13 @@ function ExpenseCategoriesSection() {
 
   return (
     <div>
-      <SectionHeader
-        title="Expense Categories"
-        description="Manage categories available when recording expenditures. Default categories cannot be deleted."
-      />
+      <div className="flex items-start justify-between gap-3 mb-6">
+        <div>
+          <h2 className="text-lg font-semibold">Expense Categories</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage categories available when recording expenditures. Default categories cannot be deleted.</p>
+        </div>
+        <CachedDataBadge show={isViewingCache} />
+      </div>
       {isLoading ? (
         <SkeletonRows rows={6} />
       ) : (
@@ -1122,6 +1146,7 @@ function DashboardPreferencesSection() {
 
 export default function SettingsPage() {
   const { isOwner } = useAuth();
+  const { isOnline } = useNetworkStatus();
   const [activeSection, setActiveSection] = useState("profile");
 
   if (!isOwner) {
@@ -1137,7 +1162,10 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <CachedDataBadge show={!isOnline} />
+        </div>
         <p className="text-sm text-muted-foreground mt-0.5">Manage your laundry's configuration and preferences</p>
       </div>
 

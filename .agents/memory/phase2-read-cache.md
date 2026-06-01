@@ -37,4 +37,30 @@ The hook must also propagate all 4 React Query generics (`TQueryFnData`, `TError
 
 - `src/components/offline-banner.tsx` — full-width banner above `<Outlet />` in Layout; uses `useNetworkStatus()` which does active HTTP probing
 - `src/components/cached-data-badge.tsx` — inline amber badge next to page titles; shown when `isViewingCache === true`
-- Pages with `CachedDataBadge`: orders, customers, services, receipts
+- `CachedDataBadge show` prop (not `isViewingCache`) — check the prop name when using it
+- Pages with `CachedDataBadge`: orders, customers, services, receipts, settings (per-section + top header)
+- `src/components/branch-selector.tsx` — uses `useCachedQuery`; shows `WifiOff` icon next to "Branch" label when offline; branchList stays populated from IndexedDB cache
+
+## Phase 2.5 coverage (all queries now cached)
+
+| Query Key | Component | Method |
+|-----------|-----------|--------|
+| `["branches"]` | BranchSelector | useCachedQuery |
+| `["settings","sla"]` | orders.tsx | useCachedQuery |
+| `["settings","business-profile"]` | BusinessProfileSection | useCachedQuery |
+| `["settings","branding"]` | BrandingSection | useCachedQuery |
+| `["settings","operational"]` | OperationalSection | useCachedQuery |
+| `["expense-categories"]` | ExpenseCategoriesSection | useCachedQuery |
+
+## isLoading guard pattern for sections with mutations
+
+When a section has both a read query (useCachedQuery) and mutations, change:
+  `if (isLoading) return <Skeleton />`
+to:
+  `if (isLoading && !isViewingCache) return <Skeleton />`
+So cached data is shown instead of a blank skeleton while offline.
+
+## Lucide icon title prop
+
+Lucide icons do NOT accept a `title` prop in this project's version.
+Wrap in `<span title="..."><Icon /></span>` instead.

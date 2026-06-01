@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCachedQuery } from "@/hooks/use-cached-query";
 import { api } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
 import { useAuth } from "@/context/auth-context";
@@ -10,13 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GitBranch } from "lucide-react";
+import { GitBranch, WifiOff } from "lucide-react";
 
 export function BranchSelector() {
   const { isOwner } = useAuth();
   const { activeBranch, setActiveBranch, setBranches } = useBranch();
 
-  const { data: branchList = [] } = useQuery({
+  const { data: branchList = [], isViewingCache } = useCachedQuery({
     queryKey: ["branches"],
     queryFn: () => api.branches.list(),
     enabled: isOwner,
@@ -45,6 +45,14 @@ export function BranchSelector() {
       <div className="flex items-center gap-1.5 mb-1 px-1">
         <GitBranch className="h-3 w-3 text-sidebar-foreground/50" />
         <span className="text-xs text-sidebar-foreground/50 uppercase tracking-wider font-medium">Branch</span>
+        {isViewingCache && (
+          <span
+            className="ml-auto shrink-0"
+            title="Showing branches from cache — you appear to be offline"
+          >
+            <WifiOff className="h-3 w-3 text-amber-400" />
+          </span>
+        )}
       </div>
       <Select value={value} onValueChange={handleChange}>
         <SelectTrigger className="h-8 text-xs bg-sidebar-accent border-sidebar-border text-sidebar-foreground w-full">
