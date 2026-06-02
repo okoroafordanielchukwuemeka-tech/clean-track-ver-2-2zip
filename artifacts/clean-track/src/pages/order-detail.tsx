@@ -7,7 +7,7 @@ import { enqueueOrderStatusUpdate, enqueuePayment, enqueuePickup, type OfflinePa
 import { syncEngine } from "@/lib/sync-engine";
 import { getIsOnline } from "@/lib/network-state";
 import { type LocalPayment, type LocalPickup } from "@/lib/local-db";
-import { usePendingLocalPayments, usePendingLocalPickups, useConflictLocalPayments } from "@/hooks/use-pending-local";
+import { usePendingLocalPayments, usePendingLocalPickups, useConflictLocalPayments, useConflictLocalPickups } from "@/hooks/use-pending-local";
 import { PendingSyncBadge, ConflictSyncBadge } from "@/components/pending-sync-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -167,19 +167,26 @@ export default function OrderDetail() {
   const pendingPayments = usePendingLocalPayments(orderLocalId);
   const pendingPickups = usePendingLocalPickups(orderLocalId);
   const conflictPayments = useConflictLocalPayments(orderLocalId);
+  const conflictPickups = useConflictLocalPickups(orderLocalId);
 
-  // Subscribe to the sync engine and invalidate order + payment caches when a
-  // payment for this order is successfully synced.  This ensures the balance
-  // and payment history refresh immediately without waiting for the next
-  // window-focus refetch or manual navigation.
+  // Subscribe to sync engine events — invalidate caches immediately when a
+  // payment or pickup for this order is successfully synced, rather than
+  // waiting for the next window-focus refetch.
   useEffect(() => {
     if (!orderId) return;
     return syncEngine.subscribe((event) => {
       if (event.type !== "item_synced") return;
       const p = event.payload as { operation?: string; serverOrderId?: number } | undefined;
-      if (p?.operation === "record_payment" && p?.serverOrderId === orderId) {
+      if (p?.serverOrderId !== orderId) return;
+
+      if (p?.operation === "record_payment") {
         qc.invalidateQueries({ queryKey: ["orders", orderId] });
         qc.invalidateQueries({ queryKey: ["orders", orderId, "payments"] });
+      }
+
+      if (p?.operation === "record_pickup") {
+        qc.invalidateQueries({ queryKey: ["orders", orderId] });
+        qc.invalidateQueries({ queryKey: ["orders", orderId, "pickups"] });
       }
     });
   }, [orderId, qc]);
@@ -919,12 +926,12 @@ export default function OrderDetail() {
         </Card>
       )}
 
-      {(pickups.length > 0 || pendingPickups.length > 0) && (
+      {(pickups.length > 0 || pendingPickups.length > 0 || conflictPickups.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <ShoppingBag className="h-4 w-4" />
-              Pickup History ({pickups.length + pendingPickups.length})
+              Pickup History ({pickups.length + pendingPickups.length + conflictPickups.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -938,6 +945,28 @@ export default function OrderDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {conflictPickups.map((p) => (
+                  <TableRow key={p.localId} className="bg-red-50/50 dark:bg-red-950/20">
+                    <TableCell>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <ConflictSyncBadge />
+                        {p.items && p.items.length > 0
+                          ? <span className="text-sm">{p.items.map(i => `${i.quantity}× ${i.name}`).join(", ")}</span>
+                          : <span className="text-sm">{p.shirtsPickedUp} shirt{p.shirtsPickedUp !== 1 ? "s" : ""}, {p.trousersPickedUp} trouser{p.trousersPickedUp !== 1 ? "s" : ""}</span>
+                        }
+                      </div>
+                    </TableCell>
+                    <TableCell><span className="text-muted-foreground text-sm">You (offline)</span></TableCell>
+                    <TableCell>
+                      <span className="text-xs text-red-600 dark:text-red-400">
+                        {p.notes || "Pickup could not sync — see sync log"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(p.createdAt).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
                 {pendingPickups.map((p) => (
                   <TableRow key={p.localId} className="bg-blue-50/50 dark:bg-blue-950/20">
                     <TableCell>

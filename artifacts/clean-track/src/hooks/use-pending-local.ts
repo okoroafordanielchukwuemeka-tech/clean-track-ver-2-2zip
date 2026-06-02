@@ -223,6 +223,50 @@ export function useConflictLocalPayments(orderLocalId: string | null): LocalPaym
 }
 
 /**
+ * Returns all LocalPickup records with syncStatus === "conflict"
+ * for the given orderLocalId (e.g. "srv-<serverId>"). Re-reads IndexedDB every 2 s.
+ *
+ * Used in order-detail to surface pickups that permanently failed with a
+ * quantity mismatch or invalid order status so the worker can take manual
+ * action (e.g. re-record after refresh).
+ */
+export function useConflictLocalPickups(orderLocalId: string | null): LocalPickup[] {
+  const [conflicts, setConflicts] = useState<LocalPickup[]>([]);
+
+  useEffect(() => {
+    if (!orderLocalId) {
+      setConflicts([]);
+      return;
+    }
+
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const records = await localDb.pickups
+          .where("syncStatus")
+          .equals("conflict")
+          .filter((p) => p.orderLocalId === orderLocalId)
+          .toArray();
+        if (active) setConflicts(records);
+      } catch {
+        // ignore
+      }
+    };
+
+    refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [orderLocalId]);
+
+  return conflicts;
+}
+
+/**
  * Returns all LocalOrder records with syncStatus === "pending_status_update"
  * belonging to the given laundryId. Re-reads IndexedDB every 2 s.
  */

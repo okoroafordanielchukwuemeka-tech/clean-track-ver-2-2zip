@@ -75,7 +75,13 @@ export interface LocalPickup {
   shirtsPickedUp: number;
   trousersPickedUp: number;
   notes: string | null;
-  syncStatus: "synced" | "pending_create";
+  /**
+   * "synced"        — successfully posted to the server
+   * "pending_create" — queued locally, waiting for sync
+   * "conflict"      — permanently failed due to a quantity mismatch or invalid
+   *                   order status; will not be retried automatically
+   */
+  syncStatus: "synced" | "pending_create" | "conflict";
   createdAt: string;
 }
 

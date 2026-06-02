@@ -324,11 +324,23 @@ async function recoverOrphanedPickups(): Promise<void> {
         orderLocalId,
         serverId,
         items: pickup.items
-          ? pickup.items.map((i) => ({
-              orderItemId: parseInt(i.orderItemLocalId, 10) || 0,
-              quantity: i.quantity,
-              name: i.name,
-            }))
+          ? pickup.items
+              .map((i) => {
+                const id = parseInt(i.orderItemLocalId, 10);
+                // Guard: skip items whose stored ID is non-numeric or zero —
+                // sending orderItemId=0 would cause the server to reject the
+                // entire request with a 400.
+                if (!Number.isFinite(id) || id <= 0) {
+                  console.warn(
+                    `[CleanTrack Recovery] Pickup ${pickup.localId}: skipping item ` +
+                      `"${i.name}" — stored orderItemLocalId "${i.orderItemLocalId}" ` +
+                      `is not a valid server item ID`
+                  );
+                  return null;
+                }
+                return { orderItemId: id, quantity: i.quantity, name: i.name };
+              })
+              .filter((x): x is NonNullable<typeof x> => x !== null)
           : null,
         shirtsPickedUp: pickup.shirtsPickedUp,
         trousersPickedUp: pickup.trousersPickedUp,

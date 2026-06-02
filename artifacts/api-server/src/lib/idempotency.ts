@@ -47,19 +47,26 @@ export function idempotencyMiddleware(
         return;
       }
 
+      // Override res.json to persist a successful response to the DB BEFORE
+      // flushing it to the client.  Without awaiting, a second request can
+      // arrive before the cache row is committed — causing the idempotency
+      // key lookup to miss and the handler to run twice.
       const originalJson = res.json.bind(res);
       res.json = function (body: unknown) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          db.insert(idempotencyKeys)
+          return db
+            .insert(idempotencyKeys)
             .values({
               key,
               statusCode: res.statusCode,
               responseBody: JSON.stringify(body),
             })
             .onConflictDoNothing()
-            .catch((err: unknown) =>
-              console.error("[Idempotency] Failed to cache response:", err)
-            );
+            .then(() => originalJson(body))
+            .catch((err: unknown) => {
+              console.error("[Idempotency] Failed to cache response:", err);
+              return originalJson(body);
+            }) as unknown as Response;
         }
         return originalJson(body);
       };

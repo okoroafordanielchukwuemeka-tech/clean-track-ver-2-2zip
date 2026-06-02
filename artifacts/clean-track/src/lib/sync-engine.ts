@@ -226,6 +226,22 @@ class SyncEngine {
     });
   }
 
+  /**
+   * Called by syncPickupEntry after a pickup successfully syncs to the server.
+   * Emits an item_synced event so order-detail can invalidate its React Query
+   * caches — refreshing the order status, item quantities, and pickup list —
+   * without waiting for the next window-focus refetch.
+   *
+   * @param serverOrderId  The numeric server-side order ID.
+   * @param localId        The pickup's local UUID.
+   */
+  notifyPickupSynced(serverOrderId: number, localId: string): void {
+    this.emit({
+      type: "item_synced",
+      payload: { operation: "record_pickup", serverOrderId, localId },
+    });
+  }
+
   async getPendingCount(): Promise<number> {
     return localDb.syncQueue
       .where("status")

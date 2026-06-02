@@ -191,6 +191,97 @@ export async function validatePaymentPreSync(
   }
 }
 
+// ── Pickup conflict types ──────────────────────────────────────────────────
+
+/**
+ * Pickup conflict codes — permanent failures that must not be retried.
+ *
+ *  INVALID_ORDER_STATUS — order is not "ready" or "partial_pickup" at sync time
+ *  QUANTITY_EXCEEDED    — requested pickup qty exceeds server-side remaining qty
+ *  ORDER_NOT_FOUND      — server returned 404 for the order
+ */
+export type ConflictPickupCode =
+  | "INVALID_ORDER_STATUS"
+  | "QUANTITY_EXCEEDED"
+  | "ORDER_NOT_FOUND";
+
+/**
+ * Thrown by validatePickupPreSync() when a pickup cannot safely proceed.
+ * Treated as a permanent failure: sets syncStatus="conflict" on the local
+ * record, marks queue entry "failed", and prefixes the syncLog entry with
+ * "CONFLICT:<code>:" for diagnostics.
+ */
+export class PickupConflictError extends Error {
+  constructor(
+    public readonly code: ConflictPickupCode,
+    message: string
+  ) {
+    super(message);
+    this.name = "PickupConflictError";
+  }
+}
+
+/**
+ * Pre-sync pickup validation layer.
+ *
+ * Must be called before every network call in syncPickupEntry so we never
+ * waste a server round-trip on data that is guaranteed to be rejected.
+ *
+ * Validation steps (in order):
+ *  1. GET current order state from server            → ORDER_NOT_FOUND if 404
+ *  2. Order status is "ready" or "partial_pickup"   → INVALID_ORDER_STATUS
+ *  3. For item-based pickups: each item qty ≤ remaining on server
+ *                                                    → QUANTITY_EXCEEDED
+ *  4. For legacy pickups: shirts+trousers > 0        → plain Error (structural)
+ *
+ * PickupConflictError → permanent failure, no retry.
+ * Plain Error         → transient, retried with exponential backoff.
+ */
+export async function validatePickupPreSync(
+  p: OfflinePickupPayload,
+  serverOrderId: number
+): Promise<void> {
+  // 1. Fetch live order state
+  let order: Awaited<ReturnType<typeof api.orders.get>>;
+  try {
+    order = await api.orders.get(serverOrderId);
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 404) {
+      throw new PickupConflictError(
+        "ORDER_NOT_FOUND",
+        `Order ${serverOrderId} not found on server — cannot sync pickup`
+      );
+    }
+    throw err; // transient network error — will be retried
+  }
+
+  // 2. Order status check
+  if (order.status !== "ready" && order.status !== "partial_pickup") {
+    throw new PickupConflictError(
+      "INVALID_ORDER_STATUS",
+      `Order ${serverOrderId} has status "${order.status}" — pickup requires "ready" or "partial_pickup"`
+    );
+  }
+
+  // 3. Item-based quantity check
+  if (p.items && p.items.length > 0) {
+    const serverItems: Array<{ id: number; quantity: number; quantityPickedUp: number; name: string }> =
+      (order as any).items ?? [];
+    for (const req of p.items) {
+      const serverItem = serverItems.find((i) => i.id === req.orderItemId);
+      if (!serverItem) continue; // server will reject — let it; don't block here
+      const remaining = serverItem.quantity - serverItem.quantityPickedUp;
+      if (req.quantity > remaining) {
+        throw new PickupConflictError(
+          "QUANTITY_EXCEEDED",
+          `Item "${serverItem.name}" (id=${req.orderItemId}): requested ${req.quantity} ` +
+            `but only ${remaining} remaining on order ${serverOrderId}`
+        );
+      }
+    }
+  }
+}
+
 export interface OfflineStatusPayload {
   localId: string;
   serverId: number | null;
@@ -474,24 +565,26 @@ export async function enqueuePickup(
   if (isOfflineOrder) {
     // Must wait for the order itself to be created on the server.
     dependsOn.push(payload.orderLocalId);
+  }
 
-    // Also explicitly depend on any pending payments for this order so
-    // their localIds are in doneLocalIds before we attempt the pickup.
-    const pendingPaymentEntries = await localDb.syncQueue
-      .where("status")
-      .anyOf(["pending", "in_flight"])
-      .filter(
-        (e) =>
-          e.operation === "record_payment" &&
-          (e.payload as unknown as OfflinePaymentPayload).orderLocalId ===
-            payload.orderLocalId
-      )
-      .toArray();
+  // Always depend on any pending payments for this order — whether the order
+  // is offline-created or already on the server.  Without this, a server-synced
+  // order with both a queued payment and a queued pickup could have the pickup
+  // attempt before the payment settles if the payment enters backoff.
+  const pendingPaymentEntries = await localDb.syncQueue
+    .where("status")
+    .anyOf(["pending", "in_flight"])
+    .filter(
+      (e) =>
+        e.operation === "record_payment" &&
+        (e.payload as unknown as OfflinePaymentPayload).orderLocalId ===
+          payload.orderLocalId
+    )
+    .toArray();
 
-    for (const e of pendingPaymentEntries) {
-      if (!dependsOn.includes(e.localId)) {
-        dependsOn.push(e.localId);
-      }
+  for (const e of pendingPaymentEntries) {
+    if (!dependsOn.includes(e.localId)) {
+      dependsOn.push(e.localId);
     }
   }
 
@@ -746,6 +839,16 @@ export async function processQueue(): Promise<void> {
       console.warn(
         `[CleanTrack Sync] Skipping pickup ${entry.localId} — unresolved dependencies: ` +
           entry.dependsOn.filter((d) => !doneLocalIds.has(d)).join(", ")
+      );
+      continue;
+    }
+
+    // Skip entries still within their exponential back-off window
+    // (same guard used in Passes 3 and 4).
+    if (!isBackoffExpired(entry)) {
+      console.debug(
+        `[CleanTrack Sync] Pickup ${entry.localId} in back-off ` +
+          `(attempt ${entry.attempts}), skipping this cycle`
       );
       continue;
     }
@@ -1375,6 +1478,11 @@ export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
       );
     }
 
+    // ── Pre-sync validation ──────────────────────────────────────────────
+    // Checks order status and per-item remaining quantities before hitting
+    // the pickup endpoint.  A PickupConflictError here is a permanent failure.
+    await validatePickupPreSync(p, serverOrderId);
+
     // ── Build server payload ─────────────────────────────────────────────
     const serverPayload: PickupInput = {
       shirtsPickedUp: p.shirtsPickedUp,
@@ -1409,10 +1517,45 @@ export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
       syncedAt: new Date().toISOString(),
     });
 
+    // Notify sync engine so React Query subscribers (order-detail) can
+    // immediately invalidate the order status, quantities, and pickup list.
+    syncEngine.notifyPickupSynced(serverOrderId, entry.localId);
+
     console.info(
       `[CleanTrack Sync] Pickup synced: localId=${entry.localId} → serverId=${response.pickup.id} (orderId=${serverOrderId})`
     );
   } catch (err) {
+    // ── Conflict path — permanent failure, no retry ──────────────────────
+    if (err instanceof PickupConflictError) {
+      const conflictError = `CONFLICT:${err.code}:${err.message}`;
+
+      await localDb.pickups.update(entry.localId, {
+        syncStatus: "conflict",
+      });
+
+      await localDb.syncQueue.update(entry.id!, {
+        status: "failed",
+        attempts: entry.attempts + 1,
+        lastError: conflictError,
+      });
+
+      await localDb.syncLog.add({
+        operation: "record_pickup",
+        localId: entry.localId,
+        serverId: null,
+        success: false,
+        error: conflictError,
+        syncedAt: new Date().toISOString(),
+      });
+
+      console.error(
+        `[CleanTrack Sync] Pickup ${entry.id} conflict (${err.code}): ${err.message}`
+      );
+
+      throw err;
+    }
+
+    // ── Transient error path — increment attempts, apply backoff ─────────
     const error = err instanceof Error ? err.message : String(err);
     const newAttempts = entry.attempts + 1;
     const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
