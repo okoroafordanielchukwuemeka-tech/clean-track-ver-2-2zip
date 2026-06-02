@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { localDb, type LocalCustomer, type LocalOrder, type LocalPayment } from "@/lib/local-db";
+import { localDb, type LocalCustomer, type LocalOrder, type LocalPayment, type LocalPickup } from "@/lib/local-db";
 
 const POLL_INTERVAL_MS = 2_000;
 
@@ -114,6 +114,48 @@ export function usePendingLocalPayments(orderLocalId: string | null): LocalPayme
     const refresh = async () => {
       try {
         const records = await localDb.payments
+          .where("syncStatus")
+          .equals("pending_create")
+          .filter((p) => p.orderLocalId === orderLocalId)
+          .toArray();
+        if (active) setPending(records);
+      } catch {
+        // ignore
+      }
+    };
+
+    refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [orderLocalId]);
+
+  return pending;
+}
+
+/**
+ * Returns all LocalPickup records with syncStatus === "pending_create"
+ * for the given orderLocalId (e.g. "srv-<serverId>"). Re-reads IndexedDB every 2 s.
+ *
+ * Used in order-detail to show pickups queued while offline before they sync.
+ */
+export function usePendingLocalPickups(orderLocalId: string | null): LocalPickup[] {
+  const [pending, setPending] = useState<LocalPickup[]>([]);
+
+  useEffect(() => {
+    if (!orderLocalId) {
+      setPending([]);
+      return;
+    }
+
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const records = await localDb.pickups
           .where("syncStatus")
           .equals("pending_create")
           .filter((p) => p.orderLocalId === orderLocalId)

@@ -3,10 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry } from "@/lib/api";
-import { enqueueOrderStatusUpdate, enqueuePayment, type OfflinePaymentPayload } from "@/lib/queue-service";
+import { enqueueOrderStatusUpdate, enqueuePayment, enqueuePickup, type OfflinePaymentPayload, type OfflinePickupPayload } from "@/lib/queue-service";
 import { getIsOnline } from "@/lib/network-state";
-import { type LocalPayment } from "@/lib/local-db";
-import { usePendingLocalPayments } from "@/hooks/use-pending-local";
+import { type LocalPayment, type LocalPickup } from "@/lib/local-db";
+import { usePendingLocalPayments, usePendingLocalPickups } from "@/hooks/use-pending-local";
 import { PendingSyncBadge } from "@/components/pending-sync-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +122,7 @@ export default function OrderDetail() {
   const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentInput>({ amount: 0, method: "cash" });
   const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false);
+  const [isPickupSubmitting, setIsPickupSubmitting] = useState(false);
   const [pickupForm, setPickupForm] = useState({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
   const [itemPickupQtys, setItemPickupQtys] = useState<Map<number, number>>(new Map());
   const [pickupNotes, setPickupNotes] = useState("");
@@ -162,6 +163,7 @@ export default function OrderDetail() {
   });
 
   const pendingPayments = usePendingLocalPayments(orderId ? `srv-${orderId}` : null);
+  const pendingPickups = usePendingLocalPickups(orderId ? `srv-${orderId}` : null);
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, any>) => api.orders.update(orderId, data),
@@ -346,18 +348,151 @@ export default function OrderDetail() {
     setItemPickupQtys(map);
   }
 
-  function handlePickupSubmit() {
+  async function handlePickupSubmit() {
     if (isItemBased) {
       const items = Array.from(itemPickupQtys.entries())
         .filter(([, qty]) => qty > 0)
         .map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
       if (items.length === 0) { toast.error("Select at least one item to pick up"); return; }
-      pickupMutation.mutate({ items, notes: pickupNotes || undefined });
+
+      if (getIsOnline()) {
+        pickupMutation.mutate({ items, notes: pickupNotes || undefined });
+      } else {
+        setIsPickupSubmitting(true);
+        try {
+          const localId = crypto.randomUUID();
+          const orderLocalId = `srv-${orderId}`;
+          const payloadItems = items.map(({ orderItemId, quantity }) => ({
+            orderItemId,
+            quantity,
+            name: order!.items!.find((i) => i.id === orderItemId)?.name ?? "",
+          }));
+
+          const record: LocalPickup = {
+            localId,
+            orderLocalId,
+            orderId,
+            syncStatus: "pending_create",
+            shirtsPickedUp: 0,
+            trousersPickedUp: 0,
+            items: payloadItems.map((i) => ({
+              orderItemLocalId: String(i.orderItemId),
+              quantity: i.quantity,
+              name: i.name,
+            })),
+            notes: pickupNotes || null,
+            laundryId: authLaundryId!,
+            createdAt: new Date().toISOString(),
+          };
+
+          const payload: OfflinePickupPayload = {
+            orderLocalId,
+            serverId: orderId,
+            items: payloadItems,
+            shirtsPickedUp: 0,
+            trousersPickedUp: 0,
+            notes: pickupNotes || null,
+            laundryId: authLaundryId!,
+            timestamp: record.createdAt,
+          };
+
+          await enqueuePickup(localId, record, payload);
+
+          // Optimistic update — reflect picked-up quantities in the cache
+          qc.setQueryData(["orders", orderId], (old: any) => {
+            if (!old) return old;
+            const updatedItems = (old.items ?? []).map((item: any) => {
+              const picked = payloadItems.find((p) => p.orderItemId === item.id);
+              return picked
+                ? { ...item, quantityPickedUp: item.quantityPickedUp + picked.quantity }
+                : item;
+            });
+            const allDone = updatedItems.every((i: any) => i.quantityPickedUp >= i.quantity);
+            return {
+              ...old,
+              status: allDone ? "completed" : "partial_pickup",
+              items: updatedItems,
+            };
+          });
+
+          setShowPickup(false);
+          setItemPickupQtys(new Map());
+          setPickupNotes("");
+          toast.info("Pickup saved offline — will sync when reconnected");
+        } catch {
+          toast.error("Failed to save pickup offline");
+        } finally {
+          setIsPickupSubmitting(false);
+        }
+      }
     } else {
       if (pickupForm.shirtsPickedUp === 0 && pickupForm.trousersPickedUp === 0) {
         toast.error("Enter at least one item to pick up"); return;
       }
-      pickupMutation.mutate(pickupForm);
+
+      if (getIsOnline()) {
+        pickupMutation.mutate(pickupForm);
+      } else {
+        setIsPickupSubmitting(true);
+        try {
+          const localId = crypto.randomUUID();
+          const orderLocalId = `srv-${orderId}`;
+
+          const record: LocalPickup = {
+            localId,
+            orderLocalId,
+            orderId,
+            syncStatus: "pending_create",
+            shirtsPickedUp: pickupForm.shirtsPickedUp,
+            trousersPickedUp: pickupForm.trousersPickedUp,
+            items: [],
+            notes: pickupForm.notes || null,
+            laundryId: authLaundryId!,
+            createdAt: new Date().toISOString(),
+          };
+
+          const payload: OfflinePickupPayload = {
+            orderLocalId,
+            serverId: orderId,
+            items: null,
+            shirtsPickedUp: pickupForm.shirtsPickedUp,
+            trousersPickedUp: pickupForm.trousersPickedUp,
+            notes: pickupForm.notes || null,
+            laundryId: authLaundryId!,
+            timestamp: record.createdAt,
+          };
+
+          await enqueuePickup(localId, record, payload);
+
+          // Optimistic update
+          qc.setQueryData(["orders", orderId], (old: any) => {
+            if (!old) return old;
+            const newShirts = Math.min(
+              old.shirtsPickedUp + pickupForm.shirtsPickedUp,
+              old.shirts
+            );
+            const newTrousers = Math.min(
+              old.trousersPickedUp + pickupForm.trousersPickedUp,
+              old.trousers
+            );
+            const allDone = newShirts >= old.shirts && newTrousers >= old.trousers;
+            return {
+              ...old,
+              status: allDone ? "completed" : "partial_pickup",
+              shirtsPickedUp: newShirts,
+              trousersPickedUp: newTrousers,
+            };
+          });
+
+          setShowPickup(false);
+          setPickupForm({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
+          toast.info("Pickup saved offline — will sync when reconnected");
+        } catch {
+          toast.error("Failed to save pickup offline");
+        } finally {
+          setIsPickupSubmitting(false);
+        }
+      }
     }
   }
 
@@ -765,12 +900,12 @@ export default function OrderDetail() {
         </Card>
       )}
 
-      {pickups.length > 0 && (
+      {(pickups.length > 0 || pendingPickups.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <ShoppingBag className="h-4 w-4" />
-              Pickup History ({pickups.length})
+              Pickup History ({pickups.length + pendingPickups.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -784,6 +919,24 @@ export default function OrderDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {pendingPickups.map((p) => (
+                  <TableRow key={p.localId} className="bg-blue-50/50 dark:bg-blue-950/20">
+                    <TableCell>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <PendingSyncBadge />
+                        {p.items && p.items.length > 0
+                          ? <span className="text-sm">{p.items.map(i => `${i.quantity}× ${i.name}`).join(", ")}</span>
+                          : <span className="text-sm">{p.shirtsPickedUp} shirt{p.shirtsPickedUp !== 1 ? "s" : ""}, {p.trousersPickedUp} trouser{p.trousersPickedUp !== 1 ? "s" : ""}</span>
+                        }
+                      </div>
+                    </TableCell>
+                    <TableCell><span className="text-muted-foreground text-sm">You (offline)</span></TableCell>
+                    <TableCell className="text-muted-foreground">{p.notes || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(p.createdAt).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
                 {pickups.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>
@@ -1107,8 +1260,13 @@ export default function OrderDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPickup(false)}>Cancel</Button>
-            <Button onClick={handlePickupSubmit} disabled={pickupMutation.isPending}>
-              {pickupMutation.isPending ? "Recording..." : "Confirm Pickup"}
+            <Button
+              onClick={handlePickupSubmit}
+              disabled={pickupMutation.isPending || isPickupSubmitting}
+            >
+              {pickupMutation.isPending || isPickupSubmitting
+                ? (getIsOnline() ? "Recording..." : "Saving offline...")
+                : "Confirm Pickup"}
             </Button>
           </DialogFooter>
         </DialogContent>

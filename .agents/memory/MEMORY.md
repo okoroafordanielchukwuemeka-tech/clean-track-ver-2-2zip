@@ -11,3 +11,4 @@
 - [Receipt Endpoint Consistency](receipt-endpoint-consistency.md) — GET /receipts/:num includes branch object; GET /orders/:id/receipt also must include branch + cashierName; order sub-object in both must include branchId
 - [Phase 2 Read Cache](phase2-read-cache.md) — persistQueryClient() called at module scope (not PersistQueryClientProvider which breaks with React strict-mode); useCachedQuery uses type intersection not interface extends for UseQueryResult
 - [Offline Status Updates](offline-status-updates.md) — enqueueOrderStatusUpdate uses "srv-NNN" synthetic localId for server-synced orders; Pass 3 in processQueue; recovery rebuilds from pending_status_update orders
+- [Offline Pickup Sync](offline-pickup-sync.md) — Pass 5 in processQueue; Passes 3+4 must add to doneLocalIds on success or same-cycle pickup deps never resolve; items store server IDs as String(orderItemId) in orderItemLocalId field

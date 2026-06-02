@@ -27,11 +27,12 @@ import {
   type LocalOrder,
   type LocalOrderItem,
   type LocalPayment,
+  type LocalPickup,
   type SyncQueueEntry,
 } from "./local-db";
 import { syncEngine } from "./sync-engine";
 import { getIsOnline } from "./network-state";
-import { api, type CustomerInput, type OrderInput } from "./api";
+import { api, type CustomerInput, type OrderInput, type PickupInput } from "./api";
 
 export interface OfflineStatusPayload {
   localId: string;
@@ -48,6 +49,25 @@ export interface OfflinePaymentPayload {
   notes: string | null;
   laundryId: number;
   branchId: number | null;
+  timestamp: string;
+}
+
+/**
+ * Payload stored in the sync queue for a record_pickup operation.
+ *
+ * items: server-side order item IDs for item-based orders. null for legacy
+ *   shirt/trouser-based orders.
+ * serverId: the server order ID at enqueue time (null when the order was
+ *   created offline in the same session and hasn't synced yet).
+ */
+export interface OfflinePickupPayload {
+  orderLocalId: string;
+  serverId: number | null;
+  items: Array<{ orderItemId: number; quantity: number; name: string }> | null;
+  shirtsPickedUp: number;
+  trousersPickedUp: number;
+  notes: string | null;
+  laundryId: number;
   timestamp: string;
 }
 
@@ -271,6 +291,80 @@ export async function enqueuePayment(
 }
 
 /**
+ * Atomically writes a pending pickup to IndexedDB and adds a
+ * record_pickup entry to the sync queue in a single Dexie transaction.
+ *
+ * Dependency rules (auto-computed):
+ *  - Server-synced orders (serverId known): dependsOn = []
+ *  - Offline-created orders (serverId = null):
+ *      • dependsOn includes [orderLocalId] — waits for create_order
+ *      • dependsOn includes any pending payment localIds for this order
+ *        so pickups never reach the server before outstanding payments
+ *
+ * Pass ordering (Pass 5 runs after customers, orders, status updates,
+ * and payments) already guarantees same-cycle ordering.  The explicit
+ * dependsOn guards against cross-cycle stale state.
+ */
+export async function enqueuePickup(
+  localId: string,
+  record: LocalPickup,
+  payload: OfflinePickupPayload
+): Promise<void> {
+  const dependsOn: string[] = [];
+  const isOfflineOrder =
+    !payload.serverId && !payload.orderLocalId.startsWith("srv-");
+
+  if (isOfflineOrder) {
+    // Must wait for the order itself to be created on the server.
+    dependsOn.push(payload.orderLocalId);
+
+    // Also explicitly depend on any pending payments for this order so
+    // their localIds are in doneLocalIds before we attempt the pickup.
+    const pendingPaymentEntries = await localDb.syncQueue
+      .where("status")
+      .anyOf(["pending", "in_flight"])
+      .filter(
+        (e) =>
+          e.operation === "record_payment" &&
+          (e.payload as unknown as OfflinePaymentPayload).orderLocalId ===
+            payload.orderLocalId
+      )
+      .toArray();
+
+    for (const e of pendingPaymentEntries) {
+      if (!dependsOn.includes(e.localId)) {
+        dependsOn.push(e.localId);
+      }
+    }
+  }
+
+  const entry: SyncQueueEntry = {
+    clientId: crypto.randomUUID(),
+    position: Date.now(),
+    operation: "record_pickup",
+    payload: payload as unknown as Record<string, unknown>,
+    localId,
+    dependsOn,
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  await localDb.transaction(
+    "rw",
+    [localDb.pickups, localDb.syncQueue],
+    async () => {
+      await localDb.pickups.add(record);
+      await localDb.syncQueue.add(entry);
+    }
+  );
+
+  await syncEngine.notifyQueueChanged();
+}
+
+/**
  * Process the offline write queue in strict dependency order.
  *
  * Ordering rules:
@@ -374,6 +468,9 @@ export async function processQueue(): Promise<void> {
 
     try {
       await syncOrderStatusEntry(entry);
+      // Add to doneLocalIds so same-cycle pickup deps resolve correctly.
+      // Status update localId = the order's localId (shared key).
+      doneLocalIds.add(entry.localId);
     } catch {
       // syncOrderStatusEntry already logged and updated the queue entry.
     }
@@ -400,8 +497,39 @@ export async function processQueue(): Promise<void> {
 
     try {
       await syncPaymentEntry(entry);
+      // Propagate into doneLocalIds so pickup deps resolve in this same cycle.
+      doneLocalIds.add(entry.localId);
     } catch {
       // syncPaymentEntry already logged and updated the queue entry.
+    }
+  }
+
+  // ── Pass 5: sync pending pickups ─────────────────────────────────────────
+  // Pickups run last so that create_order, status updates, and payments for
+  // the same order are already committed server-side before the pickup POST.
+  // For offline-created orders, dependsOn explicitly lists the order localId
+  // plus any payment localIds computed at enqueuePickup() time.
+  const pickupEntries = pending.filter(
+    (e) => e.operation === "record_pickup"
+  );
+
+  for (const entry of pickupEntries) {
+    const allDepsResolved = entry.dependsOn.every((dep) =>
+      doneLocalIds.has(dep)
+    );
+    if (!allDepsResolved) {
+      console.warn(
+        `[CleanTrack Sync] Skipping pickup ${entry.localId} — unresolved dependencies: ` +
+          entry.dependsOn.filter((d) => !doneLocalIds.has(d)).join(", ")
+      );
+      continue;
+    }
+
+    try {
+      await syncPickupEntry(entry);
+      doneLocalIds.add(entry.localId);
+    } catch {
+      // syncPickupEntry already logged and updated the queue entry.
     }
   }
 }
@@ -867,6 +995,132 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
     } else {
       console.warn(
         `[CleanTrack Sync] Payment ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+      );
+    }
+
+    throw err;
+  }
+}
+
+/**
+ * POST a pending pickup to the server, then patch the local record.
+ *
+ * Server-ID resolution (in priority order):
+ *  1. payload.serverId              — set at enqueue time for server-synced orders
+ *  2. "srv-<N>" prefix extraction   — for server-synced orders using the prefix convention
+ *  3. localDb.orders.get(localId)   — for offline-created orders after create_order synced
+ *
+ * On success:
+ *  - localDb.pickups   → orderId set, syncStatus = "synced"
+ *  - syncQueue entry   → status = "done"
+ *  - syncLog           → success entry written
+ *
+ * On failure (< MAX_ATTEMPTS):
+ *  - syncQueue entry   → status = "pending", attempts incremented
+ *  - syncLog           → error entry written
+ *
+ * On permanent failure (>= MAX_ATTEMPTS):
+ *  - syncQueue entry   → status = "failed"
+ *  - syncLog           → error entry written
+ */
+export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
+  if (entry.attempts >= MAX_ATTEMPTS) {
+    throw new Error(
+      `Pickup ${entry.id} for order ${entry.localId} has reached max sync attempts`
+    );
+  }
+
+  await localDb.syncQueue.update(entry.id!, {
+    status: "in_flight",
+    lastAttemptAt: new Date().toISOString(),
+  });
+
+  try {
+    const p = entry.payload as unknown as OfflinePickupPayload;
+
+    // ── Resolve server order ID ──────────────────────────────────────────
+    let serverOrderId: number | null = p.serverId ?? null;
+
+    if (!serverOrderId) {
+      if (p.orderLocalId.startsWith("srv-")) {
+        const parsed = parseInt(p.orderLocalId.slice(4), 10);
+        serverOrderId = Number.isFinite(parsed) ? parsed : null;
+      } else {
+        const localOrder = await localDb.orders.get(p.orderLocalId);
+        serverOrderId = localOrder?.serverId ?? null;
+      }
+    }
+
+    if (!serverOrderId) {
+      throw new Error(
+        `Cannot sync pickup for order ${p.orderLocalId}: server order ID not available yet`
+      );
+    }
+
+    // ── Build server payload ─────────────────────────────────────────────
+    const serverPayload: PickupInput = {
+      shirtsPickedUp: p.shirtsPickedUp,
+      trousersPickedUp: p.trousersPickedUp,
+      ...(p.notes ? { notes: p.notes } : {}),
+      ...(p.items && p.items.length > 0
+        ? {
+            items: p.items.map((i) => ({
+              orderItemId: i.orderItemId,
+              quantity: i.quantity,
+            })),
+          }
+        : {}),
+    };
+
+    const response = await api.pickups.record(serverOrderId, serverPayload);
+
+    // ── Patch local records ──────────────────────────────────────────────
+    await localDb.pickups.update(entry.localId, {
+      orderId: serverOrderId,
+      syncStatus: "synced",
+    });
+
+    await localDb.syncQueue.update(entry.id!, { status: "done" });
+
+    await localDb.syncLog.add({
+      operation: "record_pickup",
+      localId: entry.localId,
+      serverId: response.pickup.id,
+      success: true,
+      error: null,
+      syncedAt: new Date().toISOString(),
+    });
+
+    console.info(
+      `[CleanTrack Sync] Pickup synced: localId=${entry.localId} → serverId=${response.pickup.id} (orderId=${serverOrderId})`
+    );
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    const newAttempts = entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+
+    await localDb.syncQueue.update(entry.id!, {
+      status: permanentlyFailed ? "failed" : "pending",
+      attempts: newAttempts,
+      lastError: error,
+    });
+
+    await localDb.syncLog.add({
+      operation: "record_pickup",
+      localId: entry.localId,
+      serverId: null,
+      success: false,
+      error,
+      syncedAt: new Date().toISOString(),
+    });
+
+    if (permanentlyFailed) {
+      console.error(
+        `[CleanTrack Sync] Pickup ${entry.id} permanently failed after ${newAttempts} attempts: ${error}`
+      );
+    } else {
+      console.warn(
+        `[CleanTrack Sync] Pickup ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
       );
     }
 

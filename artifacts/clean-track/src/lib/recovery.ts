@@ -23,6 +23,7 @@ export async function runRecovery(): Promise<void> {
       recoverOrphanedOrders(),
       recoverOrphanedStatusUpdates(),
       recoverOrphanedPayments(),
+      recoverOrphanedPickups(),
     ]);
   } catch (err) {
     console.error("[CleanTrack Recovery] Unexpected error during startup recovery:", err);
@@ -242,6 +243,109 @@ async function recoverOrphanedOrders(): Promise<void> {
       createdAt: now,
     };
     await localDb.syncQueue.add(entry);
+  }
+
+  await syncEngine.notifyQueueChanged();
+}
+
+/**
+ * Finds LocalPickup records that are stuck in "pending_create" but have no
+ * corresponding syncQueue entry (e.g. the app crashed between the Dexie
+ * transaction completing and the queue-processing loop being scheduled).
+ *
+ * Recovery: re-inserts a record_pickup queue entry with dependsOn recomputed
+ * from any still-pending create_order or record_payment entries for the same
+ * order.
+ */
+async function recoverOrphanedPickups(): Promise<void> {
+  const pendingPickups = await localDb.pickups
+    .where("syncStatus")
+    .equals("pending_create")
+    .toArray();
+
+  if (pendingPickups.length === 0) return;
+
+  const queuedLocalIds = new Set(
+    (
+      await localDb.syncQueue
+        .where("operation")
+        .equals("record_pickup")
+        .filter((e) => e.status !== "done" && e.status !== "failed")
+        .toArray()
+    ).map((e) => e.localId)
+  );
+
+  const orphans = pendingPickups.filter((p) => !queuedLocalIds.has(p.localId));
+
+  if (orphans.length === 0) return;
+
+  console.warn(
+    `[CleanTrack Recovery] ${orphans.length} orphaned pending pickup(s) — rebuilding queue entries`
+  );
+
+  const now = new Date().toISOString();
+
+  for (const pickup of orphans) {
+    const orderLocalId = pickup.orderLocalId;
+    const dependsOn: string[] = [];
+    const isOfflineOrder =
+      pickup.orderId === null && !orderLocalId.startsWith("srv-");
+
+    if (isOfflineOrder) {
+      dependsOn.push(orderLocalId);
+
+      const pendingPaymentEntries = await localDb.syncQueue
+        .where("status")
+        .anyOf(["pending", "in_flight"])
+        .filter(
+          (e) =>
+            e.operation === "record_payment" &&
+            (e.payload as Record<string, unknown>)["orderLocalId"] ===
+              orderLocalId
+        )
+        .toArray();
+
+      for (const e of pendingPaymentEntries) {
+        if (!dependsOn.includes(e.localId)) dependsOn.push(e.localId);
+      }
+    }
+
+    const serverId =
+      pickup.orderId ??
+      (orderLocalId.startsWith("srv-")
+        ? parseInt(orderLocalId.slice(4), 10) || null
+        : null);
+
+    const recoveryEntry: SyncQueueEntry = {
+      clientId: crypto.randomUUID(),
+      position: Date.now(),
+      operation: "record_pickup",
+      payload: {
+        orderLocalId,
+        serverId,
+        items: pickup.items
+          ? pickup.items.map((i) => ({
+              orderItemId: parseInt(i.orderItemLocalId, 10) || 0,
+              quantity: i.quantity,
+              name: i.name,
+            }))
+          : null,
+        shirtsPickedUp: pickup.shirtsPickedUp,
+        trousersPickedUp: pickup.trousersPickedUp,
+        notes: pickup.notes ?? null,
+        laundryId: pickup.laundryId,
+        timestamp: pickup.createdAt,
+      },
+      localId: pickup.localId,
+      dependsOn,
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null,
+      status: "pending",
+      createdAt: now,
+    };
+
+    await localDb.syncQueue.add(recoveryEntry);
   }
 
   await syncEngine.notifyQueueChanged();
