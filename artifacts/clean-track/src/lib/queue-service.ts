@@ -583,7 +583,7 @@ export async function syncCustomer(localId: string): Promise<void> {
       ...(p.notes != null && { notes: p.notes }),
     };
 
-    const response = await api.customers.create(serverPayload);
+    const response = await api.customers.create(serverPayload, entry.clientId);
     const serverId = response.id;
 
     // Patch the local customer record with the server-issued ID.
@@ -716,7 +716,7 @@ export async function syncOrder(localId: string): Promise<void> {
       ...(p.branchId != null && { branchId: p.branchId }),
     };
 
-    const response = await api.orders.create(serverPayload);
+    const response = await api.orders.create(serverPayload, entry.clientId);
     const serverId = response.id;
 
     // Patch the local order record with server ID and resolved customer ID.
@@ -837,7 +837,7 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
       );
     }
 
-    await api.orders.update(serverId, p.changes as Record<string, unknown>);
+    await api.orders.update(serverId, p.changes as Record<string, unknown>, entry.clientId);
 
     await localDb.syncQueue.update(entry.id!, { status: "done" });
 
@@ -946,7 +946,7 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
       amount: p.amount,
       method: p.method,
       ...(p.notes ? { notes: p.notes } : {}),
-    });
+    }, entry.clientId);
 
     await localDb.payments.update(entry.localId, {
       orderId: serverOrderId,
@@ -1072,7 +1072,7 @@ export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
         : {}),
     };
 
-    const response = await api.pickups.record(serverOrderId, serverPayload);
+    const response = await api.pickups.record(serverOrderId, serverPayload, entry.clientId);
 
     // ── Patch local records ──────────────────────────────────────────────
     await localDb.pickups.update(entry.localId, {

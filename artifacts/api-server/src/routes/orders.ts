@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
+import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -188,7 +189,7 @@ ordersRouter.get("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.post("/", async (req: AuthRequest, res) => {
+ordersRouter.post("/", idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -357,7 +358,7 @@ ordersRouter.post("/", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.patch("/:id", async (req: AuthRequest, res) => {
+ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -487,7 +488,7 @@ ordersRouter.get("/:id/payments", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.post("/:id/payments", async (req: AuthRequest, res) => {
+ordersRouter.post("/:id/payments", idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;

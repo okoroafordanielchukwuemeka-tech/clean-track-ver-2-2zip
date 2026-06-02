@@ -1,0 +1,83 @@
+Phase 3B.5 — Idempotency Protection (Production Blocking)
+
+Before writing any code:
+
+1. Audit the entire sync flow.
+2. Identify every operation that can be retried:
+
+   * create_customer
+   * create_order
+   * update_order_status
+   * record_payment
+   * record_pickup
+
+Goal:
+
+Guarantee that a retry, reconnect, browser refresh, device restart, app crash, timeout, duplicate queue processing, or repeated sync attempt can NEVER create duplicate records on the server.
+
+Requirements:
+
+1. Every queue entry must have a stable idempotency key.
+
+   * Generated once.
+   * Persisted in IndexedDB.
+   * Never regenerated.
+   * Survives refresh, restart, and recovery.
+
+2. Sync requests must send the idempotency key with every operation.
+
+3. Recovery logic must preserve existing idempotency keys.
+
+   * Never create a new key during recovery.
+   * Never overwrite an existing key.
+
+4. Queue replay must reuse the same idempotency key.
+
+5. Duplicate queue processing must be safe.
+
+6. Network timeout scenarios must be safe.
+
+7. Crash-after-server-success scenarios must be safe.
+
+8. Refresh-during-sync scenarios must be safe.
+
+9. Multi-retry scenarios must be safe.
+
+10. Dependency chains must remain unchanged.
+
+Do NOT modify:
+
+* business logic
+* pricing logic
+* order workflows
+* permissions
+* offline UX
+
+Only implement idempotency protection.
+
+Validation Required:
+
+Simulate and verify:
+
+1. Customer sync succeeds but response is lost.
+2. Order sync succeeds but response is lost.
+3. Payment sync succeeds but response is lost.
+4. Pickup sync succeeds but response is lost.
+5. Status update succeeds but response is lost.
+6. Browser refresh during sync.
+7. Device restart during sync.
+8. Queue replay after crash.
+9. Duplicate sync worker execution.
+10. Five consecutive retries of the same queue entry.
+
+Output:
+
+* Files changed
+* Architecture explanation
+* Data flow diagram
+* Validation report
+* Remaining risks
+* Production readiness impact
+
+Do not start any timeout, retry UI, monitoring, or sync dashboard work.
+Only implement idempotency protection.

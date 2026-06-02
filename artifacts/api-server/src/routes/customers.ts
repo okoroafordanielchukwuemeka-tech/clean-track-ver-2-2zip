@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { customers, orders, paymentRecords, pickupRecords, priceAdjustments } from "@workspace/db/schema";
+import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, and, desc, ilike, or, gte, lte, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -233,7 +234,7 @@ customersRouter.get("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.post("/", async (req: AuthRequest, res) => {
+customersRouter.post("/", idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = customerInputSchema.parse(req.body);

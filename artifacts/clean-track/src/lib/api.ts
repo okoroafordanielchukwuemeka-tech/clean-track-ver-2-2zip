@@ -1,11 +1,12 @@
 const BASE_URL = "/api";
 const TOKEN_KEY = "ct_token";
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY);
   const headers: Record<string, string> = {};
   if (body) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -53,8 +54,8 @@ export const api = {
       return request<Order[]>("GET", `/orders${qs}`);
     },
     get: (id: number) => request<Order>("GET", `/orders/${id}`),
-    create: (data: OrderInput) => request<Order>("POST", "/orders", data),
-    update: (id: number, data: Partial<OrderUpdate>) => request<Order>("PATCH", `/orders/${id}`, data),
+    create: (data: OrderInput, idempotencyKey?: string) => request<Order>("POST", "/orders", data, idempotencyKey),
+    update: (id: number, data: Partial<OrderUpdate>, idempotencyKey?: string) => request<Order>("PATCH", `/orders/${id}`, data, idempotencyKey),
     delete: (id: number) => request<void>("DELETE", `/orders/${id}`),
     summary: () => request<OrdersSummary>("GET", "/orders/summary"),
     recent: (branchId?: number | null) => {
@@ -62,7 +63,7 @@ export const api = {
       return request<Order[]>("GET", `/orders/recent${qs}`);
     },
     payments: (id: number) => request<PaymentRecord[]>("GET", `/orders/${id}/payments`),
-    recordPayment: (id: number, data: PaymentInput) => request<PaymentRecord>("POST", `/orders/${id}/payments`, data),
+    recordPayment: (id: number, data: PaymentInput, idempotencyKey?: string) => request<PaymentRecord>("POST", `/orders/${id}/payments`, data, idempotencyKey),
     deletePayment: (id: number, paymentId: number) => request<void>("DELETE", `/orders/${id}/payments/${paymentId}`),
     items: (id: number) => request<OrderItem[]>("GET", `/orders/${id}/items`),
     addItems: (id: number, data: { items: OrderItemInput[] }) => request<Order>("POST", `/orders/${id}/items`, data),
@@ -121,7 +122,7 @@ export const api = {
   },
   pickups: {
     list: (orderId: number) => request<PickupRecord[]>("GET", `/orders/${orderId}/pickups`),
-    record: (orderId: number, data: PickupInput) => request<PickupResponse>("POST", `/orders/${orderId}/pickups`, data),
+    record: (orderId: number, data: PickupInput, idempotencyKey?: string) => request<PickupResponse>("POST", `/orders/${orderId}/pickups`, data, idempotencyKey),
   },
   customers: {
     list: (params?: { search?: string; tag?: string; branchId?: number | null }) => {
@@ -130,7 +131,7 @@ export const api = {
       return request<CustomerWithMetrics[]>("GET", `/customers${qs}`);
     },
     get: (id: number) => request<CustomerProfile>("GET", `/customers/${id}`),
-    create: (data: CustomerInput) => request<CustomerWithMetrics>("POST", "/customers", data),
+    create: (data: CustomerInput, idempotencyKey?: string) => request<CustomerWithMetrics>("POST", "/customers", data, idempotencyKey),
     update: (id: number, data: CustomerUpdateInput) => request<Customer>("PATCH", `/customers/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/customers/${id}`),
     backfill: () => request<{ created: number; linked: number; message: string }>("POST", "/customers/backfill"),
