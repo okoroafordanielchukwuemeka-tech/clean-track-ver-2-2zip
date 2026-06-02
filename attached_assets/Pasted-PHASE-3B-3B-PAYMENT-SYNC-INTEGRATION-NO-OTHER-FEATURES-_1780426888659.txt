@@ -1,0 +1,88 @@
+PHASE 3B.3B — PAYMENT SYNC INTEGRATION (NO OTHER FEATURES)
+
+First audit the entire payment flow before changing code.
+
+Goal:
+Complete the payment synchronization system using the already completed Phase 3B.3A financial safety layer.
+
+Requirements:
+
+1. UI Integration
+
+* Find every location where payments are recorded.
+* Ensure online behavior remains unchanged.
+* When offline:
+
+  * Save payment locally in IndexedDB.
+  * Create a sync queue entry.
+  * Show Pending Sync indicators.
+  * Show payment immediately in the UI.
+
+2. Queue Integration
+
+* Ensure enqueuePayment() is fully wired.
+* Verify payments are stored atomically with their queue entry.
+* Verify recovery can rebuild orphaned payment queue entries.
+
+3. Sync Engine
+
+* Process record_payment entries in Pass 4.
+* Respect dependency ordering.
+* Payment must never sync before its parent order is synced.
+* Use existing backoff logic.
+* Use existing conflict detection from Phase 3B.3A.
+* Use existing idempotency system.
+
+4. State Updates
+
+* After successful sync:
+
+  * patch server IDs
+  * update payment syncStatus to synced
+  * remove Pending Sync badges
+  * refresh order balance
+  * refresh payment history
+
+5. Offline UX Validation
+   Verify:
+
+* offline payment survives refresh
+* offline payment survives browser restart
+* offline payment survives device restart
+* multiple offline payments work
+* reconnect sync works
+* partial payments work
+* balance updates correctly
+* conflict states display correctly
+
+6. Validation Suite
+   Create a dedicated Phase 3B.3B validation script.
+
+Provide PASS/FAIL results for:
+
+* offline payment creation
+* queue creation
+* reconnect sync
+* dependency ordering
+* idempotency
+* balance recalculation
+* partial payments
+* conflict handling
+* orphan recovery
+* pending badge removal
+* restart persistence
+
+Constraints:
+
+* No schema redesign.
+* No new architecture.
+* No changes to customer sync.
+* No changes to order sync.
+* No changes to status sync.
+
+Deliver:
+
+1. Files changed
+2. Architecture summary
+3. Validation report
+4. Remaining gaps before Phase 3B.4
