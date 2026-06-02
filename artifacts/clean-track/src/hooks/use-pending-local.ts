@@ -93,3 +93,43 @@ export function usePendingLocalOrders(laundryId: number | null): LocalOrder[] {
 
   return pending;
 }
+
+/**
+ * Returns all LocalOrder records with syncStatus === "pending_status_update"
+ * belonging to the given laundryId. Re-reads IndexedDB every 2 s.
+ */
+export function usePendingStatusUpdateOrders(laundryId: number | null): LocalOrder[] {
+  const [pending, setPending] = useState<LocalOrder[]>([]);
+
+  useEffect(() => {
+    if (!laundryId) {
+      setPending([]);
+      return;
+    }
+
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const records = await localDb.orders
+          .where("syncStatus")
+          .equals("pending_status_update")
+          .filter(o => o.laundryId === laundryId)
+          .toArray();
+        if (active) setPending(records);
+      } catch {
+        // ignore
+      }
+    };
+
+    refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [laundryId]);
+
+  return pending;
+}

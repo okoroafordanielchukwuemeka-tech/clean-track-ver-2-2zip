@@ -47,7 +47,7 @@ export interface LocalOrder {
   discount: number | null;
   amountPaid: number;
   additionalNotes: string | null;
-  syncStatus: "synced" | "pending_create";
+  syncStatus: "synced" | "pending_create" | "pending_status_update";
   createdAt: string;
   updatedAt: string;
 }

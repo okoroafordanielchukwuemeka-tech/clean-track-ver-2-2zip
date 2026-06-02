@@ -13,6 +13,8 @@ import { CreateOrderDialog } from "@/components/create-order-dialog";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency, type UrgencyInfo } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
+import { enqueueOrderStatusUpdate } from "@/lib/queue-service";
+import { getIsOnline } from "@/lib/network-state";
 
 type OrderWithUrgency = ReturnType<typeof useQuery<any[]>>["data"] extends Array<infer T> ? T & { _urgency: UrgencyInfo } : never;
 
@@ -183,21 +185,39 @@ export default function WorkerStation() {
   const queueUrgent = sortByUrgency(sharedQueue.filter(o => o._urgency.level === "urgent"));
   const queueNormal = sortByUrgency(sharedQueue.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
 
+  const applyOrderUpdate = async (id: number, changes: Record<string, unknown>) => {
+    if (getIsOnline()) {
+      updateMutation.mutate({ id, data: changes });
+    } else {
+      try {
+        await enqueueOrderStatusUpdate(`srv-${id}`, id, changes);
+        qc.setQueryData(
+          ["orders", activeBranchId],
+          (old: any[]) => old?.map(o => o.id === id ? { ...o, ...changes } : o) ?? []
+        );
+        toast.info("Saved offline — will sync when reconnected");
+      } catch (err) {
+        toast.error("Failed to save offline");
+        console.error("[Worker] enqueueOrderStatusUpdate failed:", err);
+      }
+    }
+  };
+
   const claimOrder = (id: number) =>
-    updateMutation.mutate({ id, data: { assignedWorkerId: user?.id, status: "processing" } });
+    applyOrderUpdate(id, { assignedWorkerId: user?.id, status: "processing" });
 
   const markVerified = (id: number, o: any) => {
     const isItemBased = (o.itemCount ?? 0) > 0;
-    const verifyData: Record<string, any> = { isVerified: true };
+    const verifyData: Record<string, unknown> = { isVerified: true };
     if (!isItemBased) {
       verifyData.verifiedShirts = o.shirts;
       verifyData.verifiedTrousers = o.trousers;
     }
-    updateMutation.mutate({ id, data: verifyData });
+    applyOrderUpdate(id, verifyData);
   };
 
   const markReady = (id: number) =>
-    updateMutation.mutate({ id, data: { status: "ready" } });
+    applyOrderUpdate(id, { status: "ready" });
 
   const overdueTotal = orders.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
   const urgentTotal = orders.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;

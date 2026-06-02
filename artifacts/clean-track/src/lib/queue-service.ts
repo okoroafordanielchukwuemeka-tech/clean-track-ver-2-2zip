@@ -32,6 +32,13 @@ import { syncEngine } from "./sync-engine";
 import { getIsOnline } from "./network-state";
 import { api, type CustomerInput, type OrderInput } from "./api";
 
+export interface OfflineStatusPayload {
+  localId: string;
+  serverId: number | null;
+  changes: Record<string, unknown>;
+  timestamp: string;
+}
+
 export interface OfflineCustomerPayload {
   fullName: string;
   phone: string;
@@ -140,6 +147,77 @@ export async function enqueueOrderCreate(
 }
 
 /**
+ * Enqueues an offline order status/field update.
+ *
+ * Two usage modes:
+ *  A) Server-synced order  (serverId is known, no local record or syncStatus="synced")
+ *     – Adds a queue entry with localId="srv-<serverId>".
+ *     – Also updates localDb.orders syncStatus → "pending_status_update" if a
+ *       local record exists, so the pending badge shows correctly.
+ *  B) Locally-created order (syncStatus="pending_create", serverId=null)
+ *     – Adds a queue entry with dependsOn=[localId] so it waits for create_order.
+ *     – Updates localDb.orders status field optimistically.
+ *
+ * The queue entry payload carries the full `changes` object so syncOrderStatusEntry
+ * can PATCH exactly that data to the server.
+ */
+export async function enqueueOrderStatusUpdate(
+  localId: string,
+  serverId: number | null,
+  changes: Record<string, unknown>
+): Promise<void> {
+  const payload: OfflineStatusPayload = {
+    localId,
+    serverId,
+    changes,
+    timestamp: new Date().toISOString(),
+  };
+
+  const existingLocalOrder = localId.startsWith("srv-")
+    ? null
+    : await localDb.orders.get(localId);
+
+  const dependsOn: string[] =
+    existingLocalOrder?.syncStatus === "pending_create" ? [localId] : [];
+
+  const entry: SyncQueueEntry = {
+    clientId: crypto.randomUUID(),
+    position: Date.now(),
+    operation: "update_order_status",
+    payload: payload as unknown as Record<string, unknown>,
+    localId,
+    dependsOn,
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  await localDb.transaction(
+    "rw",
+    [localDb.orders, localDb.syncQueue],
+    async () => {
+      if (existingLocalOrder) {
+        const localUpdates: Partial<typeof existingLocalOrder> = {};
+        if (typeof changes.status === "string") {
+          localUpdates.status = changes.status;
+        }
+        if (existingLocalOrder.syncStatus === "synced") {
+          localUpdates.syncStatus = "pending_status_update";
+        }
+        if (Object.keys(localUpdates).length > 0) {
+          await localDb.orders.update(localId, localUpdates);
+        }
+      }
+      await localDb.syncQueue.add(entry);
+    }
+  );
+
+  await syncEngine.notifyQueueChanged();
+}
+
+/**
  * Process the offline write queue in strict dependency order.
  *
  * Ordering rules:
@@ -220,6 +298,31 @@ export async function processQueue(): Promise<void> {
       doneLocalIds.add(entry.localId);
     } catch {
       // syncOrder already logged the error and updated the queue entry.
+    }
+  }
+
+  // ── Pass 3: sync pending order status/field updates ──────────────────────
+  // These wait for their dependsOn (a create_order localId) to finish first.
+  const statusEntries = pending.filter(
+    (e) => e.operation === "update_order_status"
+  );
+
+  for (const entry of statusEntries) {
+    const allDepsResolved = entry.dependsOn.every((dep) =>
+      doneLocalIds.has(dep)
+    );
+    if (!allDepsResolved) {
+      console.warn(
+        `[CleanTrack Sync] Skipping status update for ${entry.localId} — unresolved dependencies: ` +
+          entry.dependsOn.filter((d) => !doneLocalIds.has(d)).join(", ")
+      );
+      continue;
+    }
+
+    try {
+      await syncOrderStatusEntry(entry);
+    } catch {
+      // syncOrderStatusEntry already logged and updated the queue entry.
     }
   }
 }
@@ -475,6 +578,119 @@ export async function syncOrder(localId: string): Promise<void> {
     } else {
       console.warn(
         `[CleanTrack Sync] Order ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+      );
+    }
+
+    throw err;
+  }
+}
+
+/**
+ * PATCH a pending order status/field update to the server.
+ *
+ * Resolves the server order ID from:
+ *  1. payload.serverId (fast path — set at enqueue time for server-synced orders)
+ *  2. localDb.orders.get(localId).serverId (for offline-created orders after create_order syncs)
+ *
+ * On success:
+ *  - syncQueue entry   → status = "done"
+ *  - localDb.orders    → syncStatus = "synced" if no other pending status-update entries remain
+ *  - syncLog           → success entry written
+ *
+ * On failure (< MAX_ATTEMPTS):
+ *  - syncQueue entry   → status = "pending", attempts incremented
+ *
+ * On permanent failure (>= MAX_ATTEMPTS):
+ *  - syncQueue entry   → status = "failed"
+ */
+export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void> {
+  if (entry.attempts >= MAX_ATTEMPTS) {
+    throw new Error(
+      `Status update entry ${entry.id} for order ${entry.localId} reached max sync attempts`
+    );
+  }
+
+  await localDb.syncQueue.update(entry.id!, {
+    status: "in_flight",
+    lastAttemptAt: new Date().toISOString(),
+  });
+
+  try {
+    const p = entry.payload as unknown as OfflineStatusPayload;
+
+    let serverId = p.serverId ?? null;
+    if (!serverId && !p.localId.startsWith("srv-")) {
+      const localOrder = await localDb.orders.get(p.localId);
+      serverId = localOrder?.serverId ?? null;
+    }
+
+    if (!serverId) {
+      throw new Error(
+        `Cannot sync status update for order ${p.localId}: serverId not available yet`
+      );
+    }
+
+    await api.orders.update(serverId, p.changes as Record<string, unknown>);
+
+    await localDb.syncQueue.update(entry.id!, { status: "done" });
+
+    const remainingPending = await localDb.syncQueue
+      .where("localId")
+      .equals(p.localId)
+      .filter(
+        (e) =>
+          e.operation === "update_order_status" &&
+          e.status === "pending" &&
+          e.id !== entry.id
+      )
+      .count();
+
+    if (remainingPending === 0 && !p.localId.startsWith("srv-")) {
+      const localOrder = await localDb.orders.get(p.localId);
+      if (localOrder?.syncStatus === "pending_status_update") {
+        await localDb.orders.update(p.localId, { syncStatus: "synced" });
+      }
+    }
+
+    await localDb.syncLog.add({
+      operation: "update_order_status",
+      localId: p.localId,
+      serverId,
+      success: true,
+      error: null,
+      syncedAt: new Date().toISOString(),
+    });
+
+    console.info(
+      `[CleanTrack Sync] Order status update synced: localId=${p.localId} serverId=${serverId}`
+    );
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    const newAttempts = entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+
+    await localDb.syncQueue.update(entry.id!, {
+      status: permanentlyFailed ? "failed" : "pending",
+      attempts: newAttempts,
+      lastError: error,
+    });
+
+    await localDb.syncLog.add({
+      operation: "update_order_status",
+      localId: entry.localId,
+      serverId: null,
+      success: false,
+      error,
+      syncedAt: new Date().toISOString(),
+    });
+
+    if (permanentlyFailed) {
+      console.error(
+        `[CleanTrack Sync] Status update ${entry.id} permanently failed after ${newAttempts} attempts: ${error}`
+      );
+    } else {
+      console.warn(
+        `[CleanTrack Sync] Status update ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
       );
     }
 

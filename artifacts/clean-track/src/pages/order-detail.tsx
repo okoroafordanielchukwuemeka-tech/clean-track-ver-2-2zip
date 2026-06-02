@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry } from "@/lib/api";
+import { enqueueOrderStatusUpdate } from "@/lib/queue-service";
+import { getIsOnline } from "@/lib/network-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -569,7 +571,27 @@ export default function OrderDetail() {
           <CardContent className="space-y-3">
             <div>
               <Label className="text-xs">Status</Label>
-              <Select value={order.status} onValueChange={(v) => updateMutation.mutate({ status: v })}>
+              <Select
+                value={order.status}
+                onValueChange={async (v) => {
+                  if (getIsOnline()) {
+                    updateMutation.mutate({ status: v });
+                  } else {
+                    try {
+                      await enqueueOrderStatusUpdate(`srv-${orderId}`, orderId, { status: v });
+                      qc.setQueryData(["orders", orderId], (old: any) =>
+                        old ? { ...old, status: v } : old
+                      );
+                      qc.setQueryData(["orders"], (old: any[]) =>
+                        old?.map(o => o.id === orderId ? { ...o, status: v } : o) ?? []
+                      );
+                      toast.info("Status saved offline — syncs when reconnected");
+                    } catch {
+                      toast.error("Failed to save status offline");
+                    }
+                  }
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pending</SelectItem>
@@ -579,7 +601,10 @@ export default function OrderDetail() {
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground mt-1">Status saves immediately when changed</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Status saves immediately when changed
+                {!getIsOnline() && <span className="ml-1 text-amber-600">(offline — will sync)</span>}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>

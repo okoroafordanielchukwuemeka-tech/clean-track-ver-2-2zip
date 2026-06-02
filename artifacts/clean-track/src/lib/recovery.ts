@@ -21,6 +21,7 @@ export async function runRecovery(): Promise<void> {
     await Promise.all([
       recoverOrphanedCustomers(),
       recoverOrphanedOrders(),
+      recoverOrphanedStatusUpdates(),
     ]);
   } catch (err) {
     console.error("[CleanTrack Recovery] Unexpected error during startup recovery:", err);
@@ -64,6 +65,54 @@ async function recoverOrphanedCustomers(): Promise<void> {
         laundryId: customer.laundryId,
       },
       localId: customer.localId,
+      dependsOn: [],
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null,
+      status: "pending",
+      createdAt: now,
+    };
+    await localDb.syncQueue.add(entry);
+  }
+
+  await syncEngine.notifyQueueChanged();
+}
+
+async function recoverOrphanedStatusUpdates(): Promise<void> {
+  const pendingStatusOrders = await localDb.orders
+    .where("syncStatus")
+    .equals("pending_status_update")
+    .toArray();
+
+  if (pendingStatusOrders.length === 0) return;
+
+  const existingQueueEntries = await localDb.syncQueue
+    .where("operation")
+    .equals("update_order_status")
+    .toArray();
+
+  const queuedLocalIds = new Set(existingQueueEntries.map(e => e.localId));
+  const orphans = pendingStatusOrders.filter(o => !queuedLocalIds.has(o.localId));
+
+  if (orphans.length === 0) return;
+
+  console.warn(
+    `[CleanTrack Recovery] ${orphans.length} orphaned pending-status-update order(s) — rebuilding queue entries`
+  );
+
+  const now = new Date().toISOString();
+  for (const order of orphans) {
+    const entry: SyncQueueEntry = {
+      clientId: crypto.randomUUID(),
+      position: Date.now(),
+      operation: "update_order_status",
+      payload: {
+        localId: order.localId,
+        serverId: order.serverId ?? null,
+        changes: { status: order.status },
+        timestamp: now,
+      },
+      localId: order.localId,
       dependsOn: [],
       attempts: 0,
       lastAttemptAt: null,
