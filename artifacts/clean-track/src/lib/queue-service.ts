@@ -26,6 +26,7 @@ import {
   type LocalCustomer,
   type LocalOrder,
   type LocalOrderItem,
+  type LocalPayment,
   type SyncQueueEntry,
 } from "./local-db";
 import { syncEngine } from "./sync-engine";
@@ -36,6 +37,17 @@ export interface OfflineStatusPayload {
   localId: string;
   serverId: number | null;
   changes: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface OfflinePaymentPayload {
+  orderLocalId: string;
+  serverId: number | null;
+  amount: number;
+  method: "cash" | "transfer" | "pos";
+  notes: string | null;
+  laundryId: number;
+  branchId: number | null;
   timestamp: string;
 }
 
@@ -218,6 +230,47 @@ export async function enqueueOrderStatusUpdate(
 }
 
 /**
+ * Atomically writes a pending payment to IndexedDB and adds a
+ * record_payment entry to the sync queue in a single Dexie transaction.
+ *
+ * Dependency rule:
+ *  - If serverId is null (the order itself is pending_create), pass
+ *    dependsOn=[orderLocalId] so processQueue() waits for create_order first.
+ *  - If serverId is already known (order is synced), pass dependsOn=[].
+ */
+export async function enqueuePayment(
+  localId: string,
+  record: LocalPayment,
+  payload: OfflinePaymentPayload,
+  dependsOn: string[] = []
+): Promise<void> {
+  const entry: SyncQueueEntry = {
+    clientId: crypto.randomUUID(),
+    position: Date.now(),
+    operation: "record_payment",
+    payload: payload as unknown as Record<string, unknown>,
+    localId,
+    dependsOn,
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  await localDb.transaction(
+    "rw",
+    [localDb.payments, localDb.syncQueue],
+    async () => {
+      await localDb.payments.add(record);
+      await localDb.syncQueue.add(entry);
+    }
+  );
+
+  await syncEngine.notifyQueueChanged();
+}
+
+/**
  * Process the offline write queue in strict dependency order.
  *
  * Ordering rules:
@@ -323,6 +376,32 @@ export async function processQueue(): Promise<void> {
       await syncOrderStatusEntry(entry);
     } catch {
       // syncOrderStatusEntry already logged and updated the queue entry.
+    }
+  }
+
+  // ── Pass 4: sync pending payments ────────────────────────────────────────
+  // Payments for offline-created orders depend on create_order completing first.
+  // Payments for server-synced orders have no dependencies and go straight through.
+  const paymentEntries = pending.filter(
+    (e) => e.operation === "record_payment"
+  );
+
+  for (const entry of paymentEntries) {
+    const allDepsResolved = entry.dependsOn.every((dep) =>
+      doneLocalIds.has(dep)
+    );
+    if (!allDepsResolved) {
+      console.warn(
+        `[CleanTrack Sync] Skipping payment ${entry.localId} — unresolved dependencies: ` +
+          entry.dependsOn.filter((d) => !doneLocalIds.has(d)).join(", ")
+      );
+      continue;
+    }
+
+    try {
+      await syncPaymentEntry(entry);
+    } catch {
+      // syncPaymentEntry already logged and updated the queue entry.
     }
   }
 }
@@ -691,6 +770,103 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
     } else {
       console.warn(
         `[CleanTrack Sync] Status update ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+      );
+    }
+
+    throw err;
+  }
+}
+
+/**
+ * POST a pending payment to the server, then patch the local record with the
+ * server-issued receipt number.
+ *
+ * On success:
+ *  - localDb.payments → orderId set, receiptNumber set, syncStatus = "synced"
+ *  - syncQueue entry   → status = "done"
+ *  - syncLog           → success entry written
+ *
+ * On failure (< MAX_ATTEMPTS): status reset to "pending", attempts incremented.
+ * On failure (= MAX_ATTEMPTS): status set to "failed".
+ */
+export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
+  if (entry.attempts >= MAX_ATTEMPTS) {
+    throw new Error(`Payment ${entry.id} reached max sync attempts`);
+  }
+
+  await localDb.syncQueue.update(entry.id!, {
+    status: "in_flight",
+    lastAttemptAt: new Date().toISOString(),
+  });
+
+  try {
+    const p = entry.payload as unknown as OfflinePaymentPayload;
+
+    let serverOrderId = p.serverId ?? null;
+    if (!serverOrderId) {
+      const localOrder = await localDb.orders.get(p.orderLocalId);
+      serverOrderId = localOrder?.serverId ?? null;
+    }
+
+    if (!serverOrderId) {
+      throw new Error(
+        `Cannot sync payment for order ${p.orderLocalId}: server order ID not available yet`
+      );
+    }
+
+    const response = await api.orders.recordPayment(serverOrderId, {
+      amount: p.amount,
+      method: p.method,
+      ...(p.notes ? { notes: p.notes } : {}),
+    });
+
+    await localDb.payments.update(entry.localId, {
+      orderId: serverOrderId,
+      receiptNumber: response.receiptNumber ?? null,
+      syncStatus: "synced",
+    });
+
+    await localDb.syncQueue.update(entry.id!, { status: "done" });
+
+    await localDb.syncLog.add({
+      operation: "record_payment",
+      localId: entry.localId,
+      serverId: response.id,
+      success: true,
+      error: null,
+      syncedAt: new Date().toISOString(),
+    });
+
+    console.info(
+      `[CleanTrack Sync] Payment synced: localId=${entry.localId} → serverId=${response.id} receiptNumber=${response.receiptNumber}`
+    );
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    const newAttempts = entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+
+    await localDb.syncQueue.update(entry.id!, {
+      status: permanentlyFailed ? "failed" : "pending",
+      attempts: newAttempts,
+      lastError: error,
+    });
+
+    await localDb.syncLog.add({
+      operation: "record_payment",
+      localId: entry.localId,
+      serverId: null,
+      success: false,
+      error,
+      syncedAt: new Date().toISOString(),
+    });
+
+    if (permanentlyFailed) {
+      console.error(
+        `[CleanTrack Sync] Payment ${entry.id} permanently failed after ${newAttempts} attempts: ${error}`
+      );
+    } else {
+      console.warn(
+        `[CleanTrack Sync] Payment ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
       );
     }
 

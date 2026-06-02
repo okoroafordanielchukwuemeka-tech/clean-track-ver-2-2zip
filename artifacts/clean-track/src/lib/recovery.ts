@@ -22,6 +22,7 @@ export async function runRecovery(): Promise<void> {
       recoverOrphanedCustomers(),
       recoverOrphanedOrders(),
       recoverOrphanedStatusUpdates(),
+      recoverOrphanedPayments(),
     ]);
   } catch (err) {
     console.error("[CleanTrack Recovery] Unexpected error during startup recovery:", err);
@@ -114,6 +115,61 @@ async function recoverOrphanedStatusUpdates(): Promise<void> {
       },
       localId: order.localId,
       dependsOn: [],
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null,
+      status: "pending",
+      createdAt: now,
+    };
+    await localDb.syncQueue.add(entry);
+  }
+
+  await syncEngine.notifyQueueChanged();
+}
+
+async function recoverOrphanedPayments(): Promise<void> {
+  const pendingPayments = await localDb.payments
+    .where("syncStatus")
+    .equals("pending_create")
+    .toArray();
+
+  if (pendingPayments.length === 0) return;
+
+  const existingQueueEntries = await localDb.syncQueue
+    .where("operation")
+    .equals("record_payment")
+    .toArray();
+
+  const queuedLocalIds = new Set(existingQueueEntries.map((e) => e.localId));
+  const orphans = pendingPayments.filter((p) => !queuedLocalIds.has(p.localId));
+
+  if (orphans.length === 0) return;
+
+  console.warn(
+    `[CleanTrack Recovery] ${orphans.length} orphaned pending payment(s) — rebuilding queue entries`
+  );
+
+  const now = new Date().toISOString();
+  for (const payment of orphans) {
+    const dependsOn: string[] =
+      payment.orderId === null ? [payment.orderLocalId] : [];
+
+    const entry: SyncQueueEntry = {
+      clientId: crypto.randomUUID(),
+      position: Date.now(),
+      operation: "record_payment",
+      payload: {
+        orderLocalId: payment.orderLocalId,
+        serverId: payment.orderId,
+        amount: payment.amount,
+        method: payment.method,
+        notes: payment.notes ?? null,
+        laundryId: payment.laundryId,
+        branchId: payment.branchId ?? null,
+        timestamp: payment.createdAt,
+      },
+      localId: payment.localId,
+      dependsOn,
       attempts: 0,
       lastAttemptAt: null,
       lastError: null,

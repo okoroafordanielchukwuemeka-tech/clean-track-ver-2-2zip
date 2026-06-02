@@ -3,8 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry } from "@/lib/api";
-import { enqueueOrderStatusUpdate } from "@/lib/queue-service";
+import { enqueueOrderStatusUpdate, enqueuePayment, type OfflinePaymentPayload } from "@/lib/queue-service";
 import { getIsOnline } from "@/lib/network-state";
+import { type LocalPayment } from "@/lib/local-db";
+import { usePendingLocalPayments } from "@/hooks/use-pending-local";
+import { PendingSyncBadge } from "@/components/pending-sync-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -109,7 +112,7 @@ export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isOwner } = useAuth();
+  const { isOwner, laundryId: authLaundryId } = useAuth();
   const [showPayment, setShowPayment] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showPickup, setShowPickup] = useState(false);
@@ -118,6 +121,7 @@ export default function OrderDetail() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentInput>({ amount: 0, method: "cash" });
+  const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false);
   const [pickupForm, setPickupForm] = useState({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
   const [itemPickupQtys, setItemPickupQtys] = useState<Map<number, number>>(new Map());
   const [pickupNotes, setPickupNotes] = useState("");
@@ -157,6 +161,8 @@ export default function OrderDetail() {
     enabled: !!orderId && showReceipt,
   });
 
+  const pendingPayments = usePendingLocalPayments(orderId ? `srv-${orderId}` : null);
+
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, any>) => api.orders.update(orderId, data),
     onSuccess: () => {
@@ -189,6 +195,75 @@ export default function OrderDetail() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const handlePaymentSubmit = async (formData: PaymentInput) => {
+    if (!formData.amount || formData.amount <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+
+    if (getIsOnline()) {
+      paymentMutation.mutate(formData);
+      return;
+    }
+
+    if (!authLaundryId || !order) {
+      toast.error("Cannot record payment — please refresh and try again");
+      return;
+    }
+
+    setIsPaymentSubmitting(true);
+    try {
+      const localId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const orderLocalId = `srv-${orderId}`;
+
+      const record: LocalPayment = {
+        localId,
+        orderLocalId,
+        orderId,
+        laundryId: authLaundryId,
+        branchId: (order as any).branchId ?? null,
+        amount: formData.amount,
+        method: formData.method,
+        notes: formData.notes ?? null,
+        receiptNumber: null,
+        syncStatus: "pending_create",
+        createdAt: now,
+      };
+
+      const payload: OfflinePaymentPayload = {
+        orderLocalId,
+        serverId: orderId,
+        amount: formData.amount,
+        method: formData.method,
+        notes: formData.notes ?? null,
+        laundryId: authLaundryId,
+        branchId: (order as any).branchId ?? null,
+        timestamp: now,
+      };
+
+      await enqueuePayment(localId, record, payload);
+
+      qc.setQueryData(["orders", orderId], (old: any) => {
+        if (!old) return old;
+        const newAmountPaid = Number(old.amountPaid ?? 0) + formData.amount;
+        const totalDue = Number(old.price ?? 0) + Number(old.extraCharge ?? 0) - Number(old.discount ?? 0);
+        const remainingBalance = Math.max(0, totalDue - newAmountPaid);
+        const newPaymentStatus = remainingBalance <= 0 ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
+        return { ...old, amountPaid: newAmountPaid, paymentStatus: newPaymentStatus };
+      });
+
+      setShowPayment(false);
+      setPaymentForm({ amount: 0, method: "cash" });
+      toast.info("Payment saved offline — will sync when reconnected");
+    } catch (err) {
+      toast.error("Failed to save payment offline");
+      console.error("[OrderDetail] enqueuePayment failed:", err);
+    } finally {
+      setIsPaymentSubmitting(false);
+    }
+  };
 
   const deletePaymentMutation = useMutation({
     mutationFn: (pid: number) => api.orders.deletePayment(orderId, pid),
@@ -756,6 +831,18 @@ export default function OrderDetail() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {pendingPayments.map((p) => (
+                <TableRow key={p.localId} className="bg-blue-50/50 dark:bg-blue-950/20">
+                  <TableCell><PendingSyncBadge /></TableCell>
+                  <TableCell className="font-medium">{formatCurrency(p.amount)}</TableCell>
+                  <TableCell className="capitalize">{p.method}</TableCell>
+                  <TableCell><span className="text-muted-foreground text-sm">You (offline)</span></TableCell>
+                  <TableCell><span className="text-muted-foreground">—</span></TableCell>
+                  <TableCell>{p.notes || "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell />
+                </TableRow>
+              ))}
               {payments.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">{p.receiptNumber ?? "—"}</TableCell>
@@ -786,7 +873,7 @@ export default function OrderDetail() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!payments.length && (
+              {!payments.length && !pendingPayments.length && (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">No payments recorded</TableCell>
                 </TableRow>
@@ -1126,13 +1213,10 @@ export default function OrderDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPayment(false)}>Cancel</Button>
             <Button
-              onClick={() => {
-                if (!paymentForm.amount || paymentForm.amount <= 0) { toast.error("Enter a valid amount"); return; }
-                paymentMutation.mutate(paymentForm);
-              }}
-              disabled={paymentMutation.isPending}
+              onClick={() => handlePaymentSubmit(paymentForm)}
+              disabled={paymentMutation.isPending || isPaymentSubmitting}
             >
-              {paymentMutation.isPending ? "Recording..." : "Record Payment"}
+              {paymentMutation.isPending || isPaymentSubmitting ? "Recording..." : "Record Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>
