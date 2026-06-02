@@ -1,0 +1,96 @@
+PHASE 3B.2 — ORDER STATUS SYNC ENGINE
+
+Act as a senior offline-first SaaS architect and distributed systems engineer.
+
+Implement sync support ONLY for order status changes.
+
+Do NOT implement:
+
+* payments
+* pickups
+* customer creation
+* order creation
+
+The existing customer/order sync engine is already working and must remain unchanged.
+
+Requirements:
+
+1. Add support for queued operation:
+
+* update_order_status
+
+2. When a status is changed while offline:
+
+* store the change in the sync queue
+* preserve the order's localId and serverId references
+* mark the local record as pending status sync
+
+3. On reconnect:
+
+* process update_order_status queue entries
+* only sync if the order already has a valid serverId
+
+4. Sync using the existing API endpoint used by the application for status updates.
+
+5. Implement idempotency:
+
+* repeated processing of the same queue item must not create duplicate status updates
+
+6. Implement last-write-wins:
+
+Example:
+
+Offline:
+processing → ready → completed
+
+Only the latest status should be sent if earlier queued status changes are obsolete.
+
+7. 4xx responses:
+
+* mark queue item as permanently failed
+* write to sync_log
+* do not retry automatically
+
+8. Network failures:
+
+* use the existing exponential backoff system
+* keep queue item pending
+
+9. Successful sync:
+
+* update local order
+* clear pending status flag
+* remove status-sync badge if present
+* write success entry to sync_log
+
+10. Preserve all existing functionality:
+
+* customer sync
+* order sync
+* queue recovery
+* dependency ordering
+* pending badges
+
+Validation required:
+
+Run a complete PASS / FAIL test suite covering:
+
+* offline status change
+* multiple offline status changes
+* last-write-wins behavior
+* reconnect sync
+* network failure retry
+* 4xx permanent failure
+* sync_log creation
+* pending indicator removal
+* idempotency
+
+Provide:
+
+1. Files modified
+2. Architecture explanation
+3. Validation report
+4. PASS / FAIL summary
+
+Do not begin payments or pickups.
+Scope is strictly order status synchronization.

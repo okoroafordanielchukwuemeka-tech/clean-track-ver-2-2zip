@@ -513,7 +513,41 @@ export async function processQueue(): Promise<void> {
     (e) => e.operation === "update_order_status"
   );
 
+  // ── Last-write-wins deduplication ──────────────────────────────────────
+  // Multiple offline status changes for the same order (e.g. pending →
+  // processing → ready → completed) all share the same localId.  Sending
+  // them in order is correct but wasteful and can leave the server briefly
+  // in intermediate states.  Instead, keep only the most-recently enqueued
+  // entry per order and immediately mark earlier ones done without a server
+  // call — the winning entry carries the authoritative final state.
+  //
+  // `statusEntries` is already sorted by position ascending, so iterating
+  // and overwriting means the last entry for each localId survives.
+  const latestByOrder = new Map<string, SyncQueueEntry>();
   for (const entry of statusEntries) {
+    latestByOrder.set(entry.localId, entry);
+  }
+
+  const staleStatusEntries = statusEntries.filter(
+    (e) => latestByOrder.get(e.localId)?.id !== e.id
+  );
+  if (staleStatusEntries.length > 0) {
+    await localDb.syncQueue.bulkUpdate(
+      staleStatusEntries.map((e) => ({
+        key: e.id!,
+        changes: { status: "done" as const },
+      }))
+    );
+    console.info(
+      `[CleanTrack Sync] Last-write-wins: collapsed ${staleStatusEntries.length} ` +
+        `stale status update(s) — only sending latest per order`
+    );
+  }
+
+  // Process only the winning (latest) entry per order.
+  const dedupedStatusEntries = [...latestByOrder.values()];
+
+  for (const entry of dedupedStatusEntries) {
     const allDepsResolved = entry.dependsOn.every((dep) =>
       doneLocalIds.has(dep)
     );
@@ -521,6 +555,15 @@ export async function processQueue(): Promise<void> {
       console.warn(
         `[CleanTrack Sync] Skipping status update for ${entry.localId} — unresolved dependencies: ` +
           entry.dependsOn.filter((d) => !doneLocalIds.has(d)).join(", ")
+      );
+      continue;
+    }
+
+    // Skip entries still within their exponential back-off window.
+    if (!isBackoffExpired(entry)) {
+      console.debug(
+        `[CleanTrack Sync] Status update ${entry.localId} in back-off ` +
+          `(attempt ${entry.attempts}), skipping this cycle`
       );
       continue;
     }
@@ -955,13 +998,17 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
     );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    const newAttempts = entry.attempts + 1;
+
+    // 4xx validation errors will never succeed — permanently fail immediately.
+    const clientErr = isClientError(err);
+    const newAttempts = clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
     const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
       attempts: newAttempts,
       lastError: error,
+      lastAttemptAt: new Date().toISOString(),
     });
 
     await localDb.syncLog.add({
@@ -973,13 +1020,19 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
       syncedAt: new Date().toISOString(),
     });
 
-    if (permanentlyFailed) {
+    if (clientErr) {
+      console.error(
+        `[CleanTrack Sync] Status update ${entry.id} permanently failed (4xx — not retryable): ${error}`
+      );
+    } else if (permanentlyFailed) {
       console.error(
         `[CleanTrack Sync] Status update ${entry.id} permanently failed after ${newAttempts} attempts: ${error}`
       );
     } else {
+      const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Status update ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+        `[CleanTrack Sync] Status update ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+          `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
 
