@@ -1,13 +1,14 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
 import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry } from "@/lib/api";
 import { enqueueOrderStatusUpdate, enqueuePayment, enqueuePickup, type OfflinePaymentPayload, type OfflinePickupPayload } from "@/lib/queue-service";
+import { syncEngine } from "@/lib/sync-engine";
 import { getIsOnline } from "@/lib/network-state";
 import { type LocalPayment, type LocalPickup } from "@/lib/local-db";
-import { usePendingLocalPayments, usePendingLocalPickups } from "@/hooks/use-pending-local";
-import { PendingSyncBadge } from "@/components/pending-sync-badge";
+import { usePendingLocalPayments, usePendingLocalPickups, useConflictLocalPayments } from "@/hooks/use-pending-local";
+import { PendingSyncBadge, ConflictSyncBadge } from "@/components/pending-sync-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -162,8 +163,26 @@ export default function OrderDetail() {
     enabled: !!orderId && showReceipt,
   });
 
-  const pendingPayments = usePendingLocalPayments(orderId ? `srv-${orderId}` : null);
-  const pendingPickups = usePendingLocalPickups(orderId ? `srv-${orderId}` : null);
+  const orderLocalId = orderId ? `srv-${orderId}` : null;
+  const pendingPayments = usePendingLocalPayments(orderLocalId);
+  const pendingPickups = usePendingLocalPickups(orderLocalId);
+  const conflictPayments = useConflictLocalPayments(orderLocalId);
+
+  // Subscribe to the sync engine and invalidate order + payment caches when a
+  // payment for this order is successfully synced.  This ensures the balance
+  // and payment history refresh immediately without waiting for the next
+  // window-focus refetch or manual navigation.
+  useEffect(() => {
+    if (!orderId) return;
+    return syncEngine.subscribe((event) => {
+      if (event.type !== "item_synced") return;
+      const p = event.payload as { operation?: string; serverOrderId?: number } | undefined;
+      if (p?.operation === "record_payment" && p?.serverOrderId === orderId) {
+        qc.invalidateQueries({ queryKey: ["orders", orderId] });
+        qc.invalidateQueries({ queryKey: ["orders", orderId, "payments"] });
+      }
+    });
+  }, [orderId, qc]);
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, any>) => api.orders.update(orderId, data),
@@ -984,6 +1003,24 @@ export default function OrderDetail() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {conflictPayments.map((p) => (
+                <TableRow key={p.localId} className="bg-red-50/50 dark:bg-red-950/20">
+                  <TableCell>
+                    <ConflictSyncBadge />
+                  </TableCell>
+                  <TableCell className="font-medium">{formatCurrency(p.amount)}</TableCell>
+                  <TableCell className="capitalize">{p.method}</TableCell>
+                  <TableCell><span className="text-muted-foreground text-sm">You (offline)</span></TableCell>
+                  <TableCell><span className="text-muted-foreground">—</span></TableCell>
+                  <TableCell>
+                    <span className="text-xs text-red-600 dark:text-red-400">
+                      {p.notes || "Payment could not sync — see sync log"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell />
+                </TableRow>
+              ))}
               {pendingPayments.map((p) => (
                 <TableRow key={p.localId} className="bg-blue-50/50 dark:bg-blue-950/20">
                   <TableCell><PendingSyncBadge /></TableCell>

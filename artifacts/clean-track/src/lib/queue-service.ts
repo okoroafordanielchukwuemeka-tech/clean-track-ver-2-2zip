@@ -1249,6 +1249,10 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
       syncedAt: new Date().toISOString(),
     });
 
+    // Notify sync engine so React Query subscribers (order-detail) can
+    // immediately invalidate the order balance and payment list caches.
+    syncEngine.notifyPaymentSynced(serverOrderId, entry.localId);
+
     console.info(
       `[CleanTrack Sync] Payment synced: localId=${entry.localId} → ` +
         `serverId=${response.id} receiptNumber=${response.receiptNumber}`

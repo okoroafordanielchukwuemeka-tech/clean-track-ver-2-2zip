@@ -209,6 +209,23 @@ class SyncEngine {
     }
   }
 
+  /**
+   * Called by syncPaymentEntry after a payment successfully syncs to the
+   * server.  Emits an item_synced event so subscribers (e.g. order-detail)
+   * can invalidate their React Query caches and reflect the real server
+   * state — updated amountPaid, paymentStatus, and payment list.
+   *
+   * @param serverOrderId  The numeric server-side order ID (never null here
+   *   because syncPaymentEntry only calls this on success after resolving it).
+   * @param localId  The payment's local UUID, for precise cache targeting.
+   */
+  notifyPaymentSynced(serverOrderId: number, localId: string): void {
+    this.emit({
+      type: "item_synced",
+      payload: { operation: "record_payment", serverOrderId, localId },
+    });
+  }
+
   async getPendingCount(): Promise<number> {
     return localDb.syncQueue
       .where("status")
