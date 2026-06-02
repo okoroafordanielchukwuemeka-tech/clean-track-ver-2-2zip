@@ -62,7 +62,7 @@ export interface LocalPayment {
   method: "cash" | "transfer" | "pos";
   notes: string | null;
   receiptNumber: string | null;
-  syncStatus: "synced" | "pending_create";
+  syncStatus: "synced" | "pending_create" | "conflict";
   createdAt: string;
 }
 

@@ -77,6 +77,120 @@ function isClientError(err: unknown): boolean {
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
+// ── Financial conflict types ───────────────────────────────────────────────
+
+/**
+ * The four categories of payment conflict that can never be resolved by
+ * retrying.  Each maps to a specific pre-sync validation check.
+ *
+ *  ORDER_ALREADY_PAID    — order.amountPaid >= totalDue at sync time
+ *  PAYMENT_CONFLICT      — amount ≤ 0 or other structural payment invalidity
+ *  OVERPAYMENT_ATTEMPT   — payment.amount > remaining balance
+ *  DUPLICATE_PAYMENT     — server returned 409 (idempotency hit on a different key)
+ */
+export type ConflictCode =
+  | "ORDER_ALREADY_PAID"
+  | "PAYMENT_CONFLICT"
+  | "OVERPAYMENT_ATTEMPT"
+  | "DUPLICATE_PAYMENT";
+
+/**
+ * Thrown by validatePaymentPreSync() when a payment cannot safely proceed.
+ *
+ * These errors are always permanent failures:
+ *  - queue entry  → status = "failed"  (no retry)
+ *  - local record → syncStatus = "conflict"  (flagged for manual review)
+ *  - syncLog      → error prefixed with "CONFLICT:<code>:"
+ */
+export class FinancialConflictError extends Error {
+  constructor(
+    public readonly code: ConflictCode,
+    message: string
+  ) {
+    super(message);
+    this.name = "FinancialConflictError";
+  }
+}
+
+/**
+ * Returns true when an HttpError is a payment-specific financial conflict
+ * that must never be retried (409 Conflict, or a 400 whose message contains
+ * payment-domain keywords).
+ */
+function isFinancialConflictHttpError(err: unknown): boolean {
+  if (!(err instanceof HttpError)) return false;
+  if (err.status === 409) return true;
+  if (err.status !== 400) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("paid") ||
+    msg.includes("conflict") ||
+    msg.includes("duplicate") ||
+    msg.includes("overpay")
+  );
+}
+
+/**
+ * Pre-sync payment validation layer.
+ *
+ * Must be called before every network call in syncPaymentEntry.
+ * Performs all checks that can be resolved without hitting the payment
+ * endpoint, so we never waste a server round-trip on bad data.
+ *
+ * Validation steps (in order):
+ *  1. amount > 0                     → PAYMENT_CONFLICT
+ *  2. serverOrderId exists           → plain Error (transient — retried with backoff)
+ *  3. GET current order state        → plain Error if fetch fails (transient)
+ *  4. Order not already fully paid   → ORDER_ALREADY_PAID (permanent)
+ *  5. Amount ≤ remaining balance     → OVERPAYMENT_ATTEMPT (permanent)
+ *
+ * FinancialConflictError → permanent failure, no retry.
+ * Plain Error            → transient, will be retried with exponential backoff.
+ */
+export async function validatePaymentPreSync(
+  p: OfflinePaymentPayload,
+  serverOrderId: number
+): Promise<void> {
+  // 1. Structural amount check
+  if (p.amount <= 0) {
+    throw new FinancialConflictError(
+      "PAYMENT_CONFLICT",
+      `Payment amount ₦${p.amount} is invalid — must be greater than zero`
+    );
+  }
+
+  // 2. Fetch live order state to check payment capacity
+  //    Throws a plain network Error on failure → treated as transient by the caller
+  const order = await api.orders.get(serverOrderId);
+
+  // 3. Compute financials from server values
+  //    Use parseFloat(String()) to safely handle both number and string DB returns.
+  const price = parseFloat(String(order.price ?? 0));
+  const extraCharge = parseFloat(String(order.extraCharge ?? 0));
+  const discount = parseFloat(String(order.discount ?? 0));
+  const totalDue = price + extraCharge - discount;
+  const alreadyPaid = parseFloat(String(order.amountPaid ?? 0));
+  const remaining = Math.max(0, totalDue - alreadyPaid);
+
+  // 4. Already fully paid?
+  if (totalDue > 0 && alreadyPaid >= totalDue - 0.01) {
+    throw new FinancialConflictError(
+      "ORDER_ALREADY_PAID",
+      `Order ${serverOrderId} is already fully paid ` +
+        `(totalDue=₦${totalDue.toFixed(2)}, alreadyPaid=₦${alreadyPaid.toFixed(2)})`
+    );
+  }
+
+  // 5. Overpayment?  +0.01 tolerance for floating-point rounding edge cases.
+  if (totalDue > 0 && p.amount > remaining + 0.01) {
+    throw new FinancialConflictError(
+      "OVERPAYMENT_ATTEMPT",
+      `Payment ₦${p.amount} exceeds remaining balance ₦${remaining.toFixed(2)} ` +
+        `for order ${serverOrderId} (totalDue=₦${totalDue.toFixed(2)}, alreadyPaid=₦${alreadyPaid.toFixed(2)})`
+    );
+  }
+}
+
 export interface OfflineStatusPayload {
   localId: string;
   serverId: number | null;
@@ -597,6 +711,15 @@ export async function processQueue(): Promise<void> {
       continue;
     }
 
+    // Skip entries still within their exponential back-off window.
+    if (!isBackoffExpired(entry)) {
+      console.debug(
+        `[CleanTrack Sync] Payment ${entry.localId} in back-off ` +
+          `(attempt ${entry.attempts}), skipping this cycle`
+      );
+      continue;
+    }
+
     try {
       await syncPaymentEntry(entry);
       // Propagate into doneLocalIds so pickup deps resolve in this same cycle.
@@ -1041,16 +1164,34 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
 }
 
 /**
- * POST a pending payment to the server, then patch the local record with the
- * server-issued receipt number.
+ * POST a pending payment to the server, then patch the local record.
+ *
+ * Financial safety layer (runs BEFORE the network call):
+ *  - validatePaymentPreSync() checks amount > 0, order not already paid,
+ *    and that the payment does not exceed the remaining balance.
+ *  - Any FinancialConflictError is a permanent failure — the local payment
+ *    record is flagged syncStatus="conflict" for manual review and the
+ *    syncLog entry is prefixed "CONFLICT:<code>:".
+ *
+ * Error classification (priority order):
+ *  1. FinancialConflictError → permanent fail + conflict flag
+ *  2. isFinancialConflictHttpError (409 / 400 + keywords) → permanent fail + conflict flag
+ *  3. isClientError (other 4xx) → permanent fail, no conflict flag
+ *  4. Network / 5xx → retry with exponential backoff
  *
  * On success:
- *  - localDb.payments → orderId set, receiptNumber set, syncStatus = "synced"
- *  - syncQueue entry   → status = "done"
- *  - syncLog           → success entry written
+ *  - localDb.payments → orderId, receiptNumber, syncStatus = "synced"
+ *  - syncQueue entry  → status = "done"
+ *  - syncLog          → success entry
  *
- * On failure (< MAX_ATTEMPTS): status reset to "pending", attempts incremented.
- * On failure (= MAX_ATTEMPTS): status set to "failed".
+ * On permanent failure:
+ *  - syncQueue entry  → status = "failed", attempts = MAX_ATTEMPTS
+ *  - localDb.payments → syncStatus = "conflict"  (financial conflicts only)
+ *  - syncLog          → error entry (prefixed "CONFLICT:<code>:" for financial)
+ *
+ * On transient failure (< MAX_ATTEMPTS):
+ *  - syncQueue entry  → status = "pending", attempts++, lastAttemptAt updated
+ *  - syncLog          → error entry
  */
 export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
   if (entry.attempts >= MAX_ATTEMPTS) {
@@ -1065,6 +1206,7 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
   try {
     const p = entry.payload as unknown as OfflinePaymentPayload;
 
+    // ── Resolve server order ID ──────────────────────────────────────────
     let serverOrderId = p.serverId ?? null;
     if (!serverOrderId) {
       const localOrder = await localDb.orders.get(p.orderLocalId);
@@ -1077,12 +1219,19 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
       );
     }
 
+    // ── Financial safety pre-check ───────────────────────────────────────
+    // Validates amount > 0, order not already paid, no overpayment.
+    // Throws FinancialConflictError (permanent) or plain Error (transient).
+    await validatePaymentPreSync(p, serverOrderId);
+
+    // ── Send payment to server ───────────────────────────────────────────
     const response = await api.orders.recordPayment(serverOrderId, {
       amount: p.amount,
       method: p.method,
       ...(p.notes ? { notes: p.notes } : {}),
     }, entry.clientId);
 
+    // ── Patch local records ──────────────────────────────────────────────
     await localDb.payments.update(entry.localId, {
       orderId: serverOrderId,
       receiptNumber: response.receiptNumber ?? null,
@@ -1101,35 +1250,65 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
     });
 
     console.info(
-      `[CleanTrack Sync] Payment synced: localId=${entry.localId} → serverId=${response.id} receiptNumber=${response.receiptNumber}`
+      `[CleanTrack Sync] Payment synced: localId=${entry.localId} → ` +
+        `serverId=${response.id} receiptNumber=${response.receiptNumber}`
     );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    const newAttempts = entry.attempts + 1;
+
+    // ── Classify the error ───────────────────────────────────────────────
+    const isConflict =
+      err instanceof FinancialConflictError || isFinancialConflictHttpError(err);
+    const clientErr = !isConflict && isClientError(err);
+    const newAttempts =
+      isConflict || clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
     const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+
+    // Financial conflicts flag the local payment for manual review.
+    if (isConflict) {
+      await localDb.payments.update(entry.localId, { syncStatus: "conflict" });
+    }
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
       attempts: newAttempts,
       lastError: error,
+      lastAttemptAt: new Date().toISOString(),
     });
+
+    // Log conflicts with a structured "CONFLICT:<code>:" prefix so the UI
+    // and any future audit tooling can filter them precisely.
+    const conflictCode =
+      err instanceof FinancialConflictError ? err.code : "PAYMENT_CONFLICT";
+    const logError = isConflict ? `CONFLICT:${conflictCode}: ${error}` : error;
 
     await localDb.syncLog.add({
       operation: "record_payment",
       localId: entry.localId,
       serverId: null,
       success: false,
-      error,
+      error: logError,
       syncedAt: new Date().toISOString(),
     });
 
-    if (permanentlyFailed) {
+    if (isConflict) {
+      console.error(
+        `[CleanTrack Sync] Payment ${entry.id} financial conflict (${conflictCode}) — ` +
+          `flagged for manual review: ${error}`
+      );
+    } else if (clientErr) {
+      console.error(
+        `[CleanTrack Sync] Payment ${entry.id} permanently failed (4xx — not retryable): ${error}`
+      );
+    } else if (permanentlyFailed) {
       console.error(
         `[CleanTrack Sync] Payment ${entry.id} permanently failed after ${newAttempts} attempts: ${error}`
       );
     } else {
+      const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Payment ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+        `[CleanTrack Sync] Payment ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+          `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
 
