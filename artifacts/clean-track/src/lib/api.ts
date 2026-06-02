@@ -1,6 +1,22 @@
 const BASE_URL = "/api";
 const TOKEN_KEY = "ct_token";
 
+/**
+ * Thrown by the API client for any non-2xx response.
+ * Carries the raw HTTP status code so the sync engine can distinguish
+ * 4xx validation failures (permanent, no retry) from 5xx / network
+ * errors (transient, should retry with backoff).
+ */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY);
   const headers: Record<string, string> = {};
@@ -17,17 +33,17 @@ async function request<T>(method: string, path: string, body?: unknown, idempote
   if (res.status === 401) {
     const err = await res.json().catch(() => ({ error: "Unauthorized" }));
     if (path.startsWith("/auth/")) {
-      throw new Error(err.error || "Invalid credentials");
+      throw new HttpError(401, err.error || "Invalid credentials");
     }
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem("ct_user");
     window.location.href = "/login";
-    throw new Error("Session expired. Please log in again.");
+    throw new HttpError(401, "Session expired. Please log in again.");
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw new HttpError(res.status, err.error || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();

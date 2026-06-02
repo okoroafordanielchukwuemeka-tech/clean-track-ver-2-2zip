@@ -32,7 +32,50 @@ import {
 } from "./local-db";
 import { syncEngine } from "./sync-engine";
 import { getIsOnline } from "./network-state";
-import { api, type CustomerInput, type OrderInput, type PickupInput } from "./api";
+import { api, HttpError, type CustomerInput, type OrderInput, type PickupInput } from "./api";
+
+// ── Retry helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Exponential back-off delay for a queue entry.
+ *
+ * Delay schedule (capped at 60 s):
+ *   attempts=1 →  2 s
+ *   attempts=2 →  4 s
+ *   attempts=3 →  8 s
+ *   attempts=4 → 16 s  …
+ *
+ * Returns 0 when attempts=0 (first try — no delay needed).
+ */
+function computeBackoffMs(attempts: number): number {
+  if (attempts === 0) return 0;
+  return Math.min(Math.pow(2, attempts) * 1_000, 60_000);
+}
+
+/**
+ * Returns true when an entry is ready to be retried.
+ * A fresh entry (attempts=0) is always ready.
+ * A previously-failed entry must have waited at least computeBackoffMs(attempts) ms.
+ */
+function isBackoffExpired(entry: SyncQueueEntry): boolean {
+  if (entry.attempts === 0 || !entry.lastAttemptAt) return true;
+  const elapsed = Date.now() - new Date(entry.lastAttemptAt).getTime();
+  return elapsed >= computeBackoffMs(entry.attempts);
+}
+
+/**
+ * Returns true when the error represents a client-side validation failure
+ * (HTTP 4xx, excluding 408 Request Timeout and 429 Too Many Requests which
+ * are both transient and should be retried normally).
+ *
+ * 4xx errors indicate bad data that will never succeed — retrying wastes
+ * network requests and fills up the log. Mark them permanently failed immediately.
+ */
+function isClientError(err: unknown): boolean {
+  if (!(err instanceof HttpError)) return false;
+  const { status } = err;
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
 
 export interface OfflineStatusPayload {
   localId: string;
@@ -414,6 +457,14 @@ export async function processQueue(): Promise<void> {
   );
 
   for (const entry of customerEntries) {
+    // Skip entries still within their exponential back-off window.
+    if (!isBackoffExpired(entry)) {
+      console.debug(
+        `[CleanTrack Sync] Customer ${entry.localId} in back-off (attempt ${entry.attempts}), skipping this cycle`
+      );
+      continue;
+    }
+
     try {
       await syncCustomer(entry.localId);
       doneLocalIds.add(entry.localId);
@@ -436,6 +487,14 @@ export async function processQueue(): Promise<void> {
       console.warn(
         `[CleanTrack Sync] Skipping order ${entry.localId} — unresolved dependencies: ` +
           entry.dependsOn.filter((d) => !doneLocalIds.has(d)).join(", ")
+      );
+      continue;
+    }
+
+    // Skip entries still within their exponential back-off window.
+    if (!isBackoffExpired(entry)) {
+      console.debug(
+        `[CleanTrack Sync] Order ${entry.localId} in back-off (attempt ${entry.attempts}), skipping this cycle`
       );
       continue;
     }
@@ -610,13 +669,18 @@ export async function syncCustomer(localId: string): Promise<void> {
     );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    const newAttempts = entry.attempts + 1;
+
+    // 4xx validation errors will never succeed — permanently fail immediately
+    // without consuming retry slots so the log is not polluted with retries.
+    const clientErr = isClientError(err);
+    const newAttempts = clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
     const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
       attempts: newAttempts,
       lastError: error,
+      lastAttemptAt: new Date().toISOString(),
     });
 
     await localDb.syncLog.add({
@@ -628,13 +692,19 @@ export async function syncCustomer(localId: string): Promise<void> {
       syncedAt: new Date().toISOString(),
     });
 
-    if (permanentlyFailed) {
+    if (clientErr) {
+      console.error(
+        `[CleanTrack Sync] Customer ${localId} permanently failed (4xx — not retryable): ${error}`
+      );
+    } else if (permanentlyFailed) {
       console.error(
         `[CleanTrack Sync] Customer ${localId} permanently failed after ${newAttempts} attempts: ${error}`
       );
     } else {
+      const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Customer ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+        `[CleanTrack Sync] Customer ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+          `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
 
@@ -719,9 +789,11 @@ export async function syncOrder(localId: string): Promise<void> {
     const response = await api.orders.create(serverPayload, entry.clientId);
     const serverId = response.id;
 
-    // Patch the local order record with server ID and resolved customer ID.
+    // Patch the local order record with server ID, server-issued orderId string,
+    // and resolved customer ID so the UI shows the canonical reference number.
     await localDb.orders.update(localId, {
       serverId,
+      orderId: response.orderId ?? null,
       syncStatus: "synced",
       ...(resolvedCustomerId != null && { customerId: resolvedCustomerId }),
     });
@@ -760,13 +832,17 @@ export async function syncOrder(localId: string): Promise<void> {
     );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    const newAttempts = entry.attempts + 1;
+
+    // 4xx validation errors will never succeed — permanently fail immediately.
+    const clientErr = isClientError(err);
+    const newAttempts = clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
     const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
       attempts: newAttempts,
       lastError: error,
+      lastAttemptAt: new Date().toISOString(),
     });
 
     await localDb.syncLog.add({
@@ -778,13 +854,19 @@ export async function syncOrder(localId: string): Promise<void> {
       syncedAt: new Date().toISOString(),
     });
 
-    if (permanentlyFailed) {
+    if (clientErr) {
+      console.error(
+        `[CleanTrack Sync] Order ${localId} permanently failed (4xx — not retryable): ${error}`
+      );
+    } else if (permanentlyFailed) {
       console.error(
         `[CleanTrack Sync] Order ${localId} permanently failed after ${newAttempts} attempts: ${error}`
       );
     } else {
+      const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Order ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+        `[CleanTrack Sync] Order ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+          `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
 
