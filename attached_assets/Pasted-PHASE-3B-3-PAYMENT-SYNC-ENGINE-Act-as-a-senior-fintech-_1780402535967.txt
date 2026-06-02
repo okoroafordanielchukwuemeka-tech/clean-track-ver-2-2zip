@@ -1,0 +1,112 @@
+PHASE 3B.3 — PAYMENT SYNC ENGINE
+
+Act as a senior fintech SaaS architect and distributed systems engineer.
+
+Implement payment synchronization ONLY.
+
+Do NOT implement:
+
+* pickups
+* customer sync
+* order sync
+* status sync
+
+The existing sync engine must remain unchanged.
+
+Requirements:
+
+1. Add support for queued operation:
+
+* record_payment
+
+2. Offline payments must:
+
+* be stored locally
+* be queued for synchronization
+* remain visible with Pending Sync status
+
+3. Payments may only sync when:
+
+* the related order already has a valid serverId
+
+4. On reconnect:
+
+* process record_payment queue entries
+* send payment using the existing payment API endpoint
+
+5. Successful sync:
+
+* patch local payment record
+* store server payment ID
+* store receipt number returned by server
+* set syncStatus = "synced"
+* remove pending badge
+* write success entry to sync_log
+
+6. Financial Safety Rules
+
+If the server reports:
+
+* order already fully paid
+* payment conflict
+* duplicate payment
+
+Then:
+
+* DO NOT retry
+* mark queue entry failed
+* write conflict to sync_log
+* flag record for manual review
+
+7. Prevent overpayment
+
+Never allow synced payment totals to exceed order total.
+
+8. Idempotency
+
+Repeated processing of the same queue item must never create duplicate payments.
+
+9. Retry policy
+
+Network failures:
+
+* exponential backoff
+
+4xx failures:
+
+* permanent failure
+
+10. Preserve all existing functionality:
+
+* customer sync
+* order sync
+* status sync
+* queue recovery
+* dependency ordering
+
+Validation Suite Required
+
+Run PASS / FAIL tests covering:
+
+* offline payment creation
+* reconnect sync
+* receipt number patching
+* duplicate payment protection
+* already-paid order conflict
+* overpayment protection
+* network retry
+* 4xx permanent failure
+* sync_log creation
+* pending badge removal
+* idempotency
+
+Output:
+
+1. Files modified
+2. Architecture explanation
+3. Financial conflict handling explanation
+4. Validation report
+5. PASS / FAIL summary
+
+Scope is strictly payment synchronization.
+Do not begin pickup synchronization.
