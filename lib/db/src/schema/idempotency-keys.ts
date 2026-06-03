@@ -2,8 +2,9 @@ import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const idempotencyKeys = pgTable("idempotency_keys", {
   key: text("key").primaryKey(),
-  statusCode: integer("status_code").notNull(),
-  responseBody: text("response_body").notNull(),
+  status: text("status", { enum: ["pending", "completed"] }).notNull().default("completed"),
+  statusCode: integer("status_code").notNull().default(0),
+  responseBody: text("response_body"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

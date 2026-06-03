@@ -1,0 +1,201 @@
+Perform a Production Financial Integrity Audit.
+
+Background:
+
+The Identifier Safety Audit found two remaining production risks:
+
+1. receiptNumber generation currently uses MAX()+1 with retry logic.
+2. idempotency middleware can allow duplicate processing when two requests with the same Idempotency-Key arrive simultaneously.
+
+These risks directly affect payments and financial records.
+
+The goal is to eliminate all realistic scenarios where duplicate payments, duplicate pickups, or duplicate financial records can be created.
+
+==================================================
+PHASE A — AUDIT ONLY
+====================
+
+Do NOT modify code initially.
+
+Audit:
+
+* receiptNumber generation
+* payment creation flow
+* pickup creation flow
+* idempotency middleware
+* idempotency_keys table
+* payment sync flow
+* pickup sync flow
+* retry behavior
+* concurrent request handling
+
+For each component provide:
+
+Current Design
+Failure Modes
+Concurrency Risks
+Production Severity
+Recommended Fix
+
+==================================================
+PHASE B — CONCURRENCY ANALYSIS
+==============================
+
+Analyze:
+
+Scenario 1:
+Two workers submit payment simultaneously.
+
+Scenario 2:
+Offline payment sync retries while original request is still processing.
+
+Scenario 3:
+Browser retries same request.
+
+Scenario 4:
+Network timeout causes duplicate replay.
+
+Scenario 5:
+Two identical requests with same Idempotency-Key arrive at the same millisecond.
+
+Scenario 6:
+Multiple Node processes.
+
+Scenario 7:
+Future horizontal scaling.
+
+For each scenario determine:
+
+* duplicate payment possible?
+* duplicate pickup possible?
+* duplicate receipt possible?
+* current protection?
+* residual risk?
+
+==================================================
+PHASE C — DESIGN PRODUCTION-GRADE FIX
+=====================================
+
+Requirements:
+
+1. Financial records must never duplicate.
+2. Receipt numbers must never collide.
+3. Must work across multiple Node processes.
+4. Must work across multiple app instances.
+5. Must work with offline sync.
+6. Must remain idempotent.
+7. Existing records remain valid.
+8. No data loss.
+
+Design:
+
+A. Receipt Number System
+
+Evaluate:
+
+* PostgreSQL sequence
+* identity column
+* dedicated receipt sequence table
+* transaction-safe counter
+
+Recommend the safest solution.
+
+B. Idempotency System
+
+Evaluate:
+
+Current:
+check → process → insert cache
+
+Design:
+atomic reservation pattern
+
+Examples:
+
+INSERT ... ON CONFLICT DO NOTHING
+
+or
+
+pending → completed idempotency state machine
+
+Choose the safest architecture.
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement only after audit.
+
+Priority:
+
+1. Receipt number safety
+2. Idempotency race protection
+3. Payment route hardening
+4. Pickup route hardening
+5. Any required migrations
+
+Requirements:
+
+* backward compatible
+* no destructive migration
+* no data loss
+* no business logic changes
+* preserve existing sync engine
+
+==================================================
+PHASE E — VALIDATION SUITE
+==========================
+
+Create a comprehensive validation suite.
+
+Minimum tests:
+
+1. Sequential payment creation
+2. Concurrent payment creation
+3. 100 simultaneous payments
+4. 1000 payment stress test
+5. Receipt uniqueness
+6. Duplicate request replay
+7. Offline sync replay
+8. Browser retry simulation
+9. Network timeout simulation
+10. Same Idempotency-Key race
+11. Concurrent pickups
+12. Mixed payment + pickup load
+13. Multi-worker scenario
+14. Multi-branch scenario
+15. Multi-laundry scenario
+16. Existing records remain valid
+17. Migration safety
+18. Queue compatibility
+19. Horizontal scaling simulation
+20. Financial integrity verification
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Audit Report
+2. Concurrency Analysis
+3. Architecture Design
+4. Implementation Report
+5. Validation Results
+6. Remaining Risks
+
+Focus only on:
+
+* receipt numbers
+* idempotency
+* payment integrity
+* pickup integrity
+* concurrency safety
+
+Do not implement analytics.
+Do not implement reporting.
+Do not implement UI features.
+Do not implement refunds.
+Do not implement new business workflows.
+
+The objective is to make financial transactions production-safe under concurrency and scale.

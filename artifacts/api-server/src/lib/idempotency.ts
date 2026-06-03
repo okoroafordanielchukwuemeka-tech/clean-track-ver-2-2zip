@@ -8,21 +8,28 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 /**
  * Express middleware that provides idempotency protection for mutating routes.
  *
- * Usage: add as a middleware on any POST/PATCH route that should be protected.
- *   router.post("/", idempotencyMiddleware, handler)
+ * Protocol (atomic reservation pattern — eliminates the check→process→insert
+ * race window that allowed duplicate handler execution under concurrent retries):
  *
- * Protocol:
- *   - Client sends `Idempotency-Key: <uuid>` header with every sync request.
- *   - On first receipt of a key, the middleware proceeds and caches the
- *     successful (2xx) response body + status code in the DB.
- *   - On subsequent receipts of the same key (within 24 h), the middleware
- *     returns the cached response immediately — the handler is never called.
- *   - Failed responses (4xx, 5xx) are never cached; retries are allowed.
- *   - If the DB lookup itself fails, the middleware falls through to the handler
- *     (fail-open) so legitimate traffic is never blocked by a DB error.
+ *  1. Attempt to INSERT a 'pending' row for the key (ON CONFLICT DO NOTHING).
+ *     - If the INSERT returns the row  → this request is the first; proceed.
+ *     - If the INSERT returns nothing  → key already exists; inspect its state.
+ *       • status='completed'          → return the cached response immediately.
+ *       • status='pending'            → a concurrent request is mid-flight;
+ *                                       return 409 so the client retries shortly.
  *
- * Key source: the SyncQueueEntry.clientId (a UUID generated once at enqueue
- * time and persisted in IndexedDB). It survives refresh, restart, and recovery.
+ *  2. Override res.json so that on a successful (2xx) response the pending row
+ *     is promoted to 'completed' (status + body + status_code) BEFORE the
+ *     response is flushed to the client.
+ *
+ *  3. On any non-2xx response (handler error) the pending row is deleted so
+ *     that the client can safely retry without getting a permanent 409.
+ *
+ *  4. DB errors fall open — if we cannot talk to the DB we let the request
+ *     through rather than blocking legitimate traffic.
+ *
+ * Key source: SyncQueueEntry.clientId (UUID, generated once at enqueue time,
+ * persisted in IndexedDB). It survives refresh, restart, and recovery.
  */
 export function idempotencyMiddleware(
   req: Request,
@@ -38,43 +45,81 @@ export function idempotencyMiddleware(
 
   const cutoff = new Date(Date.now() - TTL_MS);
 
-  db.select()
-    .from(idempotencyKeys)
-    .where(and(eq(idempotencyKeys.key, key), gt(idempotencyKeys.createdAt, cutoff)))
-    .then(([existing]: [IdempotencyKey | undefined]) => {
-      if (existing) {
+  // ── Step 1: atomic reservation ───────────────────────────────────────────
+  db.insert(idempotencyKeys)
+    .values({ key, status: "pending", statusCode: 0, responseBody: null })
+    .onConflictDoNothing()
+    .returning()
+    .then(async (inserted: IdempotencyKey[]) => {
+      if (inserted.length > 0) {
+        // We claimed the key — this is the first request. Attach the
+        // response interceptor and hand off to the handler.
+        attachResponseInterceptor(res, key);
+        next();
+        return;
+      }
+
+      // Key already exists — inspect its current state.
+      const [existing] = await db
+        .select()
+        .from(idempotencyKeys)
+        .where(and(eq(idempotencyKeys.key, key), gt(idempotencyKeys.createdAt, cutoff)));
+
+      if (!existing) {
+        // Row expired or was deleted between our INSERT and SELECT — treat as
+        // a new request (extremely rare edge case; safe to proceed).
+        attachResponseInterceptor(res, key);
+        next();
+        return;
+      }
+
+      if (existing.status === "completed" && existing.responseBody) {
+        // Cached success — replay it without touching the handler.
         res.status(existing.statusCode).json(JSON.parse(existing.responseBody));
         return;
       }
 
-      // Override res.json to persist a successful response to the DB BEFORE
-      // flushing it to the client.  Without awaiting, a second request can
-      // arrive before the cache row is committed — causing the idempotency
-      // key lookup to miss and the handler to run twice.
-      const originalJson = res.json.bind(res);
-      res.json = function (body: unknown) {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          return db
-            .insert(idempotencyKeys)
-            .values({
-              key,
-              statusCode: res.statusCode,
-              responseBody: JSON.stringify(body),
-            })
-            .onConflictDoNothing()
-            .then(() => originalJson(body))
-            .catch((err: unknown) => {
-              console.error("[Idempotency] Failed to cache response:", err);
-              return originalJson(body);
-            }) as unknown as Response;
-        }
-        return originalJson(body);
-      };
-
-      next();
+      // status='pending': a concurrent request is still processing this key.
+      // Return 409 so the client knows to retry in a moment.
+      res.status(409).json({
+        error: "Request already in progress. Retry after a moment.",
+        code: "IDEMPOTENCY_IN_FLIGHT",
+      });
     })
     .catch((err: unknown) => {
-      console.error("[Idempotency] DB lookup failed — proceeding without protection:", err);
+      console.error("[Idempotency] DB error — proceeding without protection:", err);
       next();
     });
+}
+
+function attachResponseInterceptor(res: Response, key: string): void {
+  const originalJson = res.json.bind(res);
+
+  res.json = function (body: unknown) {
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      // Promote to 'completed' BEFORE flushing the response.
+      return db
+        .update(idempotencyKeys)
+        .set({
+          status: "completed",
+          statusCode: res.statusCode,
+          responseBody: JSON.stringify(body),
+        })
+        .where(eq(idempotencyKeys.key, key))
+        .then(() => originalJson(body))
+        .catch((err: unknown) => {
+          console.error("[Idempotency] Failed to cache response:", err);
+          return originalJson(body);
+        }) as unknown as Response;
+    }
+
+    // Non-2xx: delete the pending row so the client can retry cleanly.
+    db.delete(idempotencyKeys)
+      .where(eq(idempotencyKeys.key, key))
+      .catch((err: unknown) => {
+        console.error("[Idempotency] Failed to delete pending key:", err);
+      });
+
+    return originalJson(body);
+  };
 }

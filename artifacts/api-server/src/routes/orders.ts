@@ -13,20 +13,51 @@ export const ordersRouter = Router();
 
 const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
 
-async function generateReceiptNumber(offset = 0): Promise<string> {
+/**
+ * Generates a unique, collision-free receipt number using an atomic
+ * INSERT … ON CONFLICT DO UPDATE counter row per calendar date.
+ *
+ * Why not MAX()+1?  MAX()+1 has a race window: two concurrent transactions
+ * both read the same MAX, both compute the same next value, and one of them
+ * hits a unique-constraint violation.  The old retry-loop mitigation fails
+ * under high concurrency and across multiple Node processes.
+ *
+ * The counter table approach is atomic at the database level — PostgreSQL
+ * serialises all writers on the single counter row for a given date, so
+ * every call gets a strictly unique, monotonically increasing suffix with
+ * no retry needed, even across multiple processes or servers.
+ *
+ * Format: RCT-YYYYMMDD-NNNN  (NNNN resets to 0001 each calendar day)
+ *
+ * @param tx  The active Drizzle transaction.  Receipt number generation MUST
+ *            happen inside the same transaction that inserts the payment record
+ *            so that a rolled-back payment also rolls back its counter increment.
+ */
+async function generateReceiptNumber(tx: typeof db): Promise<string> {
   const today = new Date();
   const datePart = today.toISOString().slice(0, 10).replace(/-/g, "");
   const prefix = `RCT-${datePart}-`;
-  const fromPos = prefix.length + 1; // 1-indexed SQL position of the numeric suffix
-  // Query globally across all laundries/branches so receipt numbers are unique system-wide
-  const [row] = await db
-    .select({
-      maxSuffix: sql<number>`COALESCE(MAX(CAST(SUBSTRING(${paymentRecords.receiptNumber} FROM ${sql.raw(String(fromPos))}) AS INTEGER)), 0)`,
-    })
-    .from(paymentRecords)
-    .where(sql`${paymentRecords.receiptNumber} LIKE ${prefix + "%"}`);
-  const next = (Number(row?.maxSuffix ?? 0) + 1 + offset).toString().padStart(4, "0");
-  return `${prefix}${next}`;
+  // Self-initialising: on the very first call for a given date the INSERT
+  // reads MAX(existing suffix) from payment_records (handles pre-seeded data
+  // and legacy rows) so the counter never collides with already-stored receipts.
+  // Concurrent first-time callers: one wins the INSERT; the other hits
+  // ON CONFLICT DO UPDATE and increments atomically — both get unique values.
+  const result = await tx.execute(
+    sql`INSERT INTO receipt_number_counters (date_part, counter)
+        SELECT
+          ${datePart},
+          COALESCE(
+            MAX(CAST(SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) AS INTEGER)),
+            0
+          ) + 1
+        FROM payment_records
+        WHERE receipt_number LIKE ${prefix + "%"}
+        ON CONFLICT (date_part) DO UPDATE
+        SET counter = receipt_number_counters.counter + 1
+        RETURNING counter`
+  );
+  const counter = (result as any).rows?.[0]?.counter ?? 1;
+  return `${prefix}${String(counter).padStart(4, "0")}`;
 }
 
 /**
@@ -572,80 +603,109 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
       notes: z.string().optional(),
     });
     const data = paymentSchema.parse(req.body);
-    const postPmtConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) postPmtConditions.push(eq(orders.branchId, workerBranchId));
-    const [order] = await db.select().from(orders).where(and(...postPmtConditions));
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    const orderId = parseInt(req.params.id);
 
-    const price = parseFloat(order.price || "0");
-    const extraCharge = parseFloat(order.extraCharge || "0");
-    const discount = parseFloat(order.discount || "0");
-    const totalDue = price + extraCharge - discount;
-    const amountPaid = parseFloat(order.amountPaid || "0") + data.amount;
-    const remainingBalance = Math.max(0, totalDue - amountPaid);
-    const paymentStatus = remainingBalance <= 0 ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
+    /**
+     * All financial mutations run inside a single serialisable transaction with
+     * a row-level lock (SELECT … FOR UPDATE) on the target order row.
+     *
+     * Without this lock two concurrent payment requests can both read the same
+     * stale `amount_paid`, both compute their own `newAmountPaid`, and both
+     * UPDATE the order — the second write silently overwrites the first,
+     * effectively losing one payment from the running balance.
+     *
+     * The FOR UPDATE lock ensures only one writer at a time advances the
+     * balance for a given order, regardless of how many Node processes or
+     * concurrent workers are involved.
+     *
+     * Receipt number generation also happens inside the same transaction so
+     * that a rolled-back payment does not consume a counter slot.
+     */
+    const txResult = await db.transaction(async (tx) => {
+      const branchClause = workerBranchId
+        ? sql` AND branch_id = ${workerBranchId}`
+        : sql``;
+      const lockResult = await tx.execute(
+        sql`SELECT id, order_id, customer_name, branch_id, price, extra_charge,
+                   discount, amount_paid, payment_status
+            FROM orders
+            WHERE id = ${orderId} AND laundry_id = ${laundryId}${branchClause}
+            FOR UPDATE`
+      );
+      const row = (lockResult as any).rows?.[0];
+      if (!row) return null;
 
-    // Retry on unique-constraint collision (concurrent inserts same day)
-    let payment: any;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const receiptNumber = await generateReceiptNumber(attempt);
-      try {
-        const [inserted] = await db.insert(paymentRecords).values({
-          orderId: order.id,
-          laundryId,
-          branchId: order.branchId ?? undefined,
-          receiptNumber,
-          amount: data.amount.toString(),
-          method: data.method,
-          notes: data.notes,
-          remainingBalance: remainingBalance.toString(),
-          recordedBy: actorName(req.auth!),
-          workerId: req.auth!.type === "worker" ? (req.auth!.workerId ?? null) : null,
-        }).returning();
-        payment = inserted;
-        break;
-      } catch (insertErr: any) {
-        if (attempt < 4 && insertErr?.code === "23505" && insertErr?.constraint?.includes("receipt_number")) {
-          continue; // unique violation on receipt number — retry
-        }
-        throw insertErr;
-      }
-    }
-    if (!payment) throw new Error("Failed to generate unique receipt number after retries");
+      const price = parseFloat(row.price || "0");
+      const extraCharge = parseFloat(row.extra_charge || "0");
+      const discount = parseFloat(row.discount || "0");
+      const totalDue = price + extraCharge - discount;
+      const newAmountPaid = parseFloat(row.amount_paid || "0") + data.amount;
+      const remainingBalance = Math.max(0, totalDue - newAmountPaid);
+      const paymentStatus: string =
+        remainingBalance <= 0 ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
 
-    await db.update(orders).set({
-      amountPaid: amountPaid.toString(),
-      paymentStatus,
-      updatedAt: new Date(),
-    }).where(eq(orders.id, order.id));
+      const receiptNumber = await generateReceiptNumber(tx as unknown as typeof db);
+
+      const [payment] = await tx.insert(paymentRecords).values({
+        orderId: row.id,
+        laundryId,
+        branchId: row.branch_id ?? undefined,
+        receiptNumber,
+        amount: data.amount.toString(),
+        method: data.method,
+        notes: data.notes,
+        remainingBalance: remainingBalance.toString(),
+        recordedBy: actorName(req.auth!),
+        workerId: req.auth!.type === "worker" ? (req.auth!.workerId ?? null) : null,
+      }).returning();
+
+      await tx.update(orders).set({
+        amountPaid: newAmountPaid.toString(),
+        paymentStatus,
+        updatedAt: new Date(),
+      }).where(eq(orders.id, row.id));
+
+      return {
+        payment,
+        orderId: row.id,
+        orderRef: row.order_id as string,
+        customerName: row.customer_name as string,
+        remainingBalance,
+        paymentStatus,
+      };
+    });
+
+    if (!txResult) return res.status(404).json({ error: "Order not found" });
+
+    const { payment, orderId: oId, orderRef, customerName, remainingBalance, paymentStatus } = txResult;
 
     emitEvent({
       laundryId,
       eventType: "payment_received",
       title: "Payment Received",
-      message: `₦${data.amount.toLocaleString()} received for Order #${order.orderId} (${order.customerName}) via ${data.method}. Balance: ₦${remainingBalance.toLocaleString()}.`,
+      message: `₦${data.amount.toLocaleString()} received for Order #${orderRef} (${customerName}) via ${data.method}. Balance: ₦${remainingBalance.toLocaleString()}.`,
       severity: remainingBalance <= 0 ? "success" : "info",
-      relatedOrderId: order.id,
+      relatedOrderId: oId,
     }).catch(() => {});
 
     logAction({
       auth: req.auth!,
       laundryId,
       action: "payment_recorded",
-      orderId: order.id,
+      orderId: oId,
       metadata: {
         amount: data.amount,
         method: data.method,
         remainingBalance,
         paymentStatus,
-        orderId: order.orderId,
+        orderId: orderRef,
       },
     }).catch(() => {});
 
     res.status(201).json(payment);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
-    console.error("[payment record] err:", err?.message, err?.code, err?.constraint);
+    console.error("[payment record] err:", err?.message, err?.code);
     res.status(500).json({ error: "Failed to record payment" });
   }
 });
