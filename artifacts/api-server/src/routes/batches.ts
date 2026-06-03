@@ -7,9 +7,18 @@ import { AuthRequest } from "../middleware/auth.js";
 
 export const batchesRouter = Router();
 
-function generateBatchCode() {
-  const rand = Math.floor(Math.random() * 9000) + 1000;
-  return `BATCH-${rand}`;
+/**
+ * Formats a production-safe batchCode from the database serial `id`.
+ *
+ * Format: BATCH-YYYYMMDD-NNNN  →  e.g. "BATCH-20260603-0007"
+ *
+ * Using the serial id eliminates the 9 000-value pool that the old 4-digit
+ * random suffix provided.  The PostgreSQL SERIAL is globally unique and
+ * monotonically increasing, so collisions are structurally impossible.
+ */
+function formatBatchCode(serialId: number): string {
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `BATCH-${datePart}-${String(serialId).padStart(4, "0")}`;
 }
 
 const batchInputSchema = z.object({
@@ -51,13 +60,24 @@ batchesRouter.post("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = batchInputSchema.parse(req.body);
-    const batchCode = generateBatchCode();
 
-    const [batch] = await db.insert(batches).values({
-      batchCode,
-      laundryId,
-      orderCount: data.orderIds.length,
-    }).returning();
+    // Two-step insert+update: placeholder satisfies NOT NULL + UNIQUE on insert,
+    // then is immediately replaced with the serial-based collision-free code.
+    const batch = await db.transaction(async (tx) => {
+      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const [inserted] = await tx.insert(batches).values({
+        batchCode: placeholder,
+        laundryId,
+        orderCount: data.orderIds.length,
+      }).returning();
+
+      const finalCode = formatBatchCode(inserted.id);
+      await tx.update(batches)
+        .set({ batchCode: finalCode })
+        .where(eq(batches.id, inserted.id));
+
+      return { ...inserted, batchCode: finalCode };
+    });
 
     for (const orderId of data.orderIds) {
       await db.update(orders).set({

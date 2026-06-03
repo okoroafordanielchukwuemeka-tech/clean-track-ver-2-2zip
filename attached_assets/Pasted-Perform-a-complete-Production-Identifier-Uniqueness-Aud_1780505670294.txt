@@ -1,0 +1,187 @@
+Perform a complete Production Identifier & Uniqueness Audit.
+
+Background:
+
+During the status-state-machine validation suite, order creation occasionally failed because generateOrderId() produced collisions under rapid creation.
+
+The current system is moving toward production deployment and must support:
+
+* multiple laundries
+* multiple branches
+* concurrent workers
+* offline sync
+* payment synchronization
+* pickup synchronization
+* future scaling beyond a single Node process
+
+The goal of this audit is to verify that all identifiers are production-safe.
+
+==================================================
+PHASE A — AUDIT ONLY
+====================
+
+Do NOT modify code initially.
+
+Audit every identifier system in the application.
+
+Include:
+
+* orderId
+* receiptNumber
+* payment identifiers
+* pickup identifiers
+* localId UUIDs
+* sync queue IDs
+* idempotency keys
+* customer IDs
+* worker IDs
+* branch IDs
+* laundry IDs
+* any generated reference numbers
+
+For each identifier:
+
+Show:
+
+Identifier Name
+Generation Method
+Uniqueness Scope
+Collision Risk
+Multi-Tenant Safety
+Offline Safety
+Production Risk Level
+
+Example:
+
+Identifier: orderId
+
+Current Generation:
+YYYYMMDD + 3 random digits
+
+Collision Risk:
+High
+
+Production Risk:
+Critical
+
+==================================================
+PHASE B — COLLISION ANALYSIS
+============================
+
+Perform a mathematical collision analysis.
+
+Estimate:
+
+* 10 orders/day
+* 100 orders/day
+* 1000 orders/day
+* 10000 orders/day
+
+Consider:
+
+* same laundry
+* multiple laundries
+* multiple branches
+* concurrent workers
+* offline sync bursts
+
+Identify:
+
+1. systems that can collide
+2. systems that are already safe
+3. systems that become unsafe at scale
+
+==================================================
+PHASE C — DESIGN PRODUCTION-GRADE REPLACEMENTS
+==============================================
+
+Design the safest architecture.
+
+Requirements:
+
+1. No collisions at production scale.
+2. Multi-tenant safe.
+3. Offline-safe.
+4. Human-readable where required.
+5. Works across multiple Node instances.
+6. Works with future horizontal scaling.
+7. Backward-compatible migration path.
+8. Existing records remain valid.
+
+For each identifier:
+
+Provide:
+
+Current System
+Proposed System
+Migration Impact
+Risk Level After Migration
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement only after audit.
+
+Priority order:
+
+1. orderId
+2. receiptNumber
+3. payment references
+4. pickup references
+5. any remaining risky generators
+
+Requirements:
+
+* Preserve existing records.
+* No destructive migrations.
+* No data loss.
+* No business logic changes.
+* No sync engine changes unless required for uniqueness.
+
+==================================================
+PHASE E — VALIDATION SUITE
+==========================
+
+Create a comprehensive validation suite.
+
+Minimum tests:
+
+1. Rapid order creation
+2. Concurrent order creation
+3. 100 order burst
+4. 1000 order burst
+5. Multi-branch creation
+6. Multi-laundry creation
+7. Receipt uniqueness
+8. Payment reference uniqueness
+9. Pickup reference uniqueness
+10. Offline order generation
+11. Offline sync replay
+12. Idempotency compatibility
+13. Existing records remain valid
+14. Migration safety
+15. No duplicate DB inserts
+16. Retry behavior
+17. Queue integrity
+18. Horizontal scaling simulation
+19. Human-readable formatting
+20. Collision probability verification
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Audit report
+2. Collision analysis
+3. Replacement design
+4. Implementation report
+5. Validation results
+6. Remaining risks
+
+Do not implement analytics.
+Do not implement reporting.
+Do not implement refunds.
+Focus exclusively on identifier safety, uniqueness guarantees, and production scalability.

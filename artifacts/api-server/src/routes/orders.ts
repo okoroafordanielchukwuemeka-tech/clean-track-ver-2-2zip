@@ -29,11 +29,28 @@ async function generateReceiptNumber(offset = 0): Promise<string> {
   return `${prefix}${next}`;
 }
 
-function generateOrderId() {
-  const now = new Date();
-  const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-  return `${datePart}${rand}`;
+/**
+ * Formats a production-safe orderId from a database serial `id`.
+ *
+ * Format: YYYYMMDD + id padded to 6 digits  →  e.g. "20260603000042"
+ *
+ * Why the serial id?  The orders.id column is a PostgreSQL SERIAL (sequence),
+ * globally unique and monotonically increasing.  Using it as the suffix makes
+ * orderId collision-free under any load, across any number of laundries,
+ * branches, Node processes, or concurrent workers — no coordination required.
+ *
+ * Date prefix: keeps IDs human-readable and chronologically sortable.
+ * Padding to 6 digits supports up to 999 999 total orders per calendar day
+ * across the whole system before recycling (effectively infinite at any
+ * realistic production scale).
+ *
+ * Backward compatibility: existing records generated with the old 3-digit
+ * random scheme remain valid — the uniqueness constraint is on the text value
+ * regardless of format.
+ */
+function formatOrderId(serialId: number): string {
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `${datePart}${String(serialId).padStart(6, "0")}`;
 }
 
 async function getLaundrySla(laundryId: number) {
@@ -222,8 +239,6 @@ ordersRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware,
       discountReason: undefined,
     };
 
-    const orderId = generateOrderId();
-
     let customerId: number | null = data.customerId ?? null;
     const phoneNorm = data.phone.trim();
 
@@ -283,23 +298,37 @@ ordersRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware,
 
     const orderBranchId = req.auth!.branchId ?? ((req.body as any).branchId ? parseInt((req.body as any).branchId) : undefined);
 
-    const [order] = await db.insert(orders).values({
-      laundryId,
-      branchId: orderBranchId,
-      customerId,
-      orderId,
-      customerName: data.customerName,
-      phone: phoneNorm,
-      address: data.address,
-      serviceType: data.serviceType,
-      shirts: data.shirts ?? 0,
-      trousers: data.trousers ?? 0,
-      additionalNotes: data.additionalNotes,
-      price: computedPrice?.toString(),
-      extraCharge: data.extraCharge?.toString(),
-      discount: data.discount?.toString(),
-      processingDueAt,
-    }).returning();
+    // Two-step insert+update inside a transaction guarantees orderId is
+    // collision-free: the placeholder UUID satisfies the NOT NULL / UNIQUE
+    // constraint on insert, and is immediately replaced with the formatted
+    // serial-based ID before any other code sees it.
+    const order = await db.transaction(async (tx) => {
+      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const [inserted] = await tx.insert(orders).values({
+        laundryId,
+        branchId: orderBranchId,
+        customerId,
+        orderId: placeholder,
+        customerName: data.customerName,
+        phone: phoneNorm,
+        address: data.address,
+        serviceType: data.serviceType,
+        shirts: data.shirts ?? 0,
+        trousers: data.trousers ?? 0,
+        additionalNotes: data.additionalNotes,
+        price: computedPrice?.toString(),
+        extraCharge: data.extraCharge?.toString(),
+        discount: data.discount?.toString(),
+        processingDueAt,
+      }).returning();
+
+      const finalOrderId = formatOrderId(inserted.id);
+      await tx.update(orders)
+        .set({ orderId: finalOrderId })
+        .where(eq(orders.id, inserted.id));
+
+      return { ...inserted, orderId: finalOrderId };
+    });
 
     if (resolvedItems.length > 0) {
       const itemRows = resolvedItems.map(item => ({
