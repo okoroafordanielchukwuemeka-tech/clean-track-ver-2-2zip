@@ -1,4 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback } from "react";
+
+export interface WorkerPermissions {
+  canViewOrders: boolean;
+  canProcessOrders: boolean;
+  canRecordPayments: boolean;
+  canRecordPickups: boolean;
+  canViewCustomers: boolean;
+  canCreateCustomers: boolean;
+  canViewCustomerBalances: boolean;
+  canAssignOrders: boolean;
+}
 
 export interface AuthUser {
   type: "owner" | "worker";
@@ -8,6 +19,7 @@ export interface AuthUser {
   phone?: string | null;
   role?: "admin" | "worker";
   laundryId?: number;
+  permissions?: WorkerPermissions;
 }
 
 interface AuthContextType {
@@ -18,6 +30,7 @@ interface AuthContextType {
   isOwner: boolean;
   isWorker: boolean;
   isAdmin: boolean;
+  hasPermission: (perm: keyof WorkerPermissions) => boolean;
   login: (token: string, user: AuthUser) => void;
   logout: () => void;
 }
@@ -30,6 +43,7 @@ const AuthContext = createContext<AuthContextType>({
   isOwner: false,
   isWorker: false,
   isAdmin: false,
+  hasPermission: () => false,
   login: () => {},
   logout: () => {},
 });
@@ -64,10 +78,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = isOwner || (isWorker && user?.role === "admin");
   const laundryId = user?.type === "owner" ? user.id : (user?.laundryId ?? null);
 
+  const hasPermission = useCallback((perm: keyof WorkerPermissions): boolean => {
+    if (!user) return false;
+    if (user.type === "owner") return true;
+    return user.permissions?.[perm] ?? false;
+  }, [user]);
+
   return (
     <AuthContext.Provider value={{
       user, token, laundryId,
       isAuthenticated, isOwner, isWorker, isAdmin,
+      hasPermission,
       login, logout,
     }}>
       {children}

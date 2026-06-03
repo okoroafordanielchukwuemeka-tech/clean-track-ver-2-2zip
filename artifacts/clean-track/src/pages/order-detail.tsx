@@ -113,7 +113,7 @@ export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isOwner, laundryId: authLaundryId } = useAuth();
+  const { isOwner, laundryId: authLaundryId, hasPermission } = useAuth();
   const [showPayment, setShowPayment] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showPickup, setShowPickup] = useState(false);
@@ -362,7 +362,8 @@ export default function OrderDetail() {
   const legacyHasRemaining = remainingShirts > 0 || remainingTrousers > 0;
 
   const canRecordPickup = (order.status === "ready" || order.status === "partial_pickup") &&
-    (isItemBased ? totalItemsRemaining > 0 : legacyHasRemaining);
+    (isItemBased ? totalItemsRemaining > 0 : legacyHasRemaining) &&
+    hasPermission("canRecordPickups");
 
   const totalItemPickupQty = Array.from(itemPickupQtys.values()).reduce((s, v) => s + v, 0);
 
@@ -1013,9 +1014,11 @@ export default function OrderDetail() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Payment History</CardTitle>
-          <Button size="sm" onClick={() => setShowPayment(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Record Payment
-          </Button>
+          {hasPermission("canRecordPayments") && (
+            <Button size="sm" onClick={() => setShowPayment(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Record Payment
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <Table>

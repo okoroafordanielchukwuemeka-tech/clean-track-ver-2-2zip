@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { laundries, workers, expenseCategories, messageTemplates, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_MESSAGE_TEMPLATES } from "@workspace/db/schema";
+import { laundries, workers, workerPermissions, expenseCategories, messageTemplates, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_MESSAGE_TEMPLATES, ADMIN_DEFAULT_PERMISSIONS, WORKER_DEFAULT_PERMISSIONS } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -161,6 +161,30 @@ authRouter.post("/worker-login", async (req, res) => {
       return res.status(401).json({ error: "Invalid phone number or PIN" });
     }
 
+    // Fetch or create worker permissions row
+    let [permsRow] = await db.select().from(workerPermissions)
+      .where(eq(workerPermissions.workerId, worker.id));
+
+    if (!permsRow) {
+      const defaults = worker.role === "admin" ? ADMIN_DEFAULT_PERMISSIONS : WORKER_DEFAULT_PERMISSIONS;
+      [permsRow] = await db.insert(workerPermissions).values({
+        workerId: worker.id,
+        laundryId: worker.laundryId,
+        ...defaults,
+      }).returning();
+    }
+
+    const permissions = {
+      canViewOrders: permsRow.canViewOrders,
+      canProcessOrders: permsRow.canProcessOrders,
+      canRecordPayments: permsRow.canRecordPayments,
+      canRecordPickups: permsRow.canRecordPickups,
+      canViewCustomers: permsRow.canViewCustomers,
+      canCreateCustomers: permsRow.canCreateCustomers,
+      canViewCustomerBalances: permsRow.canViewCustomerBalances,
+      canAssignOrders: permsRow.canAssignOrders,
+    };
+
     const token = signToken(
       {
         laundryId: worker.laundryId,
@@ -169,6 +193,7 @@ authRouter.post("/worker-login", async (req, res) => {
         workerRole: worker.role as "admin" | "worker",
         branchId: worker.branchId ?? undefined,
         name: worker.name,
+        permissions,
       },
       "12h"
     );
@@ -185,6 +210,7 @@ authRouter.post("/worker-login", async (req, res) => {
         phone: worker.phone,
         role: worker.role,
         laundryId: worker.laundryId,
+        permissions,
       },
     });
   } catch (err) {

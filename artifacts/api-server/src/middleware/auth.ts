@@ -1,6 +1,17 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
+export interface WorkerPermissions {
+  canViewOrders: boolean;
+  canProcessOrders: boolean;
+  canRecordPayments: boolean;
+  canRecordPickups: boolean;
+  canViewCustomers: boolean;
+  canCreateCustomers: boolean;
+  canViewCustomerBalances: boolean;
+  canAssignOrders: boolean;
+}
+
 export interface AuthPayload {
   laundryId: number;
   type: "owner" | "worker";
@@ -10,6 +21,7 @@ export interface AuthPayload {
   branchId?: number;
   email?: string;
   name?: string;
+  permissions?: WorkerPermissions;
 }
 
 export interface AuthRequest extends Request {

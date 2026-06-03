@@ -65,7 +65,7 @@ function CustomerTags({ c }: { c: CustomerWithMetrics }) {
 export default function Customers() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isOwner, laundryId } = useAuth();
+  const { isOwner, laundryId, hasPermission } = useAuth();
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -227,9 +227,11 @@ export default function Customers() {
             <RefreshCw className={`h-4 w-4 ${backfillMutation.isPending ? "animate-spin" : ""}`} />
             Sync Orders
           </Button>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4" /> New Customer
-          </Button>
+          {hasPermission("canCreateCustomers") && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" /> New Customer
+            </Button>
+          )}
         </div>
       </div>
 
@@ -502,14 +504,18 @@ export default function Customers() {
                     <ShoppingBag className="h-3.5 w-3.5" />
                     Orders ({profile.orders.length})
                   </TabsTrigger>
-                  <TabsTrigger value="receipts" className="flex-1 gap-1.5">
-                    <FileText className="h-3.5 w-3.5" />
-                    Receipts
-                  </TabsTrigger>
-                  <TabsTrigger value="statement" className="flex-1 gap-1.5">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Statement
-                  </TabsTrigger>
+                  {hasPermission("canViewCustomerBalances") && (
+                    <TabsTrigger value="receipts" className="flex-1 gap-1.5">
+                      <FileText className="h-3.5 w-3.5" />
+                      Receipts
+                    </TabsTrigger>
+                  )}
+                  {hasPermission("canViewCustomerBalances") && (
+                    <TabsTrigger value="statement" className="flex-1 gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Statement
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 {/* Orders Tab */}

@@ -4,7 +4,7 @@ import { customers, orders, paymentRecords, pickupRecords, priceAdjustments } fr
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, and, desc, ilike, or, gte, lte, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { AuthRequest } from "../middleware/auth.js";
+import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
 
 export const customersRouter = Router();
@@ -84,7 +84,7 @@ function computeMetrics(customerOrders: any[]) {
   };
 }
 
-customersRouter.post("/backfill", async (req: AuthRequest, res) => {
+customersRouter.post("/backfill", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
 
@@ -150,7 +150,7 @@ customersRouter.post("/backfill", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.get("/", async (req: AuthRequest, res) => {
+customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { search, tag, branchId: branchParam } = req.query;
@@ -207,7 +207,7 @@ customersRouter.get("/", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.get("/:id", async (req: AuthRequest, res) => {
+customersRouter.get("/:id", checkPermission("view:customers"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
@@ -234,7 +234,7 @@ customersRouter.get("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.post("/", idempotencyMiddleware, async (req: AuthRequest, res) => {
+customersRouter.post("/", checkPermission("create:customers"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = customerInputSchema.parse(req.body);
@@ -283,7 +283,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
   }
 });
 
-customersRouter.get("/:id/receipts", async (req: AuthRequest, res) => {
+customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -321,7 +321,7 @@ customersRouter.get("/:id/receipts", async (req: AuthRequest, res) => {
   }
 });
 
-customersRouter.get("/:id/statement", async (req: AuthRequest, res) => {
+customersRouter.get("/:id/statement", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;

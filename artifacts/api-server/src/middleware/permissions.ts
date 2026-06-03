@@ -1,5 +1,5 @@
 import { Response, NextFunction } from "express";
-import { AuthRequest } from "./auth.js";
+import { AuthRequest, WorkerPermissions } from "./auth.js";
 
 export type Permission =
   | "delete:customers"
@@ -9,7 +9,15 @@ export type Permission =
   | "modify:order-price"
   | "modify:order-items"
   | "apply:price-adjustment"
-  | "approve:discount";
+  | "approve:discount"
+  | "view:orders"
+  | "process:orders"
+  | "record:payments"
+  | "record:pickups"
+  | "view:customers"
+  | "create:customers"
+  | "view:customer-balances"
+  | "assign:orders";
 
 const OWNER_ONLY = new Set<Permission>([
   "delete:customers",
@@ -22,18 +30,59 @@ const OWNER_ONLY = new Set<Permission>([
   "approve:discount",
 ]);
 
+const WORKER_PERM_FIELD: Partial<Record<Permission, keyof WorkerPermissions>> = {
+  "view:orders": "canViewOrders",
+  "process:orders": "canProcessOrders",
+  "record:payments": "canRecordPayments",
+  "record:pickups": "canRecordPickups",
+  "view:customers": "canViewCustomers",
+  "create:customers": "canCreateCustomers",
+  "view:customer-balances": "canViewCustomerBalances",
+  "assign:orders": "canAssignOrders",
+};
+
+const PERM_HINT: Partial<Record<keyof WorkerPermissions, string>> = {
+  canViewOrders: "view orders",
+  canProcessOrders: "process orders",
+  canRecordPayments: "record payments",
+  canRecordPickups: "record pickups",
+  canViewCustomers: "view customers",
+  canCreateCustomers: "create customers",
+  canViewCustomerBalances: "view customer balances",
+  canAssignOrders: "assign orders",
+};
+
 export function checkPermission(permission: Permission) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.auth) {
       return res.status(401).json({ error: "Authentication required" });
     }
-    if (OWNER_ONLY.has(permission) && req.auth.type !== "owner") {
+
+    if (req.auth.type === "owner") {
+      return next();
+    }
+
+    if (OWNER_ONLY.has(permission)) {
       return res.status(403).json({
         error: "Permission denied",
         required: permission,
         hint: "This action requires owner access",
       });
     }
+
+    const field = WORKER_PERM_FIELD[permission];
+    if (field) {
+      const perms = req.auth.permissions;
+      if (!perms || !perms[field]) {
+        const action = PERM_HINT[field] ?? field;
+        return res.status(403).json({
+          error: "Permission denied",
+          required: permission,
+          hint: `You don't have permission to ${action}. Contact your manager to enable this.`,
+        });
+      }
+    }
+
     next();
   };
 }

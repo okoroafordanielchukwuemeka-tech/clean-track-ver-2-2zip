@@ -93,7 +93,7 @@ const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({
   discount: z.number().optional(),
 });
 
-ordersRouter.get("/", async (req: AuthRequest, res) => {
+ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { status, paymentStatus, limit = "500", offset = "0", branchId: branchParam } = req.query;
@@ -120,7 +120,7 @@ ordersRouter.get("/", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.get("/summary", async (req: AuthRequest, res) => {
+ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
@@ -150,7 +150,7 @@ ordersRouter.get("/summary", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.get("/recent", async (req: AuthRequest, res) => {
+ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
@@ -167,7 +167,7 @@ ordersRouter.get("/recent", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.get("/:id", async (req: AuthRequest, res) => {
+ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -189,7 +189,7 @@ ordersRouter.get("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.post("/", idempotencyMiddleware, async (req: AuthRequest, res) => {
+ordersRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -358,7 +358,7 @@ ordersRouter.post("/", idempotencyMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) => {
+ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -372,6 +372,14 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
         return res.status(403).json({
           error: "Permission denied",
           hint: `Workers cannot modify pricing fields: ${forbidden.join(", ")}. Use the discount request system instead.`,
+        });
+      }
+      // Workers need canAssignOrders to change the assigned worker
+      if ("assignedWorkerId" in req.body && !req.auth!.permissions?.canAssignOrders) {
+        return res.status(403).json({
+          error: "Permission denied",
+          required: "assign:orders",
+          hint: "You don't have permission to assign orders. Contact your manager.",
         });
       }
     }
@@ -471,7 +479,7 @@ ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRe
   }
 });
 
-ordersRouter.get("/:id/payments", async (req: AuthRequest, res) => {
+ordersRouter.get("/:id/payments", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -488,7 +496,7 @@ ordersRouter.get("/:id/payments", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.post("/:id/payments", idempotencyMiddleware, async (req: AuthRequest, res) => {
+ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -615,7 +623,7 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
   }
 });
 
-ordersRouter.get("/:id/items", async (req: AuthRequest, res) => {
+ordersRouter.get("/:id/items", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -685,7 +693,7 @@ ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (re
   }
 });
 
-ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
+ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -795,7 +803,7 @@ ordersRouter.get("/:id/receipt", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.get("/:id/audit-log", async (req: AuthRequest, res) => {
+ordersRouter.get("/:id/audit-log", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -812,7 +820,7 @@ ordersRouter.get("/:id/audit-log", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.get("/:id/price-adjustments", async (req: AuthRequest, res) => {
+ordersRouter.get("/:id/price-adjustments", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
@@ -829,7 +837,7 @@ ordersRouter.get("/:id/price-adjustments", async (req: AuthRequest, res) => {
   }
 });
 
-ordersRouter.post("/:id/price-adjustments", async (req: AuthRequest, res) => {
+ordersRouter.post("/:id/price-adjustments", checkPermission("process:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";

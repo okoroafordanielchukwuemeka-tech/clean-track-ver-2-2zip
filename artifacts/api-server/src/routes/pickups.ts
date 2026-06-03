@@ -5,6 +5,7 @@ import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { checkPermission } from "../middleware/permissions.js";
 import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 
@@ -20,7 +21,7 @@ const pickupInputSchema = z.object({
   notes: z.string().optional(),
 });
 
-pickupsRouter.get("/", async (req: AuthRequest, res) => {
+pickupsRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const orderId = parseInt(req.params.orderId);
@@ -41,7 +42,7 @@ pickupsRouter.get("/", async (req: AuthRequest, res) => {
   }
 });
 
-pickupsRouter.post("/", idempotencyMiddleware, async (req: AuthRequest, res) => {
+pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const orderId = parseInt(req.params.orderId);
