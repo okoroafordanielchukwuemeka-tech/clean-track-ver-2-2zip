@@ -311,6 +311,62 @@ export function useFailedSyncEntries() {
 }
 
 /**
+ * Returns all sync queue entries for the given order's localId that:
+ *   - operation === "update_order_status"
+ *   - status === "failed"
+ *   - lastError starts with "CONFLICT:STATUS_TRANSITION:"
+ *
+ * Used in order-detail to surface a ConflictSyncBadge when an offline
+ * status update was permanently rejected by the server's state machine
+ * (e.g. completed → pending attempted while offline).
+ *
+ * Re-reads IndexedDB every 2 s.
+ */
+export function useConflictStatusSyncEntries(
+  orderLocalId: string | null
+): import("@/lib/local-db").SyncQueueEntry[] {
+  const [conflicts, setConflicts] = useState<import("@/lib/local-db").SyncQueueEntry[]>([]);
+
+  useEffect(() => {
+    if (!orderLocalId) {
+      setConflicts([]);
+      return;
+    }
+
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const records = await localDb.syncQueue
+          .where("status")
+          .equals("failed")
+          .filter(
+            (e) =>
+              e.operation === "update_order_status" &&
+              e.localId === orderLocalId &&
+              typeof e.lastError === "string" &&
+              e.lastError.startsWith("CONFLICT:STATUS_TRANSITION:")
+          )
+          .toArray();
+        if (active) setConflicts(records);
+      } catch {
+        // ignore
+      }
+    };
+
+    refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [orderLocalId]);
+
+  return conflicts;
+}
+
+/**
  * Returns all LocalOrder records with syncStatus === "pending_status_update"
  * belonging to the given laundryId. Re-reads IndexedDB every 2 s.
  */

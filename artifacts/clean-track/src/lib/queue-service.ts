@@ -221,6 +221,38 @@ export class PickupConflictError extends Error {
   }
 }
 
+// ── Status transition conflict types ──────────────────────────────────────
+
+/**
+ * Thrown when the server rejects an offline status update with HTTP 409
+ * because the transition violates the state machine
+ * (e.g. completed → pending, pending → completed, ready → processing).
+ *
+ * Treated as a permanent failure: marks queue entry "failed" and prefixes
+ * the syncLog entry with "CONFLICT:STATUS_TRANSITION:" for diagnostics.
+ */
+export class StatusTransitionConflictError extends Error {
+  constructor(
+    public readonly from: string,
+    public readonly to: string,
+    message: string
+  ) {
+    super(message);
+    this.name = "StatusTransitionConflictError";
+  }
+}
+
+/**
+ * Returns true when an HttpError is a status-transition conflict (HTTP 409
+ * whose body carries code === "INVALID_STATUS_TRANSITION").
+ */
+function isStatusTransitionConflictHttpError(err: unknown): boolean {
+  if (!(err instanceof HttpError)) return false;
+  if (err.status !== 409) return false;
+  const msg = err.message.toLowerCase();
+  return msg.includes("invalid_status_transition") || msg.includes("cannot move order");
+}
+
 /**
  * Pre-sync pickup validation layer.
  *
@@ -1320,6 +1352,52 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
       `[CleanTrack Sync] Order status update synced: localId=${p.localId} serverId=${serverId}`
     );
   } catch (err) {
+    // ── Status transition conflict — permanent failure, no retry ──────────
+    // A 409 from the server means the transition violates the state machine.
+    // There is no point retrying: the server will always reject it.
+    if (isStatusTransitionConflictHttpError(err)) {
+      const error = err instanceof Error ? err.message : String(err);
+      const conflictError = `CONFLICT:STATUS_TRANSITION:${error}`;
+
+      await localDb.syncQueue.update(entry.id!, {
+        status: "failed",
+        attempts: MAX_TRANSIENT_ATTEMPTS,
+        lastError: conflictError,
+        lastAttemptAt: new Date().toISOString(),
+      });
+
+      // Mark the local order record as "conflict" so the UI can surface it.
+      // Only relevant for offline-created orders that exist as local records;
+      // server-synced orders ("srv-*" localIds) have no local order row.
+      const p = entry.payload as unknown as OfflineStatusPayload;
+      if (!p.localId.startsWith("srv-")) {
+        const localOrder = await localDb.orders.get(p.localId);
+        if (localOrder) {
+          await localDb.orders.update(p.localId, { syncStatus: "conflict" });
+        }
+      }
+
+      await localDb.syncLog.add({
+        operation: "update_order_status",
+        localId: entry.localId,
+        serverId: null,
+        success: false,
+        error: conflictError,
+        syncedAt: new Date().toISOString(),
+      });
+
+      console.error(
+        `[CleanTrack Sync] Status update ${entry.id} rejected by state machine — ` +
+          `permanent conflict: ${error}`
+      );
+
+      throw new StatusTransitionConflictError(
+        (entry.payload as any)?.changes?.status ?? "?",
+        (entry.payload as any)?.changes?.status ?? "?",
+        error
+      );
+    }
+
     const error = err instanceof Error ? err.message : String(err);
 
     // 4xx validation errors will never succeed — permanently fail immediately.

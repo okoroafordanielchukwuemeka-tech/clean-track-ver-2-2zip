@@ -20,7 +20,7 @@ export const orders = pgTable("orders", {
   shirtsPickedUp: integer("shirts_picked_up").notNull().default(0),
   trousersPickedUp: integer("trousers_picked_up").notNull().default(0),
   additionalNotes: text("additional_notes"),
-  status: text("status", { enum: ["pending", "processing", "ready", "partial_pickup", "completed"] }).notNull().default("pending"),
+  status: text("status", { enum: ["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"] }).notNull().default("pending"),
   paymentStatus: text("payment_status", { enum: ["unpaid", "partial", "paid"] }).notNull().default("unpaid"),
   price: numeric("price", { precision: 10, scale: 2 }),
   extraCharge: numeric("extra_charge", { precision: 10, scale: 2 }),

@@ -1,0 +1,170 @@
+Perform a complete Server-Side Order Status State Machine audit and implementation.
+
+Background:
+
+Current production audit finding:
+
+"PATCH /orders/:id accepts any status value without transition validation. Workers can move orders directly from pending → completed, completed → pending, or bypass required business steps."
+
+This creates incorrect operational data, reporting inaccuracies, and workflow integrity problems.
+
+PHASE A — AUDIT ONLY
+
+Review:
+
+* all order status values
+* all order status update routes
+* all queue-service status sync logic
+* offline status updates
+* status update UI flows
+* reporting dependencies
+* pickup dependencies
+* payment dependencies
+
+Produce an audit report before changing any code.
+
+For every status transition currently possible:
+
+Show:
+
+FROM STATUS
+TO STATUS
+Currently Allowed?
+Should Be Allowed?
+Risk Level
+
+Example:
+
+pending → processing
+processing → ready
+ready → completed
+completed → pending
+cancelled → processing
+etc.
+
+Identify every invalid transition currently possible.
+
+Do NOT modify code during Phase A.
+
+---
+
+PHASE B — DESIGN THE STATE MACHINE
+
+Define the canonical workflow.
+
+Proposed lifecycle:
+
+pending
+→ processing
+→ ready
+→ completed
+
+Optional branches:
+
+pending
+→ cancelled
+
+processing
+→ cancelled
+
+Rules:
+
+* completed is terminal
+* cancelled is terminal
+* completed cannot return to any prior state
+* cancelled cannot return to any prior state
+* pending cannot jump directly to completed
+* ready cannot move backward to processing
+* processing cannot jump directly to completed
+
+If a different lifecycle already exists in the codebase, document it before changing anything.
+
+---
+
+PHASE C — IMPLEMENTATION
+
+Implement server-side enforcement.
+
+Requirements:
+
+1. Validation must occur on the API server.
+2. Frontend restrictions alone are not sufficient.
+3. Offline sync must respect the same rules.
+4. Invalid transitions return HTTP 409 Conflict.
+5. Error messages must be human-readable.
+6. Owners cannot bypass the state machine.
+7. Workers cannot bypass the state machine.
+8. Queue-service status sync must fail permanently when the transition is invalid.
+9. Invalid transitions must create a sync_log entry.
+10. ConflictSyncBadge-style visibility should exist for invalid status transitions.
+
+---
+
+PHASE D — OFFLINE SYNC VALIDATION
+
+Verify:
+
+* offline pending → processing syncs correctly
+* offline processing → ready syncs correctly
+* offline ready → completed syncs correctly
+
+Verify invalid cases:
+
+* pending → completed
+* completed → pending
+* cancelled → processing
+* ready → processing
+
+Ensure:
+
+* queue entry becomes conflict
+* retries stop
+* conflict visible to worker
+* sync_log contains clear reason
+
+---
+
+PHASE E — TEST SUITE
+
+Create a comprehensive validation suite.
+
+Minimum tests:
+
+1. pending → processing
+2. processing → ready
+3. ready → completed
+4. pending → cancelled
+5. processing → cancelled
+6. completed → pending
+7. completed → processing
+8. completed → ready
+9. cancelled → processing
+10. pending → completed
+11. ready → processing
+12. offline valid transitions
+13. offline invalid transitions
+14. conflict logging
+15. queue conflict classification
+16. UI conflict visibility
+17. reporting integrity
+18. status sync idempotency
+19. owner behavior
+20. worker behavior
+
+---
+
+DELIVERABLES
+
+Return:
+
+1. Audit report
+2. State machine diagram
+3. Implementation report
+4. Validation results
+5. Remaining risks
+
+Do not modify unrelated business logic.
+Do not modify payment logic.
+Do not modify pickup logic.
+Do not modify permissions.
+Only implement status-transition integrity.

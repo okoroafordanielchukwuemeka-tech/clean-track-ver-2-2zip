@@ -77,8 +77,25 @@ const orderInputSchema = z.object({
   discountReason: z.string().optional(),
 });
 
+/**
+ * Server-side order status state machine.
+ *
+ * Only transitions listed here are permitted via PATCH /orders/:id.
+ * partial_pickup and completed are terminal-for-PATCH: they are set
+ * exclusively by the pickup route (POST /orders/:id/pickups) and can
+ * never be written directly through the update endpoint.
+ */
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  pending:        ["processing", "cancelled"],
+  processing:     ["ready", "cancelled"],
+  ready:          [],          // advance only via pickup route
+  partial_pickup: [],          // advance only via pickup route
+  completed:      [],          // terminal
+  cancelled:      [],          // terminal
+};
+
 const workerOrderUpdateSchema = z.object({
-  status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed"]).optional(),
+  status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"]).optional(),
   paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),
   verifiedShirts: z.number().int().optional(),
   verifiedTrousers: z.number().int().optional(),
@@ -399,6 +416,26 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
     if (workerBranchId) patchConditions.push(eq(orders.branchId, workerBranchId));
 
     const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
+
+    // ── Status transition validation ──────────────────────────────────────
+    // Enforce the state machine before touching the database.
+    // This applies equally to owners and workers — no role bypasses the rules.
+    if (data.status !== undefined && beforeOrder && data.status !== beforeOrder.status) {
+      const currentStatus = beforeOrder.status;
+      const allowedNext = VALID_STATUS_TRANSITIONS[currentStatus] ?? [];
+      if (!allowedNext.includes(data.status)) {
+        const reason = allowedNext.length > 0
+          ? `Allowed next statuses from '${currentStatus}': ${allowedNext.join(", ")}.`
+          : `'${currentStatus}' is a terminal or read-only status — it cannot be changed via this endpoint.`;
+        return res.status(409).json({
+          error: `Cannot move order from '${currentStatus}' to '${data.status}'. ${reason}`,
+          code: "INVALID_STATUS_TRANSITION",
+          from: currentStatus,
+          to: data.status,
+          allowed: allowedNext,
+        });
+      }
+    }
 
     const [order] = await db.update(orders).set(updateData)
       .where(and(...patchConditions))

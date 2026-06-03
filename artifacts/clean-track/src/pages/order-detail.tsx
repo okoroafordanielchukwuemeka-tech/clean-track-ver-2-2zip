@@ -7,7 +7,7 @@ import { enqueueOrderStatusUpdate, enqueuePayment, enqueuePickup, type OfflinePa
 import { syncEngine } from "@/lib/sync-engine";
 import { getIsOnline } from "@/lib/network-state";
 import { type LocalPayment, type LocalPickup } from "@/lib/local-db";
-import { usePendingLocalPayments, usePendingLocalPickups, useConflictLocalPayments, useConflictLocalPickups } from "@/hooks/use-pending-local";
+import { usePendingLocalPayments, usePendingLocalPickups, useConflictLocalPayments, useConflictLocalPickups, useConflictStatusSyncEntries } from "@/hooks/use-pending-local";
 import { PendingSyncBadge, ConflictSyncBadge } from "@/components/pending-sync-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -168,6 +168,7 @@ export default function OrderDetail() {
   const pendingPickups = usePendingLocalPickups(orderLocalId);
   const conflictPayments = useConflictLocalPayments(orderLocalId);
   const conflictPickups = useConflictLocalPickups(orderLocalId);
+  const conflictStatusUpdates = useConflictStatusSyncEntries(orderLocalId);
 
   // Subscribe to sync engine events — invalidate caches immediately when a
   // payment or pickup for this order is successfully synced, rather than
@@ -806,43 +807,75 @@ export default function OrderDetail() {
         <Card>
           <CardHeader><CardTitle className="text-base">Update Order</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div>
-              <Label className="text-xs">Status</Label>
-              <Select
-                value={order.status}
-                onValueChange={async (v) => {
-                  if (getIsOnline()) {
-                    updateMutation.mutate({ status: v });
-                  } else {
-                    try {
-                      await enqueueOrderStatusUpdate(`srv-${orderId}`, orderId, { status: v });
-                      qc.setQueryData(["orders", orderId], (old: any) =>
-                        old ? { ...old, status: v } : old
-                      );
-                      qc.setQueryData(["orders"], (old: any[]) =>
-                        old?.map(o => o.id === orderId ? { ...o, status: v } : o) ?? []
-                      );
-                      toast.info("Status saved offline — syncs when reconnected");
-                    } catch {
-                      toast.error("Failed to save status offline");
-                    }
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="ready">Ready</SelectItem>
-                  <SelectItem value="partial_pickup">Partial Pickup</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Status saves immediately when changed
-                {!getIsOnline() && <span className="ml-1 text-amber-600">(offline — will sync)</span>}
-              </p>
-            </div>
+            {(() => {
+              const VALID_NEXT: Record<string, string[]> = {
+                pending:        ["processing", "cancelled"],
+                processing:     ["ready", "cancelled"],
+                ready:          [],
+                partial_pickup: [],
+                completed:      [],
+                cancelled:      [],
+              };
+              const STATUS_LABELS: Record<string, string> = {
+                pending:        "Pending",
+                processing:     "Processing",
+                ready:          "Ready",
+                partial_pickup: "Partial Pickup",
+                completed:      "Completed",
+                cancelled:      "Cancelled",
+              };
+              const validNext = VALID_NEXT[order.status] ?? [];
+              const isTerminal = validNext.length === 0;
+              return (
+                <div>
+                  <Label className="text-xs">Status</Label>
+                  <Select
+                    value={order.status}
+                    disabled={isTerminal}
+                    onValueChange={async (v) => {
+                      if (getIsOnline()) {
+                        updateMutation.mutate({ status: v });
+                      } else {
+                        try {
+                          await enqueueOrderStatusUpdate(`srv-${orderId}`, orderId, { status: v });
+                          qc.setQueryData(["orders", orderId], (old: any) =>
+                            old ? { ...old, status: v } : old
+                          );
+                          qc.setQueryData(["orders"], (old: any[]) =>
+                            old?.map(o => o.id === orderId ? { ...o, status: v } : o) ?? []
+                          );
+                          toast.info("Status saved offline — syncs when reconnected");
+                        } catch {
+                          toast.error("Failed to save status offline");
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={order.status}>{STATUS_LABELS[order.status] ?? order.status}</SelectItem>
+                      {validNext.map(s => (
+                        <SelectItem key={s} value={s}>{STATUS_LABELS[s] ?? s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {conflictStatusUpdates.length > 0 && (
+                    <div className="flex items-center gap-2 mt-2 p-2 rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+                      <ConflictSyncBadge />
+                      <span className="text-xs text-red-700 dark:text-red-400">
+                        An offline status change was rejected — the transition is not permitted by the workflow. Check the sync log for details.
+                      </span>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {isTerminal
+                      ? `'${STATUS_LABELS[order.status] ?? order.status}' is a final state — no further changes allowed.`
+                      : "Status saves immediately when changed"}
+                    {!isTerminal && !getIsOnline() && <span className="ml-1 text-amber-600">(offline — will sync)</span>}
+                  </p>
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">Price (₦)</Label>
