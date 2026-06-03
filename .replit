@@ -45,4 +45,3 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-JWT_SECRET = "clean-track-replit-secret-6bfcyiazo6q"
