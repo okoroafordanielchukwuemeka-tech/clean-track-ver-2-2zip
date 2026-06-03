@@ -267,6 +267,50 @@ export function useConflictLocalPickups(orderLocalId: string | null): LocalPicku
 }
 
 /**
+ * Returns all sync queue entries with status === "failed".
+ *
+ * These entries have exhausted their retry budget (or received an immediate
+ * permanent failure like a 4xx or conflict) and will not be retried
+ * automatically.  The UI uses this hook to surface a "Failed Sync" panel
+ * so users can inspect errors and trigger a manual retry.
+ *
+ * Re-reads IndexedDB every 2 s so the panel disappears once all failed
+ * entries have been successfully requeued and synced.
+ *
+ * No laundryId filter: the caller receives all failed entries across all
+ * operations so nothing is silently hidden from the operator.
+ */
+export function useFailedSyncEntries() {
+  const [failed, setFailed] = useState<import("@/lib/local-db").SyncQueueEntry[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const refresh = async () => {
+      try {
+        const records = await localDb.syncQueue
+          .where("status")
+          .equals("failed")
+          .toArray();
+        if (active) setFailed(records);
+      } catch {
+        // Dexie may throw if the DB is not yet open; ignore silently
+      }
+    };
+
+    refresh();
+    const timer = setInterval(refresh, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  return failed;
+}
+
+/**
  * Returns all LocalOrder records with syncStatus === "pending_status_update"
  * belonging to the given laundryId. Re-reads IndexedDB every 2 s.
  */

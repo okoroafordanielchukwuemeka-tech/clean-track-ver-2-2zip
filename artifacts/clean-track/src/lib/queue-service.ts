@@ -49,7 +49,7 @@ import { api, HttpError, type CustomerInput, type OrderInput, type PickupInput }
  */
 function computeBackoffMs(attempts: number): number {
   if (attempts === 0) return 0;
-  return Math.min(Math.pow(2, attempts) * 1_000, 60_000);
+  return Math.min(Math.pow(2, attempts) * 1_000, MAX_BACKOFF_MS);
 }
 
 /**
@@ -345,7 +345,37 @@ export interface OfflineOrderPayload {
   laundryId?: number | null;
 }
 
-const MAX_ATTEMPTS = 3;
+/**
+ * Maximum number of retry attempts for transient failures (network errors, 5xx).
+ *
+ * With a 5-minute cap, the retry schedule looks like:
+ *   attempt  1 →   2 s
+ *   attempt  2 →   4 s
+ *   attempt  3 →   8 s
+ *   attempt  4 →  16 s
+ *   attempt  5 →  32 s
+ *   attempt  6 →  64 s
+ *   attempt  7 → 128 s  (~2 min)
+ *   attempt  8 → 300 s  (5 min cap)
+ *   attempts 9–20 → 300 s each
+ *
+ * Total retry window before permanent failure: ~70 minutes.
+ *
+ * Entries are only retried when the device is online, so true offline
+ * periods do not consume retry slots — workers can be offline for many
+ * hours and still sync when they reconnect.
+ *
+ * Client errors (4xx non-transient) and conflict errors still fail
+ * permanently on the first attempt — this limit only applies to
+ * genuinely transient errors.
+ */
+const MAX_TRANSIENT_ATTEMPTS = 20;
+
+/**
+ * Maximum exponential back-off delay.
+ * Extended from 60 s → 5 min so later attempts do not hammer a recovering server.
+ */
+const MAX_BACKOFF_MS = 300_000;
 
 /**
  * Atomically writes a pending customer to IndexedDB and adds a
@@ -621,7 +651,7 @@ export async function enqueuePickup(
  *  1. create_customer entries are always processed before create_order entries.
  *  2. A create_order entry is only processed once every localId listed in its
  *     dependsOn array has status "done" in the queue.
- *  3. If a customer sync fails after MAX_ATTEMPTS, dependent orders are skipped
+ *  3. If a customer sync fails after MAX_TRANSIENT_ATTEMPTS, dependent orders are skipped
  *     for this cycle (they will remain pending until manually resolved).
  *
  * In-flight recovery:
@@ -863,6 +893,73 @@ export async function processQueue(): Promise<void> {
 }
 
 /**
+ * Reset a single permanently-failed sync queue entry back to pending so the
+ * engine will retry it on the next sync cycle.
+ *
+ * Safe to call from the UI at any time — no-ops on entries that are not
+ * in the "failed" state so double-clicks / races are harmless.
+ *
+ * Resets:
+ *  - status       → "pending"
+ *  - attempts     → 0  (gives the entry a full fresh set of retries)
+ *  - lastError    → null
+ *  - lastAttemptAt → null  (no back-off delay on first retry)
+ */
+export async function requeueFailedEntry(entryId: number): Promise<void> {
+  const entry = await localDb.syncQueue.get(entryId);
+  if (!entry || entry.status !== "failed") return;
+
+  await localDb.syncQueue.update(entryId, {
+    status: "pending",
+    attempts: 0,
+    lastError: null,
+    lastAttemptAt: null,
+  });
+
+  await syncEngine.notifyQueueChanged();
+
+  console.info(
+    `[CleanTrack Sync] Manual requeue: entry ${entryId} ` +
+      `(${entry.operation} / ${entry.localId}) reset to pending`
+  );
+}
+
+/**
+ * Reset every permanently-failed sync queue entry back to pending.
+ *
+ * All reset entries get attempts=0 so they immediately qualify for the
+ * next sync cycle without waiting for any back-off window.
+ *
+ * Intended for the "Retry All" action in the failed-sync UI panel.
+ */
+export async function requeueAllFailed(): Promise<void> {
+  const failedEntries = await localDb.syncQueue
+    .where("status")
+    .equals("failed")
+    .toArray();
+
+  if (failedEntries.length === 0) return;
+
+  await localDb.syncQueue.bulkUpdate(
+    failedEntries.map((e) => ({
+      key: e.id!,
+      changes: {
+        status: "pending" as const,
+        attempts: 0,
+        lastError: null,
+        lastAttemptAt: null,
+      },
+    }))
+  );
+
+  await syncEngine.notifyQueueChanged();
+
+  console.info(
+    `[CleanTrack Sync] Manual requeue: ${failedEntries.length} failed entry(ies) reset to pending`
+  );
+}
+
+/**
  * POST a pending customer to the server, then patch the local record.
  *
  * On success:
@@ -870,11 +967,11 @@ export async function processQueue(): Promise<void> {
  *  - syncQueue entry   → status = "done"
  *  - syncLog           → success entry written
  *
- * On failure (< MAX_ATTEMPTS):
+ * On failure (< MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry   → status = "pending", attempts incremented
  *  - syncLog           → error entry written
  *
- * On permanent failure (>= MAX_ATTEMPTS):
+ * On permanent failure (>= MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry   → status = "failed"
  *  - syncLog           → error entry written
  *  - Throws so processQueue can skip dependent orders
@@ -888,7 +985,7 @@ export async function syncCustomer(localId: string): Promise<void> {
   if (!entry) return;
 
   // Already permanently failed — do not retry.
-  if (entry.attempts >= MAX_ATTEMPTS) {
+  if (entry.attempts >= MAX_TRANSIENT_ATTEMPTS) {
     throw new Error(
       `Customer ${localId} has reached max sync attempts and is permanently failed`
     );
@@ -942,8 +1039,8 @@ export async function syncCustomer(localId: string): Promise<void> {
     // 4xx validation errors will never succeed — permanently fail immediately
     // without consuming retry slots so the log is not polluted with retries.
     const clientErr = isClientError(err);
-    const newAttempts = clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
-    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+    const newAttempts = clientErr ? MAX_TRANSIENT_ATTEMPTS : entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_TRANSIENT_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
@@ -972,7 +1069,7 @@ export async function syncCustomer(localId: string): Promise<void> {
     } else {
       const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Customer ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+        `[CleanTrack Sync] Customer ${localId} sync attempt ${newAttempts}/${MAX_TRANSIENT_ATTEMPTS} failed ` +
           `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
@@ -994,11 +1091,11 @@ export async function syncCustomer(localId: string): Promise<void> {
  *  - syncQueue entry    → status = "done"
  *  - syncLog            → success entry written
  *
- * On failure (< MAX_ATTEMPTS):
+ * On failure (< MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry → status = "pending", attempts incremented
  *  - syncLog         → error entry written
  *
- * On permanent failure (>= MAX_ATTEMPTS):
+ * On permanent failure (>= MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry → status = "failed"
  *  - syncLog         → error entry written
  */
@@ -1010,7 +1107,7 @@ export async function syncOrder(localId: string): Promise<void> {
   const entry = allEntries.find((e) => e.operation === "create_order");
   if (!entry) return;
 
-  if (entry.attempts >= MAX_ATTEMPTS) {
+  if (entry.attempts >= MAX_TRANSIENT_ATTEMPTS) {
     throw new Error(
       `Order ${localId} has reached max sync attempts and is permanently failed`
     );
@@ -1104,8 +1201,8 @@ export async function syncOrder(localId: string): Promise<void> {
 
     // 4xx validation errors will never succeed — permanently fail immediately.
     const clientErr = isClientError(err);
-    const newAttempts = clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
-    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+    const newAttempts = clientErr ? MAX_TRANSIENT_ATTEMPTS : entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_TRANSIENT_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
@@ -1134,7 +1231,7 @@ export async function syncOrder(localId: string): Promise<void> {
     } else {
       const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Order ${localId} sync attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+        `[CleanTrack Sync] Order ${localId} sync attempt ${newAttempts}/${MAX_TRANSIENT_ATTEMPTS} failed ` +
           `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
@@ -1155,14 +1252,14 @@ export async function syncOrder(localId: string): Promise<void> {
  *  - localDb.orders    → syncStatus = "synced" if no other pending status-update entries remain
  *  - syncLog           → success entry written
  *
- * On failure (< MAX_ATTEMPTS):
+ * On failure (< MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry   → status = "pending", attempts incremented
  *
- * On permanent failure (>= MAX_ATTEMPTS):
+ * On permanent failure (>= MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry   → status = "failed"
  */
 export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void> {
-  if (entry.attempts >= MAX_ATTEMPTS) {
+  if (entry.attempts >= MAX_TRANSIENT_ATTEMPTS) {
     throw new Error(
       `Status update entry ${entry.id} for order ${entry.localId} reached max sync attempts`
     );
@@ -1227,8 +1324,8 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
 
     // 4xx validation errors will never succeed — permanently fail immediately.
     const clientErr = isClientError(err);
-    const newAttempts = clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
-    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+    const newAttempts = clientErr ? MAX_TRANSIENT_ATTEMPTS : entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_TRANSIENT_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
@@ -1257,7 +1354,7 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
     } else {
       const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Status update ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+        `[CleanTrack Sync] Status update ${entry.id} attempt ${newAttempts}/${MAX_TRANSIENT_ATTEMPTS} failed ` +
           `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
@@ -1288,16 +1385,16 @@ export async function syncOrderStatusEntry(entry: SyncQueueEntry): Promise<void>
  *  - syncLog          → success entry
  *
  * On permanent failure:
- *  - syncQueue entry  → status = "failed", attempts = MAX_ATTEMPTS
+ *  - syncQueue entry  → status = "failed", attempts = MAX_TRANSIENT_ATTEMPTS
  *  - localDb.payments → syncStatus = "conflict"  (financial conflicts only)
  *  - syncLog          → error entry (prefixed "CONFLICT:<code>:" for financial)
  *
- * On transient failure (< MAX_ATTEMPTS):
+ * On transient failure (< MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry  → status = "pending", attempts++, lastAttemptAt updated
  *  - syncLog          → error entry
  */
 export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
-  if (entry.attempts >= MAX_ATTEMPTS) {
+  if (entry.attempts >= MAX_TRANSIENT_ATTEMPTS) {
     throw new Error(`Payment ${entry.id} reached max sync attempts`);
   }
 
@@ -1368,8 +1465,8 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
       err instanceof FinancialConflictError || isFinancialConflictHttpError(err);
     const clientErr = !isConflict && isClientError(err);
     const newAttempts =
-      isConflict || clientErr ? MAX_ATTEMPTS : entry.attempts + 1;
-    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+      isConflict || clientErr ? MAX_TRANSIENT_ATTEMPTS : entry.attempts + 1;
+    const permanentlyFailed = newAttempts >= MAX_TRANSIENT_ATTEMPTS;
 
     // Financial conflicts flag the local payment for manual review.
     if (isConflict) {
@@ -1414,7 +1511,7 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
     } else {
       const nextBackoffSec = Math.round(computeBackoffMs(newAttempts) / 1_000);
       console.warn(
-        `[CleanTrack Sync] Payment ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed ` +
+        `[CleanTrack Sync] Payment ${entry.id} attempt ${newAttempts}/${MAX_TRANSIENT_ATTEMPTS} failed ` +
           `(retry in ${nextBackoffSec}s): ${error}`
       );
     }
@@ -1436,16 +1533,16 @@ export async function syncPaymentEntry(entry: SyncQueueEntry): Promise<void> {
  *  - syncQueue entry   → status = "done"
  *  - syncLog           → success entry written
  *
- * On failure (< MAX_ATTEMPTS):
+ * On failure (< MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry   → status = "pending", attempts incremented
  *  - syncLog           → error entry written
  *
- * On permanent failure (>= MAX_ATTEMPTS):
+ * On permanent failure (>= MAX_TRANSIENT_ATTEMPTS):
  *  - syncQueue entry   → status = "failed"
  *  - syncLog           → error entry written
  */
 export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
-  if (entry.attempts >= MAX_ATTEMPTS) {
+  if (entry.attempts >= MAX_TRANSIENT_ATTEMPTS) {
     throw new Error(
       `Pickup ${entry.id} for order ${entry.localId} has reached max sync attempts`
     );
@@ -1558,7 +1655,7 @@ export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
     // ── Transient error path — increment attempts, apply backoff ─────────
     const error = err instanceof Error ? err.message : String(err);
     const newAttempts = entry.attempts + 1;
-    const permanentlyFailed = newAttempts >= MAX_ATTEMPTS;
+    const permanentlyFailed = newAttempts >= MAX_TRANSIENT_ATTEMPTS;
 
     await localDb.syncQueue.update(entry.id!, {
       status: permanentlyFailed ? "failed" : "pending",
@@ -1581,7 +1678,7 @@ export async function syncPickupEntry(entry: SyncQueueEntry): Promise<void> {
       );
     } else {
       console.warn(
-        `[CleanTrack Sync] Pickup ${entry.id} attempt ${newAttempts}/${MAX_ATTEMPTS} failed: ${error}`
+        `[CleanTrack Sync] Pickup ${entry.id} attempt ${newAttempts}/${MAX_TRANSIENT_ATTEMPTS} failed: ${error}`
       );
     }
 

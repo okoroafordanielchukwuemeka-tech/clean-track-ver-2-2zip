@@ -26,6 +26,7 @@ import { NotificationCenter } from "@/components/notification-center";
 import { BranchSelector } from "@/components/branch-selector";
 import { NetworkStatusBadge } from "@/components/network-status-badge";
 import { OfflineBanner } from "@/components/offline-banner";
+import { SyncFailedPanel } from "@/components/sync-failed-panel";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -171,6 +172,7 @@ export function Layout() {
         </header>
 
         <OfflineBanner />
+        <SyncFailedPanel />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <Outlet />
         </main>
