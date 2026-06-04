@@ -20,6 +20,18 @@ import { SCHEMA_VERSION } from "./version";
 
 export type SyncStatus = "idle" | "syncing" | "offline" | "error" | "paused";
 
+/**
+ * Live progress for the current sync cycle.
+ * Emitted via SyncState.progress during processQueue() to power the
+ * SyncProgressBar UI — shown only when total ≥ 20 so small queues
+ * don't flash a progress bar that instantly disappears.
+ */
+export interface SyncProgress {
+  done: number;
+  total: number;
+  phase: string;
+}
+
 export interface SyncState {
   status: SyncStatus;
   pendingCount: number;
@@ -27,6 +39,7 @@ export interface SyncState {
   lastSyncedAt: Date | null;
   currentOperation: string | null;
   isOnline: boolean;
+  progress: SyncProgress | null;
 }
 
 export type SyncEventType =
@@ -52,6 +65,7 @@ const DEFAULT_STATE: SyncState = {
   lastSyncedAt: null,
   currentOperation: null,
   isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+  progress: null,
 };
 
 class SyncEngine {
@@ -159,10 +173,12 @@ class SyncEngine {
   private async processQueue(): Promise<void> {
     if (this.isSyncing) return;
     this.isSyncing = true;
-    this.updateState({ status: "syncing", currentOperation: "processing queue" });
+    this.updateState({ status: "syncing", currentOperation: "processing queue", progress: null });
 
     try {
-      await processQueueFromService();
+      await processQueueFromService((done, total, phase) => {
+        this.updateState({ progress: { done, total, phase } });
+      });
 
       const [pendingCount, failedCount] = await Promise.all([
         this.getPendingCount(),
@@ -177,10 +193,11 @@ class SyncEngine {
         status: "idle",
         currentOperation: null,
         lastSyncedAt: new Date(),
+        progress: null,
       });
     } catch (err) {
       console.error("[CleanTrack SyncEngine] processQueue threw unexpectedly:", err);
-      this.updateState({ status: "error", currentOperation: null });
+      this.updateState({ status: "error", currentOperation: null, progress: null });
     } finally {
       this.isSyncing = false;
       await this.refreshCounts();
@@ -299,7 +316,10 @@ class SyncEngine {
       prev.status !== this.state.status ||
       prev.pendingCount !== this.state.pendingCount ||
       prev.failedCount !== this.state.failedCount ||
-      prev.isOnline !== this.state.isOnline
+      prev.isOnline !== this.state.isOnline ||
+      // progress is always a new object reference when set, so reference
+      // inequality correctly detects every chunk-level progress update.
+      prev.progress !== this.state.progress
     ) {
       this.emit({ type: "status_change", payload: this.state });
     }

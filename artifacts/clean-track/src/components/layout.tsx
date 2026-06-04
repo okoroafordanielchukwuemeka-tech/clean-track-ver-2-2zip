@@ -29,6 +29,7 @@ import { NetworkStatusBadge } from "@/components/network-status-badge";
 import { OfflineBanner } from "@/components/offline-banner";
 import { SyncFailedPanel } from "@/components/sync-failed-panel";
 import { OutdatedClientBanner } from "@/components/outdated-client-banner";
+import { SyncProgressBar } from "@/components/sync-progress-bar";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -175,6 +176,7 @@ export function Layout() {
         </header>
 
         <OutdatedClientBanner />
+        <SyncProgressBar />
         <OfflineBanner />
         <SyncFailedPanel />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
