@@ -16,6 +16,9 @@ import type {
   DeletedPayment,
   DRReadiness,
   DRCheck,
+  BackupTriggerResult,
+  BackupVerifyResult,
+  SchemaSnapshot,
 } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +62,16 @@ import {
   Database,
   HardDrive,
   Lock,
+  BookOpen,
+  History,
+  Shield,
+  Play,
+  Terminal,
+  FileText,
+  Download,
+  CheckSquare,
+  AlertTriangle,
+  Zap,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -968,11 +981,338 @@ function CheckStatusIcon({ status }: { status: DRCheck["status"] }) {
   return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
 }
 
+function BackupHistoryPanel() {
+  const { data: backups, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["recovery", "backups"],
+    queryFn: api.recovery.backups,
+    staleTime: 30_000,
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <HardDrive className="h-4 w-4 text-blue-500" />
+          Backup Files
+          {backups && <span className="text-muted-foreground font-normal">({backups.length})</span>}
+        </CardTitle>
+        <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching} className="h-7 w-7 p-0">
+          <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
+        </Button>
+      </CardHeader>
+      <CardContent className="px-4 pb-4">
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground py-2">Loading backup files…</p>
+        ) : !backups?.length ? (
+          <div className="text-center py-6 space-y-1">
+            <AlertTriangle className="h-8 w-8 text-yellow-400 mx-auto" />
+            <p className="text-sm font-medium">No backups found</p>
+            <p className="text-xs text-muted-foreground">Use "Backup Now" in the DR Readiness panel above</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {backups.slice(0, 8).map((b, i) => (
+              <div
+                key={b.file}
+                className={cn(
+                  "flex items-center justify-between rounded-md border px-3 py-2",
+                  i === 0 ? "bg-green-50/60 border-green-200" : "bg-muted/30"
+                )}
+              >
+                <div className="min-w-0 text-xs">
+                  <p className="font-mono font-medium truncate">{b.file}</p>
+                  <p className="text-muted-foreground">
+                    {fmtAge(b.createdAt)} ago · {b.sizeBytes != null ? (b.sizeBytes / 1024).toFixed(1) : "?"} KB
+                    {b.sha256 && <> · <span className="font-mono">SHA: {b.sha256.substring(0, 14)}…</span></>}
+                  </p>
+                </div>
+                {i === 0 && (
+                  <Badge variant="outline" className="ml-2 shrink-0 text-[10px] text-green-700 border-green-300">Latest</Badge>
+                )}
+              </div>
+            ))}
+            {backups.length > 8 && (
+              <p className="text-xs text-muted-foreground text-center">+{backups.length - 8} older backups on disk</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MigrationLogPanel() {
+  const qc = useQueryClient();
+  const { data: snapshots, isLoading } = useQuery({
+    queryKey: ["recovery", "migrations"],
+    queryFn: api.recovery.migrations,
+    staleTime: 60_000,
+  });
+
+  const record = useMutation({
+    mutationFn: () => api.recovery.recordSnapshot("Manual checkpoint"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recovery", "migrations"] }),
+  });
+
+  const typeColor = (t: string) => {
+    if (t === "manual") return "text-blue-700 bg-blue-50 border-blue-200";
+    if (t === "pre_migration") return "text-orange-700 bg-orange-50 border-orange-200";
+    if (t === "post_migration") return "text-green-700 bg-green-50 border-green-200";
+    return "text-muted-foreground bg-muted/30 border-border";
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <History className="h-4 w-4 text-indigo-500" />
+          Migration Log
+          {snapshots && <span className="text-muted-foreground font-normal">({snapshots.length} checkpoints)</span>}
+        </CardTitle>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => record.mutate()}
+          disabled={record.isPending}
+          className="h-7 text-xs gap-1"
+        >
+          <Shield className="h-3 w-3" />
+          {record.isPending ? "Recording…" : "Record Checkpoint"}
+        </Button>
+      </CardHeader>
+      <CardContent className="px-4 pb-4">
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground py-2">Loading…</p>
+        ) : !snapshots?.length ? (
+          <div className="text-center py-6 space-y-1">
+            <History className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-medium">No checkpoints recorded</p>
+            <p className="text-xs text-muted-foreground">
+              Record a checkpoint <strong>before</strong> running{" "}
+              <code className="bg-muted px-1 rounded text-[10px]">pnpm db:push</code> so you can compare schema changes
+            </p>
+            {record.isSuccess && (
+              <p className="text-xs text-green-600 font-medium">✓ Checkpoint recorded!</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {record.isSuccess && (
+              <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700 font-medium flex items-center gap-1.5">
+                <CheckSquare className="h-3.5 w-3.5" /> New checkpoint recorded
+              </div>
+            )}
+            {snapshots.map((s, i) => (
+              <div
+                key={s.id}
+                className={cn("rounded-md border px-3 py-2 text-xs", i === 0 ? "bg-indigo-50/50 border-indigo-200" : "bg-muted/20")}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium border", typeColor(s.snapshotType))}>
+                      {s.snapshotType.replace("_", " ")}
+                    </span>
+                    <span className="text-muted-foreground truncate">{fmtAge(s.createdAt)} ago</span>
+                    {s.triggeredBy && (
+                      <span className="text-muted-foreground hidden sm:inline truncate">by {s.triggeredBy}</span>
+                    )}
+                  </div>
+                  <div className="text-right text-muted-foreground shrink-0">
+                    {s.tableCount != null && <span>{s.tableCount} tables · {s.indexCount} idx</span>}
+                  </div>
+                </div>
+                {s.notes && <p className="text-muted-foreground mt-0.5 italic">{s.notes}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const RUNBOOK_SECTIONS = [
+  {
+    id: "triage",
+    icon: <Zap className="h-4 w-4 text-red-500" />,
+    title: "Emergency Triage (first 5 minutes)",
+    steps: [
+      "Is the API server running? — Check workflow logs for crash errors",
+      "Is the database reachable? — Open Operations → System Health → check DB connectivity",
+      "Are financial records intact? — Check for any orders in 'paid' status with ₦0 amountPaid",
+      "Is it data corruption or server crash? — Determine whether to restore vs restart",
+      "Notify branch managers to hold transactions if data integrity is uncertain",
+    ],
+  },
+  {
+    id: "soft-delete",
+    icon: <RotateCcw className="h-4 w-4 text-blue-500" />,
+    title: "Soft-Delete Recovery",
+    steps: [
+      "Go to Operations → Recovery → Recovery Bin",
+      "All deleted workers, customers, branches, and voided payments are listed here",
+      "Click 'Restore' next to any item — it is re-activated immediately with order balances recalculated",
+      "Audit log records every restoration (who triggered it and when)",
+      "No data is permanently deleted without a hard-delete migration",
+    ],
+  },
+  {
+    id: "backup-restore",
+    icon: <HardDrive className="h-4 w-4 text-green-500" />,
+    title: "Full Database Restore from Backup",
+    steps: [
+      "Find the latest verified backup in the Backup Files panel",
+      "SSH into the server or use Replit shell: bash scripts/restore-backup.sh backups/<filename.sql.gz>",
+      "The restore script drops & recreates the database, then runs psql to load the dump",
+      "After restore, run: cd lib/db && pnpm push (re-applies any missing Drizzle migrations)",
+      "Verify data by checking order counts in the dashboard vs expected",
+      "RPO = time since last backup (check 'Last backup age' in DR Readiness panel)",
+    ],
+  },
+  {
+    id: "bad-migration",
+    icon: <AlertTriangle className="h-4 w-4 text-orange-500" />,
+    title: "Bad Migration Recovery",
+    steps: [
+      "STOP: before running pnpm db:push, record a schema checkpoint in Migration Log above",
+      "If migration caused data loss: immediately restore from the pre-migration backup",
+      "If migration was column-renaming / additive: check Migration Log for previous table structure",
+      "Drizzle push is destructive for drops — always take backup first",
+      "To roll back: psql $DATABASE_URL < scripts/schema-rollback.sql (if rollback script exists)",
+      "For Replit managed DB: contact Replit support for PITR (if available on plan)",
+    ],
+  },
+  {
+    id: "server-outage",
+    icon: <Terminal className="h-4 w-4 text-slate-500" />,
+    title: "Server Outage / Crash Loop",
+    steps: [
+      "Check workflow logs in Replit for crash reason (syntax error, missing env var, port conflict)",
+      "Verify DATABASE_URL and JWT_SECRET are set in Replit Secrets",
+      "Run: pnpm --filter @workspace/api-server build to check for compile errors",
+      "If stuck in crash loop: revert last code change via Replit checkpoint rollback",
+      "Workers in offline mode will queue operations locally — sync resumes automatically on reconnect",
+      "Check sync health panel after recovery to confirm all pending operations synced",
+    ],
+  },
+  {
+    id: "offline-recovery",
+    icon: <Wifi className="h-4 w-4 text-indigo-500" />,
+    title: "Offline Worker Queue Recovery",
+    steps: [
+      "Worker stations operate in offline mode when server is unreachable",
+      "All operations (status updates, payments, pickups) are queued locally in IndexedDB",
+      "On reconnect, the sync engine replays all queued operations in correct order (5 passes)",
+      "Check Operations → Sync Health for devices with pending queues or conflicts",
+      "Conflicts show a red badge on affected orders — resolve manually if needed",
+      "Use 'Retry All Failed' in the Sync Failed panel to re-queue permanently-failed operations",
+    ],
+  },
+];
+
+function RunbookTab() {
+  const [expanded, setExpanded] = useState<string | null>("triage");
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-amber-200 bg-amber-50">
+        <CardContent className="px-4 py-3 flex items-start gap-3">
+          <BookOpen className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <div className="text-xs text-amber-800">
+            <strong>Recovery Runbook</strong> — step-by-step procedures for common disaster scenarios.
+            Keep this tab open during an incident. All restore operations require Owner credentials.
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2">
+        {RUNBOOK_SECTIONS.map((section) => {
+          const isOpen = expanded === section.id;
+          return (
+            <Card key={section.id} className={cn("overflow-hidden transition-all", isOpen && "ring-1 ring-primary/20")}>
+              <button
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+                onClick={() => setExpanded(isOpen ? null : section.id)}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  {section.icon}
+                  {section.title}
+                </span>
+                <span className={cn("text-muted-foreground transition-transform text-lg leading-none", isOpen && "rotate-180")}>
+                  ⌄
+                </span>
+              </button>
+              {isOpen && (
+                <CardContent className="px-4 pb-4 pt-0">
+                  <ol className="space-y-2">
+                    {section.steps.map((step, i) => (
+                      <li key={i} className="flex gap-2.5 text-xs">
+                        <span className="shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center mt-0.5">
+                          {i + 1}
+                        </span>
+                        <span className="text-foreground leading-relaxed">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card className="border-slate-200">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground" /> Key Recovery Metrics
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "RPO (target)", value: "≤ 24h", sub: "Recovery Point Objective", color: "text-blue-600" },
+              { label: "RTO (target)", value: "≤ 2h", sub: "Recovery Time Objective", color: "text-green-600" },
+              { label: "Backup method", value: "pg_dump", sub: "Full logical backup + SHA256", color: "text-slate-600" },
+              { label: "Offline tolerance", value: "Unlimited", sub: "IndexedDB queue with sync", color: "text-indigo-600" },
+            ].map((m) => (
+              <div key={m.label} className="rounded-md border bg-muted/20 px-3 py-2">
+                <p className={cn("text-lg font-bold", m.color)}>{m.value}</p>
+                <p className="text-[10px] font-medium">{m.label}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{m.sub}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function DRReadinessPanel() {
+  const qc = useQueryClient();
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["recovery", "readiness"],
     queryFn: api.recovery.readiness,
     staleTime: 60_000,
+  });
+
+  const [backupResult, setBackupResult] = useState<BackupTriggerResult | null>(null);
+  const [verifyResult, setVerifyResult] = useState<BackupVerifyResult | null>(null);
+
+  const triggerBackup = useMutation({
+    mutationFn: api.recovery.triggerBackup,
+    onSuccess: (result) => {
+      setBackupResult(result);
+      qc.invalidateQueries({ queryKey: ["recovery", "readiness"] });
+      qc.invalidateQueries({ queryKey: ["recovery", "backups"] });
+    },
+    onError: () => setBackupResult({ success: false, output: "", manifest: null, error: "Backup failed" }),
+  });
+
+  const verifyLatest = useMutation({
+    mutationFn: api.recovery.verifyLatest,
+    onSuccess: (result) => setVerifyResult(result),
+    onError: () => setVerifyResult({ success: false, output: "", passed: 0, failed: 1, error: "Verification failed" }),
   });
 
   if (isLoading) {
@@ -1031,13 +1371,72 @@ function DRReadinessPanel() {
                 </div>
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching} className="shrink-0 gap-1 h-8 text-xs">
-              <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
-              Refresh
-            </Button>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching} className="gap-1 h-8 text-xs">
+                <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => { setBackupResult(null); triggerBackup.mutate(); }}
+                disabled={triggerBackup.isPending}
+                className="gap-1 h-8 text-xs"
+              >
+                <HardDrive className="h-3 w-3" />
+                {triggerBackup.isPending ? "Running…" : "Backup Now"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { setVerifyResult(null); verifyLatest.mutate(); }}
+                disabled={verifyLatest.isPending}
+                className="gap-1 h-8 text-xs"
+              >
+                <CheckSquare className="h-3 w-3" />
+                {verifyLatest.isPending ? "Verifying…" : "Verify"}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {backupResult && (
+        <Card className={cn("border", backupResult.success ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50")}>
+          <CardContent className="px-4 py-3">
+            <p className={cn("text-xs font-semibold flex items-center gap-1.5", backupResult.success ? "text-green-800" : "text-red-800")}>
+              {backupResult.success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+              {backupResult.success
+                ? `Backup complete · ${backupResult.manifest ? (backupResult.manifest.sizeBytes / 1024).toFixed(1) + " KB" : ""}`
+                : (backupResult.error ?? "Backup failed")}
+            </p>
+            {backupResult.output && (
+              <pre className="mt-2 text-[10px] text-muted-foreground whitespace-pre-wrap max-h-32 overflow-auto bg-white/60 rounded p-2">
+                {backupResult.output}
+              </pre>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {verifyResult && (
+        <Card className={cn("border", verifyResult.success ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50")}>
+          <CardContent className="px-4 py-3">
+            <p className={cn("text-xs font-semibold flex items-center gap-1.5", verifyResult.success ? "text-green-800" : "text-red-800")}>
+              {verifyResult.success ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+              {verifyResult.success
+                ? `Verification passed · ${verifyResult.passed} check(s) passed`
+                : `Verification failed · ${verifyResult.failed} check(s) failed — ${verifyResult.error ?? ""}`}
+            </p>
+            {verifyResult.file && <p className="text-[10px] text-muted-foreground mt-1">File: {verifyResult.file}</p>}
+            {verifyResult.output && (
+              <pre className="mt-2 text-[10px] text-muted-foreground whitespace-pre-wrap max-h-28 overflow-auto bg-white/60 rounded p-2">
+                {verifyResult.output}
+              </pre>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {data.checks.map((check) => (
@@ -1127,6 +1526,8 @@ function RecoveryTab() {
   return (
     <div className="space-y-6">
       <DRReadinessPanel />
+      <BackupHistoryPanel />
+      <MigrationLogPanel />
 
       <div>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -1312,6 +1713,9 @@ export default function OperationsPage() {
           <TabsTrigger value="recovery" className="text-xs gap-1.5">
             <RotateCcw className="h-3.5 w-3.5" /> Recovery
           </TabsTrigger>
+          <TabsTrigger value="runbook" className="text-xs gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" /> Runbook
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="audit-log" className="mt-4"><AuditLogTab /></TabsContent>
@@ -1321,6 +1725,7 @@ export default function OperationsPage() {
         <TabsContent value="health" className="mt-4"><HealthTab /></TabsContent>
         <TabsContent value="sync-health" className="mt-4"><SyncHealthTab /></TabsContent>
         <TabsContent value="recovery" className="mt-4"><RecoveryTab /></TabsContent>
+        <TabsContent value="runbook" className="mt-4"><RunbookTab /></TabsContent>
       </Tabs>
     </div>
   );

@@ -1,18 +1,29 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { workers, customers, branches, paymentRecords, orders, auditLog, idempotencyKeys } from "@workspace/db/schema";
+import { workers, customers, branches, paymentRecords, orders, auditLog, idempotencyKeys, schemaSnapshots } from "@workspace/db/schema";
 import { eq, and, isNull, isNotNull, desc, count, sql } from "drizzle-orm";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { logAction } from "../lib/audit.js";
 import fs from "fs";
 import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 export const recoveryRouter = Router();
 
 function getBackupsDir(): string {
-  const fromCwd = path.join(process.cwd(), "../../backups");
   const fromRoot = path.join("/home/runner/workspace/backups");
+  const fromCwd = path.join(process.cwd(), "../../backups");
+  if (fs.existsSync(fromRoot)) return fromRoot;
   if (fs.existsSync(fromCwd)) return fromCwd;
+  return fromRoot;
+}
+
+function getScriptsDir(): string {
+  const fromRoot = path.join("/home/runner/workspace/scripts");
+  const fromCwd = path.join(process.cwd(), "../../scripts");
   if (fs.existsSync(fromRoot)) return fromRoot;
   return fromCwd;
 }
@@ -33,6 +44,32 @@ function readLatestBackupManifest(): Record<string, unknown> | null {
   }
 }
 
+function readAllBackupManifests(): Array<Record<string, unknown>> {
+  try {
+    const dir = getBackupsDir();
+    if (!fs.existsSync(dir)) return [];
+    const manifests = fs.readdirSync(dir)
+      .filter((f) => f.endsWith(".manifest.json"))
+      .sort()
+      .reverse();
+    return manifests.map((mf) => {
+      try {
+        const raw = fs.readFileSync(path.join(dir, mf), "utf-8");
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const createdAt = parsed.createdAt as string;
+        parsed.ageHours = createdAt
+          ? (Date.now() - new Date(createdAt).getTime()) / 3_600_000
+          : null;
+        return parsed;
+      } catch {
+        return null;
+      }
+    }).filter(Boolean) as Array<Record<string, unknown>>;
+  } catch {
+    return [];
+  }
+}
+
 recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
@@ -48,19 +85,22 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
     const dbSizeBytes = Number((dbSizeResult.rows[0] as { bytes: string }).bytes);
     const dbSizePretty = (dbSizeResult.rows[0] as { pretty: string }).pretty;
 
-    const [deletedWorkers, deletedCustomers, deletedBranches, deletedPayments, auditLogCount, idemCount] = await Promise.all([
+    const [deletedWorkers, deletedCustomers, deletedBranches, deletedPayments, auditLogCount, idemCount, snapshotCount] = await Promise.all([
       db.select({ c: count() }).from(workers).where(and(eq(workers.laundryId, laundryId), isNotNull(workers.deletedAt))),
       db.select({ c: count() }).from(customers).where(and(eq(customers.laundryId, laundryId), isNotNull(customers.deletedAt))),
       db.select({ c: count() }).from(branches).where(and(eq(branches.laundryId, laundryId), isNotNull(branches.deletedAt))),
       db.select({ c: count() }).from(paymentRecords).where(and(eq(paymentRecords.laundryId, laundryId), isNotNull(paymentRecords.deletedAt))),
       db.select({ c: count() }).from(auditLog).where(eq(auditLog.laundryId, laundryId)),
       db.select({ c: count() }).from(idempotencyKeys),
+      db.select({ c: count() }).from(schemaSnapshots),
     ]);
 
     const manifest = readLatestBackupManifest();
     const backupAgeHours = manifest?.createdAt
       ? (Date.now() - new Date(manifest.createdAt as string).getTime()) / 3_600_000
       : null;
+
+    const totalBackupFiles = readAllBackupManifests().length;
 
     type CheckStatus = "pass" | "warn" | "fail";
     const checks: { id: string; label: string; status: CheckStatus; detail: string; critical: boolean }[] = [
@@ -74,8 +114,8 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
       {
         id: "schema_integrity",
         label: "Schema integrity",
-        status: tableCount >= 20 ? "pass" : "warn",
-        detail: tableCount >= 20 ? `${tableCount} tables (expected 21)` : `Only ${tableCount} tables found — schema may be incomplete`,
+        status: tableCount >= 21 ? "pass" : "warn",
+        detail: tableCount >= 21 ? `${tableCount} tables (expected 22)` : `Only ${tableCount} tables found — schema may be incomplete`,
         critical: true,
       },
       {
@@ -97,7 +137,7 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
         label: "Last backup age",
         status: manifest === null ? "fail" : backupAgeHours! <= 24 ? "pass" : backupAgeHours! <= 168 ? "warn" : "fail",
         detail: manifest === null
-          ? "No backup found — run pnpm db:backup immediately"
+          ? "No backup found — run Backup Now immediately"
           : backupAgeHours! <= 1
             ? `${Math.round(backupAgeHours! * 60)}m ago (excellent)`
             : backupAgeHours! <= 24
@@ -110,15 +150,24 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
         label: "Backup integrity",
         status: manifest?.sha256 ? "pass" : "fail",
         detail: manifest?.sha256
-          ? `SHA256 verified: ${String(manifest.sha256).substring(0, 16)}…`
+          ? `SHA256 verified: ${String(manifest.sha256).substring(0, 16)}… · ${totalBackupFiles} file(s) stored`
           : "No verified backup on record",
         critical: true,
+      },
+      {
+        id: "migration_tracking",
+        label: "Migration tracking",
+        status: Number(snapshotCount[0].c) > 0 ? "pass" : "warn",
+        detail: Number(snapshotCount[0].c) > 0
+          ? `${Number(snapshotCount[0].c)} schema checkpoint(s) recorded`
+          : "No checkpoints yet — record one before running migrations",
+        critical: false,
       },
       {
         id: "idempotency_cleanup",
         label: "Idempotency key cleanup",
         status: "pass",
-        detail: `Hourly TTL prune active · ${Number(idemCount[0].c)} keys currently stored`,
+        detail: `Hourly TTL prune active · ${Number(idemCount[0].c)} keys stored`,
         critical: false,
       },
       {
@@ -132,7 +181,7 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
         id: "audit_trail",
         label: "Audit trail",
         status: "pass",
-        detail: `${Number(auditLogCount[0].c)} audit events logged for this business`,
+        detail: `${Number(auditLogCount[0].c)} audit events for this business`,
         critical: false,
       },
       {
@@ -146,14 +195,7 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
         id: "offsite_backup",
         label: "Off-site backup storage",
         status: "warn",
-        detail: "Backups stored on local filesystem — download regularly for off-site copy",
-        critical: false,
-      },
-      {
-        id: "migration_files",
-        label: "Migration file tracking",
-        status: "warn",
-        detail: "Using drizzle-kit push (no migration files) — schema changes cannot be rolled back automatically",
+        detail: "Backups on local filesystem — download regularly for true off-site copy",
         critical: false,
       },
     ];
@@ -204,16 +246,168 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
   }
 });
 
+recoveryRouter.get("/backups", requireOwner, async (_req: AuthRequest, res) => {
+  try {
+    const backups = readAllBackupManifests();
+    res.json(backups);
+  } catch {
+    res.status(500).json({ error: "Failed to list backups" });
+  }
+});
+
+recoveryRouter.post("/trigger-backup", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const scriptsDir = getScriptsDir();
+    const backupsDir = getBackupsDir();
+    const scriptFile = path.join(scriptsDir, "backup.sh");
+
+    if (!fs.existsSync(scriptFile)) {
+      return res.status(500).json({ error: "Backup script not found at " + scriptFile });
+    }
+
+    fs.mkdirSync(backupsDir, { recursive: true });
+
+    const { stdout, stderr } = await execAsync(
+      `bash "${scriptFile}" "${backupsDir}"`,
+      { timeout: 120_000, env: { ...process.env } }
+    );
+
+    const manifest = readLatestBackupManifest();
+    if (manifest) {
+      manifest.ageHours = manifest.createdAt
+        ? (Date.now() - new Date(manifest.createdAt as string).getTime()) / 3_600_000
+        : null;
+    }
+
+    logAction({
+      auth: req.auth!,
+      laundryId: req.auth!.laundryId,
+      action: "backup_triggered",
+      metadata: { file: manifest?.file, sizeBytes: manifest?.sizeBytes },
+    }).catch(() => {});
+
+    res.json({ success: true, output: stdout + (stderr ? `\n[stderr] ${stderr}` : ""), manifest });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: "Backup failed",
+      detail: err.stderr || err.message,
+    });
+  }
+});
+
+recoveryRouter.post("/verify-latest", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const dir = getBackupsDir();
+    if (!fs.existsSync(dir)) {
+      return res.status(404).json({ success: false, error: "No backups directory found" });
+    }
+
+    const backupFiles = fs.readdirSync(dir)
+      .filter((f) => f.endsWith(".sql.gz"))
+      .sort()
+      .reverse();
+
+    if (backupFiles.length === 0) {
+      return res.status(404).json({ success: false, error: "No backup files found" });
+    }
+
+    const latestFile = path.join(dir, backupFiles[0]);
+    const scriptsDir = getScriptsDir();
+    const scriptFile = path.join(scriptsDir, "verify-backup.sh");
+
+    if (!fs.existsSync(scriptFile)) {
+      return res.status(500).json({ success: false, error: "Verify script not found" });
+    }
+
+    const { stdout, stderr } = await execAsync(
+      `bash "${scriptFile}" "${latestFile}"`,
+      { timeout: 60_000, env: { ...process.env } }
+    );
+
+    const output = stdout + (stderr ? `\n${stderr}` : "");
+    const passMatch = output.match(/(\d+) passed/);
+    const failMatch = output.match(/(\d+) failed/);
+    const passed = passMatch ? parseInt(passMatch[1]) : 0;
+    const failed = failMatch ? parseInt(failMatch[1]) : 0;
+    const success = failed === 0 && passed > 0;
+
+    logAction({
+      auth: req.auth!,
+      laundryId: req.auth!.laundryId,
+      action: "backup_verified",
+      metadata: { file: backupFiles[0], passed, failed, success },
+    }).catch(() => {});
+
+    res.json({ success, output, passed, failed, file: backupFiles[0] });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: "Verification failed",
+      detail: err.stderr || err.message,
+    });
+  }
+});
+
+recoveryRouter.post("/record-snapshot", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+    const triggeredBy = req.auth!.email ?? `owner:${req.auth!.laundryId}`;
+
+    const [tableCountResult, indexCountResult, dbSizeResult, tableListResult] = await Promise.all([
+      db.execute(sql`SELECT count(*)::int as cnt FROM information_schema.tables WHERE table_schema = 'public'`),
+      db.execute(sql`SELECT count(*)::int as cnt FROM pg_indexes WHERE schemaname = 'public'`),
+      db.execute(sql`SELECT pg_database_size(current_database())::bigint as bytes`),
+      db.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`),
+    ]);
+
+    const tableCount = (tableCountResult.rows[0] as { cnt: number }).cnt;
+    const indexCount = (indexCountResult.rows[0] as { cnt: number }).cnt;
+    const dbSizeBytes = Number((dbSizeResult.rows[0] as { bytes: string }).bytes);
+    const tableList = (tableListResult.rows as Array<{ table_name: string }>)
+      .map((r) => r.table_name)
+      .join(",");
+
+    const [snapshot] = await db.insert(schemaSnapshots).values({
+      snapshotType: "manual",
+      triggeredBy,
+      tableCount,
+      indexCount,
+      dbSizeBytes,
+      tableList,
+      notes,
+    }).returning();
+
+    logAction({
+      auth: req.auth!,
+      laundryId: req.auth!.laundryId,
+      action: "schema_snapshot_recorded",
+      metadata: { snapshotId: snapshot.id, tableCount, notes },
+    }).catch(() => {});
+
+    res.json(snapshot);
+  } catch (err) {
+    console.error("[recovery/record-snapshot]", err);
+    res.status(500).json({ error: "Failed to record snapshot" });
+  }
+});
+
+recoveryRouter.get("/migrations", requireOwner, async (_req: AuthRequest, res) => {
+  try {
+    const snapshots = await db.select().from(schemaSnapshots)
+      .orderBy(desc(schemaSnapshots.createdAt))
+      .limit(50);
+    res.json(snapshots);
+  } catch {
+    res.status(500).json({ error: "Failed to list migration snapshots" });
+  }
+});
+
 recoveryRouter.get("/summary", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
 
-    const [
-      deletedWorkers,
-      deletedCustomers,
-      deletedBranches,
-      deletedPayments,
-    ] = await Promise.all([
+    const [deletedWorkers, deletedCustomers, deletedBranches, deletedPayments] = await Promise.all([
       db.select().from(workers).where(and(eq(workers.laundryId, laundryId), isNotNull(workers.deletedAt))),
       db.select().from(customers).where(and(eq(customers.laundryId, laundryId), isNotNull(customers.deletedAt))),
       db.select().from(branches).where(and(eq(branches.laundryId, laundryId), isNotNull(branches.deletedAt))),

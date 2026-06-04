@@ -227,6 +227,11 @@ export const api = {
     restoreBranch: (id: number) => request<{ id: number; name: string; restored: boolean }>("POST", `/recovery/branches/${id}/restore`),
     restorePayment: (id: number) => request<{ id: number; receiptNumber: string; amount: string; restored: boolean }>("POST", `/recovery/payments/${id}/restore`),
     readiness: () => request<DRReadiness>("GET", "/recovery/readiness"),
+    backups: () => request<BackupFile[]>("GET", "/recovery/backups"),
+    triggerBackup: () => request<BackupTriggerResult>("POST", "/recovery/trigger-backup"),
+    verifyLatest: () => request<BackupVerifyResult>("POST", "/recovery/verify-latest"),
+    migrations: () => request<SchemaSnapshot[]>("GET", "/recovery/migrations"),
+    recordSnapshot: (notes?: string) => request<SchemaSnapshot>("POST", "/recovery/record-snapshot", { notes }),
   },
   expenseCategories: {
     list: () => request<ExpenseCategoryRecord[]>("GET", "/expense-categories"),
@@ -1020,6 +1025,44 @@ export interface DRReadiness {
     total: number;
   };
   generatedAt: string;
+}
+
+export interface BackupFile {
+  file: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
+  timestamp: string;
+  ageHours: number | null;
+}
+
+export interface BackupTriggerResult {
+  success: boolean;
+  output: string;
+  manifest: BackupFile | null;
+  error?: string;
+  detail?: string;
+}
+
+export interface BackupVerifyResult {
+  success: boolean;
+  output: string;
+  passed: number;
+  failed: number;
+  file?: string;
+  error?: string;
+}
+
+export interface SchemaSnapshot {
+  id: number;
+  snapshotType: string;
+  triggeredBy: string | null;
+  tableCount: number | null;
+  indexCount: number | null;
+  dbSizeBytes: number | null;
+  tableList: string | null;
+  notes: string | null;
+  createdAt: string;
 }
 
 export interface RecoverySummary {
