@@ -1,0 +1,109 @@
+Perform a Client-Server Schema Versioning & Compatibility Audit.
+
+Mission:
+
+Ensure CleanTrack can safely handle offline devices running older app versions while the backend has been upgraded.
+
+Do NOT modify code initially.
+
+==================================================
+PHASE A — AUDIT
+===============
+
+Audit:
+
+* Sync payload formats
+* Queue entries
+* IndexedDB schemas
+* API request bodies
+* API response bodies
+* Service worker updates
+* App version handling
+* Existing migrations
+
+Identify:
+
+1. Where payload shapes can change
+2. Where older clients can break
+3. Where offline queues can become incompatible
+4. Where backend validation may reject old data
+
+==================================================
+PHASE B — FAILURE ANALYSIS
+==========================
+
+Analyze:
+
+1. Device offline 1 day
+2. Device offline 7 days
+3. Device offline 30 days
+4. Backend upgraded while queue still contains old payloads
+5. IndexedDB schema upgraded while pending queue exists
+6. Worker skips multiple app versions
+
+For each:
+
+* Failure mode
+* Data-loss risk
+* Recovery difficulty
+* Severity
+
+==================================================
+PHASE C — VERSIONING DESIGN
+===========================
+
+Design:
+
+1. schemaVersion strategy
+2. API version strategy
+3. Queue version strategy
+4. IndexedDB migration strategy
+5. Backward compatibility rules
+
+Requirements:
+
+* No data loss
+* No forced queue deletion
+* Old clients must fail gracefully
+* Owners must be able to identify outdated devices
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement only high-value protections:
+
+1. Global schemaVersion
+2. Version attached to sync payloads
+3. Server compatibility checks
+4. Outdated client detection
+5. Operations dashboard version visibility
+
+Avoid:
+
+* Business logic changes
+* Financial logic changes
+* Queue architecture rewrites
+
+==================================================
+PHASE E — VALIDATION
+====================
+
+Test:
+
+1. Old client → new server
+2. New client → old queue
+3. Offline queue survives upgrade
+4. Multiple skipped versions
+5. IndexedDB migration safety
+6. Sync compatibility checks
+7. Multi-tenant isolation
+
+Return:
+
+1. Audit Report
+2. Compatibility Risks
+3. Versioning Architecture
+4. Implementation Report
+5. Validation Results
+6. Remaining Risks
