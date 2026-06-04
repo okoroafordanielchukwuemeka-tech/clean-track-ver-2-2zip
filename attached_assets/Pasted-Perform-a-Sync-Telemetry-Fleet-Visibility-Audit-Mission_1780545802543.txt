@@ -1,0 +1,120 @@
+Perform a Sync Telemetry & Fleet Visibility Audit.
+
+Mission:
+
+Determine how owners can gain visibility into worker-device sync health without changing core sync logic.
+
+Do NOT modify code initially.
+
+==================================================
+PHASE A — AUDIT
+===============
+
+Audit:
+
+* sync engine
+* sync queue
+* retry system
+* conflict system
+* recovery system
+* failed sync panel
+* operations center
+
+Identify:
+
+1. Events that never reach the server
+2. Device-local failures invisible to owners
+3. Queue states invisible to owners
+4. Recovery events invisible to owners
+5. Worker devices that can silently stop syncing
+
+Rank each risk by severity.
+
+==================================================
+PHASE B — TELEMETRY DESIGN
+==========================
+
+Design a lightweight telemetry layer.
+
+Capture:
+
+* last successful sync
+* pending count
+* failed count
+* conflict count
+* recovery count
+* device online/offline state
+* app version
+* worker id
+* branch id
+
+Requirements:
+
+* read-only monitoring
+* no business logic changes
+* no sync logic changes
+* no payment logic changes
+
+==================================================
+PHASE C — OWNER VISIBILITY
+==========================
+
+Design a new Sync Health tab in Operations Center.
+
+Show:
+
+1. Worker devices
+2. Last sync time
+3. Pending items
+4. Failed items
+5. Conflict items
+6. Recovery events
+7. Offline duration
+8. App version
+
+Highlight:
+
+* stale devices
+* stuck queues
+* conflict-heavy devices
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement only telemetry and visibility.
+
+Priority:
+
+1. Telemetry API
+2. Device heartbeat
+3. Sync metrics aggregation
+4. Operations Center Sync Health tab
+
+==================================================
+PHASE E — VALIDATION
+====================
+
+Test:
+
+* offline worker
+* stuck queue
+* conflict generation
+* recovery events
+* multiple branches
+* multiple workers
+* multi-tenant isolation
+
+Return:
+
+1. Audit Report
+2. Telemetry Architecture
+3. Implementation Report
+4. Validation Results
+5. Remaining Blind Spots
+
+Do not build notifications.
+Do not build analytics.
+Do not build WebSockets.
+Do not build customer-facing features.
+Focus entirely on operational visibility.

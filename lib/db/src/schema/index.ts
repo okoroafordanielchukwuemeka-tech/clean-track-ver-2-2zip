@@ -18,3 +18,4 @@ export * from "./discount-approvals.js";
 export * from "./audit-log.js";
 export * from "./idempotency-keys.js";
 export * from "./receipt-number-counters.js";
+export * from "./device-heartbeats.js";

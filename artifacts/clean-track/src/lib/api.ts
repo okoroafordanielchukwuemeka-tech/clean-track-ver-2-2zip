@@ -211,6 +211,10 @@ export const api = {
       return request<OpsWorkerActivityResponse>("GET", `/operations/worker-activity${qs}`);
     },
     health: () => request<OpsHealthResponse>("GET", "/operations/health"),
+    syncHealth: () => request<OpsSyncHealthResponse>("GET", "/operations/sync-health"),
+  },
+  telemetry: {
+    heartbeat: (data: HeartbeatInput) => request<void>("POST", "/telemetry/heartbeat", data),
   },
   expenseCategories: {
     list: () => request<ExpenseCategoryRecord[]>("GET", "/expense-categories"),
@@ -920,6 +924,53 @@ export interface OpsHealthResponse {
   };
   pickups: { last24h: number };
   topActions: { action: string; count: number }[];
+  generatedAt: string;
+}
+
+export interface HeartbeatInput {
+  deviceId: string;
+  pendingCount: number;
+  failedCount: number;
+  conflictCount: number;
+  recoveryCount: number;
+  isOnline: boolean;
+  appVersion: string;
+  lastSyncedAt: string | null;
+}
+
+export interface OpsSyncHealthDevice {
+  id: number;
+  deviceId: string;
+  actorType: "owner" | "worker";
+  workerName: string | null;
+  workerId: number | null;
+  branchId: number | null;
+  branchName: string | null;
+  pendingCount: number;
+  failedCount: number;
+  conflictCount: number;
+  recoveryCount: number;
+  isOnline: boolean;
+  appVersion: string | null;
+  lastSyncedAt: string | null;
+  lastSeenAt: string;
+  createdAt: string;
+  staleness: "fresh" | "stale" | "very_stale";
+  minutesSinceLastSeen: number;
+}
+
+export interface OpsSyncHealthResponse {
+  devices: OpsSyncHealthDevice[];
+  summary: {
+    total: number;
+    active: number;
+    stale: number;
+    veryStale: number;
+    withConflicts: number;
+    withPending: number;
+    withFailed: number;
+    offline: number;
+  };
   generatedAt: string;
 }
 

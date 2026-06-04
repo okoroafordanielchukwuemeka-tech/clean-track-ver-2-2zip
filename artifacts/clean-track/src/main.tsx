@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import "./index.css";
 import { syncEngine } from "./lib/sync-engine";
 import { runRecovery } from "./lib/recovery";
+import { initTelemetry } from "./lib/telemetry";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -12,9 +13,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 syncEngine.start();
-runRecovery().catch(err =>
-  console.error("[CleanTrack] Startup recovery failed:", err)
-);
+runRecovery()
+  .catch(err => console.error("[CleanTrack] Startup recovery failed:", err))
+  .finally(() => initTelemetry());
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

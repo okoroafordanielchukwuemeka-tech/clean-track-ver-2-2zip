@@ -7,6 +7,7 @@ import {
   orders,
   workers,
   branches,
+  deviceHeartbeats,
 } from "@workspace/db/schema";
 import { eq, and, gte, desc, sql, ilike, or } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
@@ -340,5 +341,83 @@ operationsRouter.get("/health", async (req: AuthRequest, res) => {
   } catch (err) {
     console.error("operations/health error:", err);
     res.status(500).json({ error: "Failed to load health data" });
+  }
+});
+
+/**
+ * GET /api/operations/sync-health
+ *
+ * Returns one row per worker device that has sent a heartbeat for this
+ * laundry. Each row includes current queue metrics (pending / failed /
+ * conflict counts), the staleness classification (fresh / stale /
+ * very_stale), and a pre-computed minutesSinceLastSeen integer for the UI.
+ *
+ * Staleness bands:
+ *   fresh      — lastSeenAt within 5 minutes
+ *   stale      — 5 – 60 minutes since last heartbeat
+ *   very_stale — more than 60 minutes
+ *
+ * The summary object contains fleet-level counts for the owner dashboard
+ * headline cards (active / stale / with-conflicts etc.).
+ */
+operationsRouter.get("/sync-health", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const now = new Date();
+
+    const rows = await db
+      .select({
+        id: deviceHeartbeats.id,
+        deviceId: deviceHeartbeats.deviceId,
+        actorType: deviceHeartbeats.actorType,
+        workerName: deviceHeartbeats.workerName,
+        workerId: deviceHeartbeats.workerId,
+        branchId: deviceHeartbeats.branchId,
+        branchName: branches.name,
+        pendingCount: deviceHeartbeats.pendingCount,
+        failedCount: deviceHeartbeats.failedCount,
+        conflictCount: deviceHeartbeats.conflictCount,
+        recoveryCount: deviceHeartbeats.recoveryCount,
+        isOnline: deviceHeartbeats.isOnline,
+        appVersion: deviceHeartbeats.appVersion,
+        lastSyncedAt: deviceHeartbeats.lastSyncedAt,
+        lastSeenAt: deviceHeartbeats.lastSeenAt,
+        createdAt: deviceHeartbeats.createdAt,
+      })
+      .from(deviceHeartbeats)
+      .leftJoin(branches, eq(branches.id, deviceHeartbeats.branchId))
+      .where(eq(deviceHeartbeats.laundryId, laundryId))
+      .orderBy(desc(deviceHeartbeats.lastSeenAt));
+
+    const devices = rows.map((d) => {
+      const msSince = now.getTime() - new Date(d.lastSeenAt).getTime();
+      const minutesSince = msSince / 60_000;
+      const staleness: "fresh" | "stale" | "very_stale" =
+        minutesSince < 5 ? "fresh" : minutesSince < 60 ? "stale" : "very_stale";
+      return {
+        ...d,
+        lastSeenAt: d.lastSeenAt.toISOString(),
+        lastSyncedAt: d.lastSyncedAt ? d.lastSyncedAt.toISOString() : null,
+        createdAt: d.createdAt.toISOString(),
+        staleness,
+        minutesSinceLastSeen: Math.round(minutesSince),
+      };
+    });
+
+    const summary = {
+      total: devices.length,
+      active: devices.filter((d) => d.staleness === "fresh").length,
+      stale: devices.filter((d) => d.staleness === "stale").length,
+      veryStale: devices.filter((d) => d.staleness === "very_stale").length,
+      withConflicts: devices.filter((d) => d.conflictCount > 0).length,
+      withPending: devices.filter((d) => d.pendingCount > 0).length,
+      withFailed: devices.filter((d) => d.failedCount > 0).length,
+      offline: devices.filter((d) => !d.isOnline).length,
+    };
+
+    return res.json({ devices, summary, generatedAt: now.toISOString() });
+  } catch (err) {
+    console.error("operations/sync-health error:", err);
+    return res.status(500).json({ error: "Failed to load sync health data" });
   }
 });
