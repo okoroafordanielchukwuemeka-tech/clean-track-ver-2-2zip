@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { APP_VERSION as CURRENT_APP_VERSION } from "@/lib/version";
 import type {
   OpsAuditLogResponse,
   OpsPaymentsResponse,
@@ -898,7 +899,14 @@ function SyncHealthTab() {
                       {d.lastSyncedAt ? fmtAge(d.lastSyncedAt) : "—"}
                     </td>
                     <td className="px-3 py-2 hidden xl:table-cell font-mono text-[10px] text-muted-foreground">
-                      {d.appVersion ?? "—"}
+                      <div className="flex flex-col gap-0.5">
+                        <span>{d.appVersion ?? "—"}</span>
+                        {d.appVersion && d.appVersion !== CURRENT_APP_VERSION && (
+                          <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[9px] font-semibold px-1.5 py-0.5 rounded w-fit">
+                            outdated
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

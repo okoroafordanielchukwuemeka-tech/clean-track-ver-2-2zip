@@ -117,6 +117,13 @@ export interface SyncQueueEntry {
   lastError: string | null;
   status: "pending" | "in_flight" | "failed" | "done";
   createdAt: string;
+  /**
+   * IndexedDB/payload schema version stamped at enqueue time.
+   * Allows the server to detect and handle entries created by older clients
+   * whose payload shape may differ from the current format.
+   * Optional for backward-compatibility with entries created before v2.
+   */
+  schemaVersion?: number;
 }
 
 export interface SyncLogEntry {
@@ -149,6 +156,35 @@ class CleanTrackDB extends Dexie {
     super("cleantrack_local_v1");
 
     this.version(1).stores({
+      customers:
+        "localId, serverId, phone, branchId, syncStatus, laundryId",
+      orders:
+        "localId, serverId, branchId, status, syncStatus, laundryId, createdAt",
+      orderItems:
+        "localId, orderLocalId, orderId",
+      payments:
+        "localId, orderLocalId, orderId, syncStatus, laundryId",
+      pickups:
+        "localId, orderLocalId, orderId, syncStatus",
+      services:
+        "localId, serverId, laundryId, serviceType, isActive",
+      syncQueue:
+        "++id, clientId, status, position, operation, localId, createdAt",
+      syncLog:
+        "++id, localId, success, syncedAt, operation",
+      metadata:
+        "key",
+    });
+
+    /**
+     * Version 2 — Schema versioning support (Phase D: Compatibility Audit)
+     *
+     * Adds the optional `schemaVersion` field to SyncQueueEntry.
+     * No index change is needed — schemaVersion is only used by the server
+     * to detect payload shape compatibility, not queried client-side.
+     * Existing entries without schemaVersion continue to work (treated as v1).
+     */
+    this.version(2).stores({
       customers:
         "localId, serverId, phone, branchId, syncStatus, laundryId",
       orders:

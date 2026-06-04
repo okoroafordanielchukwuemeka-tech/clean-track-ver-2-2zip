@@ -1,5 +1,51 @@
+import { APP_VERSION } from "./version";
+
 const BASE_URL = "/api";
 const TOKEN_KEY = "ct_token";
+
+// ── Outdated-client detection ───────────────────────────────────────────────
+// The server sends X-Min-Client-Version on every response.  If the running
+// APP_VERSION is older than that value, we flip _clientOutdated and notify
+// all subscribers (e.g. OutdatedClientBanner) so they can prompt a reload.
+
+let _clientOutdated = false;
+const _outdatedListeners: Array<() => void> = [];
+
+export function isClientOutdated(): boolean {
+  return _clientOutdated;
+}
+
+export function subscribeOutdated(cb: () => void): () => void {
+  _outdatedListeners.push(cb);
+  return () => {
+    const i = _outdatedListeners.indexOf(cb);
+    if (i >= 0) _outdatedListeners.splice(i, 1);
+  };
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function checkVersionHeaders(res: Response): void {
+  try {
+    const minVersion = res.headers.get("X-Min-Client-Version");
+    if (minVersion && !_clientOutdated) {
+      if (compareVersions(APP_VERSION, minVersion) < 0) {
+        _clientOutdated = true;
+        _outdatedListeners.forEach((cb) => {
+          try { cb(); } catch { /* listeners must not crash the engine */ }
+        });
+      }
+    }
+  } catch { /* never let version checking crash a real request */ }
+}
 
 /**
  * Thrown by the API client for any non-2xx response.
@@ -23,12 +69,15 @@ async function request<T>(method: string, path: string, body?: unknown, idempote
   if (body) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  headers["X-Client-Version"] = APP_VERSION;
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
+
+  checkVersionHeaders(res);
 
   if (res.status === 401) {
     const err = await res.json().catch(() => ({ error: "Unauthorized" }));

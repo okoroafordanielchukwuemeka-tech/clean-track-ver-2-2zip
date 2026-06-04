@@ -14,10 +14,12 @@
 import { syncEngine } from "./sync-engine";
 import { localDb, getMetadata } from "./local-db";
 import { api } from "./api";
+import { APP_VERSION } from "./version";
+
+export { APP_VERSION };
 
 const DEVICE_ID_KEY = "ct_device_id";
 const TOKEN_KEY = "ct_token";
-export const APP_VERSION = "1.0.0";
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 /**

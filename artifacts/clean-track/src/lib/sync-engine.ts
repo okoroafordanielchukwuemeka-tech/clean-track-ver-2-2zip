@@ -16,6 +16,7 @@
 
 import { localDb, type SyncOperation, type SyncQueueEntry } from "./local-db";
 import { processQueue as processQueueFromService } from "./queue-service";
+import { SCHEMA_VERSION } from "./version";
 
 export type SyncStatus = "idle" | "syncing" | "offline" | "error" | "paused";
 
@@ -124,6 +125,7 @@ class SyncEngine {
       lastError: null,
       status: "pending",
       createdAt: new Date().toISOString(),
+      schemaVersion: SCHEMA_VERSION,
     };
     await localDb.syncQueue.add(entry);
     await this.refreshCounts();
