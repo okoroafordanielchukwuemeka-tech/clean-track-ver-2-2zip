@@ -14,6 +14,8 @@ import type {
   DeletedCustomer,
   DeletedBranch,
   DeletedPayment,
+  DRReadiness,
+  DRCheck,
 } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +53,12 @@ import {
   UserX,
   Building2,
   ReceiptText,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
+  Database,
+  HardDrive,
+  Lock,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -942,6 +950,140 @@ function RecoverySection<T extends { id: number }>({
   );
 }
 
+function scoreColor(score: number) {
+  if (score >= 80) return "text-green-600";
+  if (score >= 60) return "text-yellow-600";
+  return "text-red-600";
+}
+
+function scoreBg(score: number) {
+  if (score >= 80) return "bg-green-50 border-green-200";
+  if (score >= 60) return "bg-yellow-50 border-yellow-200";
+  return "bg-red-50 border-red-200";
+}
+
+function CheckStatusIcon({ status }: { status: DRCheck["status"] }) {
+  if (status === "pass") return <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />;
+  if (status === "warn") return <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0" />;
+  return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
+}
+
+function DRReadinessPanel() {
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["recovery", "readiness"],
+    queryFn: api.recovery.readiness,
+    staleTime: 60_000,
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+          Calculating readiness score…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  const criticalFails = data.checks.filter(c => c.critical && c.status === "fail");
+  const warns = data.checks.filter(c => c.status === "warn");
+
+  return (
+    <div className="space-y-4">
+      <Card className={cn("border-2", scoreBg(data.score))}>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className={cn("text-5xl font-black tabular-nums", scoreColor(data.score))}>{data.score}</p>
+                <p className={cn("text-2xl font-bold", scoreColor(data.score))}>{data.grade}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">DR Score</p>
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-sm">Recovery Readiness</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="flex items-center gap-1 text-green-700">
+                    <CheckCircle className="h-3 w-3" />
+                    {data.checks.filter(c => c.status === "pass").length} passing
+                  </span>
+                  {warns.length > 0 && (
+                    <span className="flex items-center gap-1 text-yellow-700">
+                      <AlertCircle className="h-3 w-3" />
+                      {warns.length} warnings
+                    </span>
+                  )}
+                  {criticalFails.length > 0 && (
+                    <span className="flex items-center gap-1 text-red-700 font-medium">
+                      <XCircle className="h-3 w-3" />
+                      {criticalFails.length} critical failures
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
+                  <span className="flex items-center gap-1"><Database className="h-3 w-3" /> {data.dbStats.tables} tables · {data.dbStats.indexes} indexes · {data.dbStats.sizePretty}</span>
+                  <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" />
+                    {data.lastBackup
+                      ? `Last backup ${fmtAge(data.lastBackup.createdAt)} · ${(data.lastBackup.sizeBytes / 1024).toFixed(1)} KB`
+                      : "No backup on record"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching} className="shrink-0 gap-1 h-8 text-xs">
+              <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {data.checks.map((check) => (
+          <div
+            key={check.id}
+            className={cn(
+              "flex items-start gap-2 rounded-md border px-3 py-2 text-xs",
+              check.status === "pass" && "bg-green-50/50 border-green-100",
+              check.status === "warn" && "bg-yellow-50/50 border-yellow-100",
+              check.status === "fail" && (check.critical ? "bg-red-50/70 border-red-200" : "bg-orange-50/50 border-orange-100"),
+            )}
+          >
+            <CheckStatusIcon status={check.status} />
+            <div className="min-w-0">
+              <p className="font-medium leading-tight flex items-center gap-1">
+                {check.label}
+                {check.critical && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
+              </p>
+              <p className="text-muted-foreground leading-tight mt-0.5">{check.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {criticalFails.length > 0 && (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="px-4 py-3">
+            <p className="text-sm font-semibold text-red-800 flex items-center gap-1.5">
+              <ShieldX className="h-4 w-4" /> {criticalFails.length} Critical Issue{criticalFails.length > 1 ? "s" : ""} Require Immediate Action
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {criticalFails.map(c => (
+                <li key={c.id} className="text-xs text-red-700">• {c.label}: {c.detail}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      <p className="text-[10px] text-muted-foreground text-right">
+        Report generated {fmtAge(data.generatedAt)} · <Lock className="h-2.5 w-2.5 inline" /> = critical check
+      </p>
+    </div>
+  );
+}
+
 function RecoveryTab() {
   const qc = useQueryClient();
   const [restoringWorker, setRestoringWorker] = useState<number | null>(null);
@@ -983,7 +1125,13 @@ function RecoveryTab() {
   const total = summary?.total ?? 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      <DRReadinessPanel />
+
+      <div>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <RotateCcw className="h-4 w-4 text-muted-foreground" /> Recovery Bin
+        </h3>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Deleted Workers", icon: <UserX className="h-4 w-4 text-red-500" />, count: summary?.workers ?? 0 },

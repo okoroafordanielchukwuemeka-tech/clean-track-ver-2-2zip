@@ -226,6 +226,7 @@ export const api = {
     restoreCustomer: (id: number) => request<{ id: number; fullName: string; restored: boolean }>("POST", `/recovery/customers/${id}/restore`),
     restoreBranch: (id: number) => request<{ id: number; name: string; restored: boolean }>("POST", `/recovery/branches/${id}/restore`),
     restorePayment: (id: number) => request<{ id: number; receiptNumber: string; amount: string; restored: boolean }>("POST", `/recovery/payments/${id}/restore`),
+    readiness: () => request<DRReadiness>("GET", "/recovery/readiness"),
   },
   expenseCategories: {
     list: () => request<ExpenseCategoryRecord[]>("GET", "/expense-categories"),
@@ -981,6 +982,42 @@ export interface OpsSyncHealthResponse {
     withPending: number;
     withFailed: number;
     offline: number;
+  };
+  generatedAt: string;
+}
+
+export interface DRCheck {
+  id: string;
+  label: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+  critical: boolean;
+}
+
+export interface DRReadiness {
+  score: number;
+  grade: string;
+  checks: DRCheck[];
+  lastBackup: {
+    timestamp: string;
+    file: string;
+    sizeBytes: number;
+    sha256: string;
+    createdAt: string;
+    ageHours: number;
+  } | null;
+  dbStats: {
+    tables: number;
+    indexes: number;
+    sizeBytes: number;
+    sizePretty: string;
+  };
+  softDeleteStats: {
+    workers: number;
+    customers: number;
+    branches: number;
+    payments: number;
+    total: number;
   };
   generatedAt: string;
 }

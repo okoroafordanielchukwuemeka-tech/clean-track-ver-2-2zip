@@ -1,0 +1,153 @@
+Perform a Backup, Disaster Recovery, and Business Continuity Audit for CleanTrack.
+
+Mission:
+
+Determine whether CleanTrack can survive:
+
+1. Database corruption
+2. Accidental production deletion
+3. Failed deployment
+4. Bad migration
+5. Server outage
+6. Replit outage
+7. Region outage
+8. Human error
+9. Ransomware-style data destruction
+10. Multi-day service interruption
+
+Do NOT modify code initially.
+
+==================================================
+PHASE A — CURRENT STATE AUDIT
+=============================
+
+Audit:
+
+* PostgreSQL storage
+* Replit deployment
+* Database backups
+* Restore procedures
+* Schema migrations
+* Audit logs
+* Recovery Center
+* Device telemetry
+* Offline queue recovery
+* Soft delete system
+
+For each:
+
+Current State
+Failure Modes
+Recovery Capability
+RTO (Recovery Time Objective)
+RPO (Recovery Point Objective)
+Severity
+
+==================================================
+PHASE B — DISASTER SCENARIOS
+============================
+
+Analyze:
+
+1. Entire database deleted
+2. Orders table corrupted
+3. Payments table corrupted
+4. Bad migration deployed
+5. Developer deletes production data
+6. Customer accidentally deletes branch
+7. Server unavailable for 24 hours
+8. Server unavailable for 7 days
+9. Device offline for 30 days
+10. Sync queue exceeds 10,000 records
+
+For each scenario answer:
+
+Can system recover?
+How?
+How long?
+Data loss amount?
+Manual intervention required?
+
+==================================================
+PHASE C — BACKUP ARCHITECTURE
+=============================
+
+Design a production-grade backup strategy.
+
+Include:
+
+1. Daily snapshots
+2. Point-in-time recovery
+3. Off-site backups
+4. Backup retention policy
+5. Backup verification
+6. Restore testing
+7. Migration rollback plan
+8. Emergency recovery runbook
+
+Show:
+
+Cost
+Complexity
+Operational burden
+Business value
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement ONLY the highest-value safety improvements.
+
+Priority order:
+
+1. Backup status visibility
+2. Recovery readiness dashboard
+3. Migration tracking
+4. Backup verification tooling
+5. Recovery runbook storage
+
+Avoid:
+
+* Analytics
+* Notifications
+* Customer-facing features
+* New business workflows
+
+==================================================
+PHASE E — VALIDATION
+====================
+
+Create validation covering:
+
+1. Backup visibility
+2. Restore readiness
+3. Migration tracking
+4. Recovery workflows
+5. Soft-delete recovery
+6. Queue recovery
+7. Large outage scenarios
+8. Multi-tenant safety
+9. Data integrity after restore
+10. Operational usability
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Disaster Recovery Audit
+2. Backup Architecture
+3. Recovery Readiness Score
+4. Implementation Report
+5. Validation Results
+6. Remaining Catastrophic Risks
+
+Focus on:
+
+* survivability
+* recovery
+* operational resilience
+* business continuity
+
+The goal is to ensure CleanTrack can survive catastrophic failure without losing customer trust or financial records.
