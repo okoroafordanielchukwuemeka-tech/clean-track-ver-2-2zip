@@ -1271,6 +1271,7 @@ function RecoveryTab() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
