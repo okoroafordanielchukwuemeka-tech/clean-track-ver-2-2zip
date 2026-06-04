@@ -16,6 +16,7 @@ import {
   Percent,
   FileText,
   GitBranch,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -64,6 +65,7 @@ export function Layout() {
     { to: "/workers", label: "Workers", icon: Users },
     { to: "/branches", label: "Branches", icon: GitBranch },
     { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+    { to: "/operations", label: "Operations", icon: Activity },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 

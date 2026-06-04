@@ -27,6 +27,7 @@ import Receipts from "@/pages/receipts";
 import ReceiptPrint from "@/pages/receipt-print";
 import BranchesPage from "@/pages/branches";
 import DemoLogin from "@/pages/demo-login";
+import OperationsPage from "@/pages/operations";
 
 const STALE_TIME = 5 * 60 * 1000;       // 5 minutes
 const GC_TIME   = 24 * 60 * 60 * 1000;  // 24 hours
@@ -98,6 +99,7 @@ export default function App() {
                 <Route path="expenditures" element={<ProtectedRoute ownerOnly><Expenditures /></ProtectedRoute>} />
                 <Route path="receipts" element={<ProtectedRoute ownerOnly><Receipts /></ProtectedRoute>} />
                 <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
+                <Route path="operations" element={<ProtectedRoute ownerOnly><OperationsPage /></ProtectedRoute>} />
                 <Route path="worker-station" element={<WorkerStation />} />
                 <Route path="*" element={<NotFound />} />
               </Route>

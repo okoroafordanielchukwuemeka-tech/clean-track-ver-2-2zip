@@ -193,6 +193,25 @@ export const api = {
     update: (id: number, data: Partial<MessageTemplateInput>) => request<MessageTemplate>("PATCH", `/message-templates/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/message-templates/${id}`),
   },
+  operations: {
+    auditLog: (params?: { period?: string; action?: string; actorType?: string; actorName?: string; limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
+      return request<OpsAuditLogResponse>("GET", `/operations/audit-log${qs}`);
+    },
+    payments: (params?: { period?: string; method?: string; branchId?: number; recordedBy?: string; limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
+      return request<OpsPaymentsResponse>("GET", `/operations/payments${qs}`);
+    },
+    pickups: (params?: { period?: string; recordedBy?: string; limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
+      return request<OpsPickupsResponse>("GET", `/operations/pickups${qs}`);
+    },
+    workerActivity: (params?: { period?: string; actorName?: string; action?: string; limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
+      return request<OpsWorkerActivityResponse>("GET", `/operations/worker-activity${qs}`);
+    },
+    health: () => request<OpsHealthResponse>("GET", "/operations/health"),
+  },
   expenseCategories: {
     list: () => request<ExpenseCategoryRecord[]>("GET", "/expense-categories"),
     create: (data: { name: string }) => request<ExpenseCategoryRecord>("POST", "/expense-categories", data),
@@ -823,6 +842,85 @@ export interface ReceiptListResponse {
   total: number;
   totalCollected: number;
   totalBalance: number;
+}
+
+export interface OpsAuditEntry {
+  id: number;
+  actorId?: number | null;
+  actorType: "owner" | "worker";
+  actorName: string;
+  action: string;
+  orderId?: number | null;
+  orderRef?: string | null;
+  customerName?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface OpsAuditLogResponse {
+  entries: OpsAuditEntry[];
+  total: number;
+}
+
+export interface OpsPaymentEntry {
+  id: number;
+  receiptNumber?: string | null;
+  amount: string;
+  method: string;
+  notes?: string | null;
+  remainingBalance: string;
+  recordedBy?: string | null;
+  recordedAt: string;
+  branchId?: number | null;
+  branchName?: string | null;
+  orderId: number;
+  orderRef?: string | null;
+  customerName?: string | null;
+  phone?: string | null;
+  workerName?: string | null;
+}
+
+export interface OpsPaymentsResponse {
+  payments: OpsPaymentEntry[];
+  total: number;
+  totalAmount: string;
+}
+
+export interface OpsPickupEntry {
+  id: number;
+  orderId: number;
+  orderRef?: string | null;
+  customerName?: string | null;
+  phone?: string | null;
+  shirtsPickedUp: number;
+  trousersPickedUp: number;
+  itemPickups?: { orderItemId: number; quantity: number; name: string }[] | null;
+  notes?: string | null;
+  recordedBy?: string | null;
+  workerName?: string | null;
+  createdAt: string;
+}
+
+export interface OpsPickupsResponse {
+  pickups: OpsPickupEntry[];
+  total: number;
+}
+
+export interface OpsWorkerActivityResponse {
+  entries: OpsAuditEntry[];
+  total: number;
+  summary: { actorName: string; actorId?: number | null; count: number }[];
+}
+
+export interface OpsHealthResponse {
+  orders: { byStatus: { status: string; count: number }[] };
+  payments: {
+    byMethod: { method: string; count: number; total: string }[];
+    last24h: number;
+  };
+  pickups: { last24h: number };
+  topActions: { action: string; count: number }[];
+  generatedAt: string;
 }
 
 export interface AuditLogEntry {

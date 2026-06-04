@@ -16,6 +16,7 @@ import { expenseCategoriesRouter } from "./expense-categories.js";
 import { discountApprovalsRouter } from "./discount-approvals.js";
 import { receiptsRouter } from "./receipts.js";
 import { branchesRouter } from "./branches.js";
+import { operationsRouter } from "./operations.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 export const router = Router();
@@ -44,3 +45,4 @@ router.use("/discount-approvals", requireAuth, discountApprovalsRouter);
 // GET /receipts/:receiptNumber  → requireAuth (workers + owners, for print page)
 router.use("/receipts", requireAuth, receiptsRouter);
 router.use("/branches", requireAuth, branchesRouter);
+router.use("/operations", requireOwner, operationsRouter);
