@@ -12,6 +12,10 @@ export const customers = pgTable("customers", {
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastActivityAt: timestamp("last_activity_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: integer("deleted_by_id"),
+  deletedByType: text("deleted_by_type"),
+  deletedByName: text("deleted_by_name"),
 });
 
 export type Customer = typeof customers.$inferSelect;

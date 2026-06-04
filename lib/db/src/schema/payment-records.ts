@@ -17,6 +17,11 @@ export const paymentRecords = pgTable("payment_records", {
   recordedBy: text("recorded_by"),
   workerId: integer("worker_id").references(() => workers.id, { onDelete: "set null" }),
   recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: integer("deleted_by_id"),
+  deletedByType: text("deleted_by_type"),
+  deletedByName: text("deleted_by_name"),
+  deletionReason: text("deletion_reason"),
 });
 
 export type PaymentRecord = typeof paymentRecords.$inferSelect;

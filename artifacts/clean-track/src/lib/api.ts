@@ -216,6 +216,17 @@ export const api = {
   telemetry: {
     heartbeat: (data: HeartbeatInput) => request<void>("POST", "/telemetry/heartbeat", data),
   },
+  recovery: {
+    summary: () => request<RecoverySummary>("GET", "/recovery/summary"),
+    workers: () => request<DeletedWorker[]>("GET", "/recovery/workers"),
+    customers: () => request<DeletedCustomer[]>("GET", "/recovery/customers"),
+    branches: () => request<DeletedBranch[]>("GET", "/recovery/branches"),
+    payments: () => request<DeletedPayment[]>("GET", "/recovery/payments"),
+    restoreWorker: (id: number) => request<{ id: number; name: string; restored: boolean }>("POST", `/recovery/workers/${id}/restore`),
+    restoreCustomer: (id: number) => request<{ id: number; fullName: string; restored: boolean }>("POST", `/recovery/customers/${id}/restore`),
+    restoreBranch: (id: number) => request<{ id: number; name: string; restored: boolean }>("POST", `/recovery/branches/${id}/restore`),
+    restorePayment: (id: number) => request<{ id: number; receiptNumber: string; amount: string; restored: boolean }>("POST", `/recovery/payments/${id}/restore`),
+  },
   expenseCategories: {
     list: () => request<ExpenseCategoryRecord[]>("GET", "/expense-categories"),
     create: (data: { name: string }) => request<ExpenseCategoryRecord>("POST", "/expense-categories", data),
@@ -972,6 +983,60 @@ export interface OpsSyncHealthResponse {
     offline: number;
   };
   generatedAt: string;
+}
+
+export interface RecoverySummary {
+  workers: number;
+  customers: number;
+  branches: number;
+  payments: number;
+  total: number;
+}
+
+export interface DeletedWorker {
+  id: number;
+  name: string;
+  phone?: string | null;
+  role: string;
+  branchId?: number | null;
+  deletedAt: string;
+  deletedByName?: string | null;
+  deletedByType?: string | null;
+  createdAt: string;
+}
+
+export interface DeletedCustomer {
+  id: number;
+  fullName: string;
+  phone: string;
+  branchId?: number | null;
+  deletedAt: string;
+  deletedByName?: string | null;
+  deletedByType?: string | null;
+  createdAt: string;
+}
+
+export interface DeletedBranch {
+  id: number;
+  name: string;
+  address?: string | null;
+  deletedAt: string;
+  deletedByName?: string | null;
+  deletedByType?: string | null;
+  createdAt: string;
+}
+
+export interface DeletedPayment {
+  id: number;
+  orderId: number;
+  receiptNumber?: string | null;
+  amount: string;
+  method: string;
+  recordedBy?: string | null;
+  recordedAt: string;
+  deletedAt: string;
+  deletedByName?: string | null;
+  deletedByType?: string | null;
 }
 
 export interface AuditLogEntry {

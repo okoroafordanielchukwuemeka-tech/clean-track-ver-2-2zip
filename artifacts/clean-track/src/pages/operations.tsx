@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   OpsAuditLogResponse,
@@ -9,6 +9,11 @@ import type {
   OpsHealthResponse,
   OpsSyncHealthResponse,
   OpsSyncHealthDevice,
+  RecoverySummary,
+  DeletedWorker,
+  DeletedCustomer,
+  DeletedBranch,
+  DeletedPayment,
 } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +46,11 @@ import {
   Wifi,
   WifiOff,
   Monitor,
+  RotateCcw,
+  Trash2,
+  UserX,
+  Building2,
+  ReceiptText,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -888,6 +898,235 @@ function SyncHealthTab() {
   );
 }
 
+function RecoverySection<T extends { id: number }>({
+  title,
+  icon,
+  items,
+  isLoading,
+  renderRow,
+  onRestore,
+  restoring,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: T[] | undefined;
+  isLoading: boolean;
+  renderRow: (item: T) => React.ReactNode;
+  onRestore: (id: number) => void;
+  restoring: number | null;
+}) {
+  if (isLoading) return <p className="text-xs text-muted-foreground py-4">Loading…</p>;
+  if (!items || items.length === 0)
+    return <p className="text-xs text-muted-foreground py-3 italic">No deleted {title.toLowerCase()} found.</p>;
+  return (
+    <div className="space-y-1">
+      {items.map((item) => (
+        <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs bg-muted/30">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-muted-foreground">{icon}</span>
+            <div className="min-w-0">{renderRow(item)}</div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs shrink-0 gap-1"
+            disabled={restoring === item.id}
+            onClick={() => onRestore(item.id)}
+          >
+            <RotateCcw className="h-3 w-3" />
+            {restoring === item.id ? "Restoring…" : "Restore"}
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecoveryTab() {
+  const qc = useQueryClient();
+  const [restoringWorker, setRestoringWorker] = useState<number | null>(null);
+  const [restoringCustomer, setRestoringCustomer] = useState<number | null>(null);
+  const [restoringBranch, setRestoringBranch] = useState<number | null>(null);
+  const [restoringPayment, setRestoringPayment] = useState<number | null>(null);
+
+  const { data: summary } = useQuery({ queryKey: ["recovery", "summary"], queryFn: api.recovery.summary });
+  const { data: dWorkers, isLoading: wLoad } = useQuery({ queryKey: ["recovery", "workers"], queryFn: api.recovery.workers });
+  const { data: dCustomers, isLoading: cLoad } = useQuery({ queryKey: ["recovery", "customers"], queryFn: api.recovery.customers });
+  const { data: dBranches, isLoading: bLoad } = useQuery({ queryKey: ["recovery", "branches"], queryFn: api.recovery.branches });
+  const { data: dPayments, isLoading: pLoad } = useQuery({ queryKey: ["recovery", "payments"], queryFn: api.recovery.payments });
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["recovery"] });
+    qc.invalidateQueries({ queryKey: ["workers"] });
+    qc.invalidateQueries({ queryKey: ["customers"] });
+    qc.invalidateQueries({ queryKey: ["branches"] });
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
+  const restoreWorker = useMutation({
+    mutationFn: (id: number) => { setRestoringWorker(id); return api.recovery.restoreWorker(id); },
+    onSettled: () => { setRestoringWorker(null); invalidateAll(); },
+  });
+  const restoreCustomer = useMutation({
+    mutationFn: (id: number) => { setRestoringCustomer(id); return api.recovery.restoreCustomer(id); },
+    onSettled: () => { setRestoringCustomer(null); invalidateAll(); },
+  });
+  const restoreBranch = useMutation({
+    mutationFn: (id: number) => { setRestoringBranch(id); return api.recovery.restoreBranch(id); },
+    onSettled: () => { setRestoringBranch(null); invalidateAll(); },
+  });
+  const restorePayment = useMutation({
+    mutationFn: (id: number) => { setRestoringPayment(id); return api.recovery.restorePayment(id); },
+    onSettled: () => { setRestoringPayment(null); invalidateAll(); },
+  });
+
+  const total = summary?.total ?? 0;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Deleted Workers", icon: <UserX className="h-4 w-4 text-red-500" />, count: summary?.workers ?? 0 },
+          { label: "Deleted Customers", icon: <Users className="h-4 w-4 text-orange-500" />, count: summary?.customers ?? 0 },
+          { label: "Deleted Branches", icon: <Building2 className="h-4 w-4 text-amber-500" />, count: summary?.branches ?? 0 },
+          { label: "Voided Payments", icon: <ReceiptText className="h-4 w-4 text-purple-500" />, count: summary?.payments ?? 0 },
+        ].map((s) => (
+          <Card key={s.label} className="py-3">
+            <CardContent className="px-4 py-0">
+              <div className="flex items-center gap-2">
+                {s.icon}
+                <div>
+                  <p className="text-xl font-bold">{s.count}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">{s.label}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {total === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
+            <p className="font-semibold">Nothing in the recovery bin</p>
+            <p className="text-sm text-muted-foreground mt-1">All workers, customers, branches, and payments are active.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-5">
+          {(summary?.workers ?? 0) > 0 && (
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <UserX className="h-4 w-4 text-red-500" /> Deleted Workers
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <RecoverySection<DeletedWorker>
+                  title="Workers"
+                  icon={<UserX className="h-3.5 w-3.5" />}
+                  items={dWorkers}
+                  isLoading={wLoad}
+                  restoring={restoringWorker}
+                  onRestore={(id) => restoreWorker.mutate(id)}
+                  renderRow={(w) => (
+                    <div>
+                      <p className="font-medium">{w.name} <span className="text-muted-foreground font-normal">({w.role})</span></p>
+                      <p className="text-muted-foreground">{w.phone} · Deleted {fmtAge(w.deletedAt)} by {w.deletedByName ?? "unknown"}</p>
+                    </div>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {(summary?.customers ?? 0) > 0 && (
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="h-4 w-4 text-orange-500" /> Deleted Customers
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <RecoverySection<DeletedCustomer>
+                  title="Customers"
+                  icon={<Users className="h-3.5 w-3.5" />}
+                  items={dCustomers}
+                  isLoading={cLoad}
+                  restoring={restoringCustomer}
+                  onRestore={(id) => restoreCustomer.mutate(id)}
+                  renderRow={(c) => (
+                    <div>
+                      <p className="font-medium">{c.fullName}</p>
+                      <p className="text-muted-foreground">{c.phone} · Deleted {fmtAge(c.deletedAt)} by {c.deletedByName ?? "unknown"}</p>
+                    </div>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {(summary?.branches ?? 0) > 0 && (
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-amber-500" /> Deleted Branches
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <RecoverySection<DeletedBranch>
+                  title="Branches"
+                  icon={<Building2 className="h-3.5 w-3.5" />}
+                  items={dBranches}
+                  isLoading={bLoad}
+                  restoring={restoringBranch}
+                  onRestore={(id) => restoreBranch.mutate(id)}
+                  renderRow={(b) => (
+                    <div>
+                      <p className="font-medium">{b.name}</p>
+                      <p className="text-muted-foreground">{b.address ?? "No address"} · Deleted {fmtAge(b.deletedAt)} by {b.deletedByName ?? "unknown"}</p>
+                    </div>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {(summary?.payments ?? 0) > 0 && (
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ReceiptText className="h-4 w-4 text-purple-500" /> Voided Payments
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <RecoverySection<DeletedPayment>
+                  title="Payments"
+                  icon={<ReceiptText className="h-3.5 w-3.5" />}
+                  items={dPayments}
+                  isLoading={pLoad}
+                  restoring={restoringPayment}
+                  onRestore={(id) => restorePayment.mutate(id)}
+                  renderRow={(p) => (
+                    <div>
+                      <p className="font-medium">
+                        {fmt(p.amount)} via {p.method.toUpperCase()}
+                        {p.receiptNumber && <span className="text-muted-foreground font-normal ml-1">#{p.receiptNumber}</span>}
+                      </p>
+                      <p className="text-muted-foreground">Voided {fmtAge(p.deletedAt)} by {p.deletedByName ?? "unknown"} · Recorded by {p.recordedBy ?? "?"}</p>
+                    </div>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OperationsPage() {
   return (
     <div className="space-y-5">
@@ -921,6 +1160,9 @@ export default function OperationsPage() {
           <TabsTrigger value="sync-health" className="text-xs gap-1.5">
             <Wifi className="h-3.5 w-3.5" /> Sync Health
           </TabsTrigger>
+          <TabsTrigger value="recovery" className="text-xs gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" /> Recovery
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="audit-log" className="mt-4"><AuditLogTab /></TabsContent>
@@ -929,6 +1171,7 @@ export default function OperationsPage() {
         <TabsContent value="worker-activity" className="mt-4"><WorkerActivityTab /></TabsContent>
         <TabsContent value="health" className="mt-4"><HealthTab /></TabsContent>
         <TabsContent value="sync-health" className="mt-4"><SyncHealthTab /></TabsContent>
+        <TabsContent value="recovery" className="mt-4"><RecoveryTab /></TabsContent>
       </Tabs>
     </div>
   );

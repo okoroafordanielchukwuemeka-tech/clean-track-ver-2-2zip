@@ -7,6 +7,10 @@ export const branches = pgTable("branches", {
   name: text("name").notNull(),
   address: text("address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: integer("deleted_by_id"),
+  deletedByType: text("deleted_by_type"),
+  deletedByName: text("deleted_by_name"),
 });
 
 export type Branch = typeof branches.$inferSelect;

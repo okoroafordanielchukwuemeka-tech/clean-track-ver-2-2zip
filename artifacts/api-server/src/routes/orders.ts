@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers } from "@workspace/db/schema";
-import { eq, desc, and, count, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -558,16 +558,28 @@ ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRe
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
-    const delConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) delConditions.push(eq(orders.branchId, workerBranchId));
-    const [deleted] = await db.delete(orders).where(and(...delConditions)).returning();
-    if (!deleted) return res.status(404).json({ error: "Order not found" });
+    const orderId = parseInt(req.params.id);
+    const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
+    if (workerBranchId) conditions.push(eq(orders.branchId, workerBranchId));
+
+    const [existing] = await db.select().from(orders).where(and(...conditions));
+    if (!existing) return res.status(404).json({ error: "Order not found" });
+
+    if (existing.status === "completed") {
+      return res.status(409).json({ error: "Cannot delete a completed order. Completed orders are permanently preserved for financial records." });
+    }
+
+    const [cancelled] = await db.update(orders).set({
+      status: "cancelled",
+      updatedAt: new Date(),
+    }).where(and(...conditions)).returning();
 
     logAction({
       auth: req.auth!,
       laundryId,
-      action: "order_deleted",
-      metadata: { orderId: deleted.orderId, customerName: deleted.customerName },
+      action: "order_cancelled",
+      orderId: cancelled.id,
+      metadata: { orderId: cancelled.orderId, customerName: cancelled.customerName, previousStatus: existing.status },
     }).catch(() => {});
 
     res.status(204).send();
@@ -718,13 +730,23 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
     if (workerBranchId) delPmtConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...delPmtConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
-    const [deleted] = await db.delete(paymentRecords)
-      .where(and(eq(paymentRecords.id, parseInt(req.params.paymentId)), eq(paymentRecords.orderId, order.id)))
-      .returning();
-    if (!deleted) return res.status(404).json({ error: "Payment not found" });
 
-    // Recalculate order balance after deleting this payment
-    const remaining = await db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id));
+    const paymentId = parseInt(req.params.paymentId);
+    const [existing] = await db.select().from(paymentRecords)
+      .where(and(eq(paymentRecords.id, paymentId), eq(paymentRecords.orderId, order.id)));
+    if (!existing || existing.deletedAt) return res.status(404).json({ error: "Payment not found" });
+
+    const auth = req.auth!;
+    await db.update(paymentRecords).set({
+      deletedAt: new Date(),
+      deletedById: auth.type === "owner" ? (auth.ownerId ?? null) : (auth.workerId ?? null),
+      deletedByType: auth.type,
+      deletedByName: auth.name ?? auth.email ?? "unknown",
+    }).where(eq(paymentRecords.id, paymentId));
+
+    // Recalculate order balance excluding soft-deleted payments
+    const remaining = await db.select().from(paymentRecords)
+      .where(and(eq(paymentRecords.orderId, order.id), isNull(paymentRecords.deletedAt)));
     const newAmountPaid = remaining.reduce((sum, p) => sum + parseFloat(p.amount), 0);
     const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
     const newPaymentStatus = totalDue <= 0 || newAmountPaid >= totalDue ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
@@ -736,16 +758,16 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
     }).where(eq(orders.id, order.id));
 
     logAction({
-      auth: req.auth!,
+      auth,
       laundryId,
-      action: "payment_deleted",
+      action: "payment_voided",
       orderId: order.id,
-      metadata: { paymentId: deleted.id, amount: deleted.amount, newAmountPaid, newPaymentStatus, orderId: order.orderId },
+      metadata: { paymentId: existing.id, receiptNumber: existing.receiptNumber, amount: existing.amount, newAmountPaid, newPaymentStatus, orderId: order.orderId },
     }).catch(() => {});
 
     res.status(204).send();
   } catch {
-    res.status(500).json({ error: "Failed to delete payment" });
+    res.status(500).json({ error: "Failed to void payment" });
   }
 });
 

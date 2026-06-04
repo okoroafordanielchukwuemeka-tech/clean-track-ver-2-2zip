@@ -2,10 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { customers, orders, paymentRecords, pickupRecords, priceAdjustments } from "@workspace/db/schema";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
-import { eq, and, desc, ilike, or, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, ilike, or, gte, lte, inArray, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
+import { logAction } from "../lib/audit.js";
 
 export const customersRouter = Router();
 
@@ -157,7 +158,7 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
 
     const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
 
-    const baseConditions: any[] = [eq(customers.laundryId, laundryId)];
+    const baseConditions: any[] = [eq(customers.laundryId, laundryId), isNull(customers.deletedAt)];
     if (effectiveBranchId) baseConditions.push(eq(customers.branchId, effectiveBranchId));
 
     let query = db.select().from(customers).where(and(...baseConditions)).$dynamic();
@@ -213,7 +214,7 @@ customersRouter.get("/:id", checkPermission("view:customers"), async (req: AuthR
     const customerId = parseInt(req.params.id);
     const workerBranchId = req.auth!.branchId;
 
-    const custGetConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
+    const custGetConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId), isNull(customers.deletedAt)];
     if (workerBranchId) custGetConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.select().from(customers).where(and(...custGetConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
@@ -483,12 +484,57 @@ customersRouter.delete("/:id", checkPermission("delete:customers"), async (req: 
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
-    const [deleted] = await db.delete(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)))
-      .returning();
-    if (!deleted) return res.status(404).json({ error: "Customer not found" });
+
+    const [existing] = await db.select().from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId), isNull(customers.deletedAt)));
+    if (!existing) return res.status(404).json({ error: "Customer not found" });
+
+    const auth = req.auth!;
+    await db.update(customers).set({
+      deletedAt: new Date(),
+      deletedById: auth.type === "owner" ? (auth.ownerId ?? null) : (auth.workerId ?? null),
+      deletedByType: auth.type,
+      deletedByName: auth.name ?? auth.email ?? "unknown",
+    }).where(eq(customers.id, customerId));
+
+    logAction({
+      auth,
+      laundryId,
+      action: "customer_deleted",
+      metadata: { customerId, fullName: existing.fullName, phone: existing.phone },
+    }).catch(() => {});
+
     res.status(204).send();
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to delete customer" });
+  }
+});
+
+customersRouter.post("/:id/restore", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const customerId = parseInt(req.params.id);
+
+    const [existing] = await db.select().from(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId), isNotNull(customers.deletedAt)));
+    if (!existing) return res.status(404).json({ error: "Deleted customer not found" });
+
+    const [restored] = await db.update(customers).set({
+      deletedAt: null,
+      deletedById: null,
+      deletedByType: null,
+      deletedByName: null,
+    }).where(eq(customers.id, customerId)).returning();
+
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "customer_restored",
+      metadata: { customerId, fullName: existing.fullName, phone: existing.phone },
+    }).catch(() => {});
+
+    res.json(restored);
+  } catch {
+    res.status(500).json({ error: "Failed to restore customer" });
   }
 });

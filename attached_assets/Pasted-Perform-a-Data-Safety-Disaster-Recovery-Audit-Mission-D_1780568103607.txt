@@ -1,0 +1,154 @@
+Perform a Data Safety & Disaster Recovery Audit.
+
+Mission:
+
+Determine whether CleanTrack can survive operator mistakes, software bugs, deployment failures, database corruption, and accidental data loss.
+
+Do NOT modify code initially.
+
+==================================================
+PHASE A — FULL DATA AUDIT
+=========================
+
+Audit every major entity:
+
+* laundries
+* branches
+* workers
+* customers
+* orders
+* order_items
+* payments
+* pickups
+* audit_log
+* sync queues
+* device_heartbeats
+* telemetry tables
+* worker permissions
+
+For each entity provide:
+
+1. Creation path
+2. Update path
+3. Delete path
+4. Soft delete support
+5. Restore support
+6. Audit coverage
+7. Multi-tenant isolation
+8. Data loss risk
+
+Rank risk:
+
+LOW
+MEDIUM
+HIGH
+CRITICAL
+
+==================================================
+PHASE B — FAILURE SCENARIOS
+===========================
+
+Analyze:
+
+1. Worker deleted accidentally
+2. Customer deleted accidentally
+3. Branch deleted accidentally
+4. Order deleted accidentally
+5. Payment deleted accidentally
+6. Pickup deleted accidentally
+7. Audit log corruption
+8. Database corruption
+9. Failed deployment
+10. Migration failure
+11. Production restore
+12. Owner account compromised
+
+For each scenario answer:
+
+* Can recovery occur?
+* How?
+* What data is lost?
+* Severity?
+* Recommended fix?
+
+==================================================
+PHASE C — BACKUP ARCHITECTURE
+=============================
+
+Design:
+
+1. Daily backups
+2. Weekly backups
+3. Monthly backups
+4. Point-in-time recovery
+5. Backup verification
+6. Restore testing
+
+Estimate:
+
+* Storage requirements
+* Cost
+* Recovery time
+* Recovery point objective (RPO)
+* Recovery time objective (RTO)
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement ONLY the highest-value protections.
+
+Priority order:
+
+1. Soft deletes
+2. Restore metadata
+3. Deletion audit trails
+4. Recovery visibility
+5. Backup status visibility
+
+Do NOT implement:
+
+* analytics
+* notifications
+* AI features
+* customer-facing functionality
+
+==================================================
+PHASE E — VALIDATION
+====================
+
+Create tests covering:
+
+1. Soft delete
+2. Restore
+3. Historical visibility
+4. Audit integrity
+5. Multi-tenant isolation
+6. Recovery workflow
+7. Backup metadata integrity
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Data Safety Audit
+2. Disaster Recovery Report
+3. Backup Architecture
+4. Implementation Report
+5. Validation Results
+6. Remaining Risks
+7. Production Readiness Score
+
+Focus on:
+
+* recoverability
+* business continuity
+* operational resilience
+* data protection
+* owner trust
+
+Goal:
+
+Ensure CleanTrack can survive real-world failures without losing customer data or financial records.
