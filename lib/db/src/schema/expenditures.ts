@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, boolean, integer, timestamp, index } from "drizzle-orm/pg-core";
 import { laundries } from "./laundries.js";
 
 export const EXPENSE_CATEGORIES = [
@@ -17,7 +17,10 @@ export const expenditures = pgTable("expenditures", {
   isRecurring: boolean("is_recurring").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("expenditures_laundry_id_idx").on(t.laundryId),
+  index("expenditures_created_at_idx").on(t.createdAt),
+]);
 
 export type Expenditure = typeof expenditures.$inferSelect;
 export type NewExpenditure = typeof expenditures.$inferInsert;

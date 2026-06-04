@@ -5,7 +5,10 @@
     "dev": "concurrently \"pnpm --filter @workspace/api-server dev\" \"pnpm --filter @workspace/clean-track dev\"",
     "build": "pnpm --filter @workspace/api-server build && pnpm --filter @workspace/clean-track build",
     "db:push": "pnpm --filter @workspace/db push",
-    "db:push-force": "pnpm --filter @workspace/db push-force"
+    "db:push-force": "pnpm --filter @workspace/db push-force",
+    "db:backup": "bash scripts/backup.sh ./backups",
+    "db:verify-backup": "bash scripts/verify-backup.sh",
+    "db:restore": "bash scripts/restore.sh"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

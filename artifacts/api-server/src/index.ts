@@ -1,7 +1,60 @@
 import app from "./app.js";
+import { db } from "@workspace/db";
+import { idempotencyKeys } from "@workspace/db/schema";
+import { lt } from "drizzle-orm";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`API server running on port ${PORT}`);
+  scheduleIdempotencyCleanup();
+});
+
+function scheduleIdempotencyCleanup() {
+  const TTL_MS = 24 * 60 * 60 * 1000;
+  const INTERVAL_MS = 60 * 60 * 1000;
+
+  const runCleanup = async () => {
+    try {
+      const cutoff = new Date(Date.now() - TTL_MS);
+      const result = await db.delete(idempotencyKeys).where(lt(idempotencyKeys.createdAt, cutoff));
+      const count = (result as any).rowCount ?? 0;
+      if (count > 0) console.log(`[cleanup] Removed ${count} expired idempotency key(s)`);
+    } catch (err) {
+      console.error("[cleanup] Idempotency key cleanup failed:", err);
+    }
+  };
+
+  const timer = setInterval(runCleanup, INTERVAL_MS);
+  timer.unref();
+}
+
+function gracefulShutdown(signal: string) {
+  console.log(`[shutdown] Received ${signal}. Closing HTTP server gracefully…`);
+  server.close((err) => {
+    if (err) {
+      console.error("[shutdown] Error closing server:", err);
+      process.exit(1);
+    }
+    console.log("[shutdown] HTTP server closed. Exiting.");
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error("[shutdown] Forced exit after 10s timeout.");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+process.on("uncaughtException", (err) => {
+  console.error("[fatal] Uncaught exception:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[fatal] Unhandled promise rejection:", reason);
+  process.exit(1);
 });

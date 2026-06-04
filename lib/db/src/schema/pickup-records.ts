@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, json } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, json, index } from "drizzle-orm/pg-core";
 import { orders } from "./orders.js";
 import { workers } from "./workers.js";
 import { laundries } from "./laundries.js";
@@ -14,7 +14,10 @@ export const pickupRecords = pgTable("pickup_records", {
   processedBy: integer("processed_by").references(() => workers.id),
   recordedBy: text("recorded_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("pickup_records_order_id_idx").on(t.orderId),
+  index("pickup_records_laundry_id_idx").on(t.laundryId),
+]);
 
 export type PickupRecord = typeof pickupRecords.$inferSelect;
 export type NewPickupRecord = typeof pickupRecords.$inferInsert;

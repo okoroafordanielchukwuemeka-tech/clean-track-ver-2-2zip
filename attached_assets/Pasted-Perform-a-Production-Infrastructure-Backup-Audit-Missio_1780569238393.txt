@@ -1,0 +1,149 @@
+Perform a Production Infrastructure & Backup Audit.
+
+Mission:
+
+Determine whether CleanTrack can survive infrastructure failures, deployment mistakes, database corruption, and accidental data loss.
+
+Do NOT modify code initially.
+
+==================================================
+PHASE A — INFRASTRUCTURE AUDIT
+==============================
+
+Audit:
+
+* PostgreSQL usage
+* Database schema
+* Migrations
+* Environment variables
+* File storage
+* Replit deployment setup
+* Service restart behavior
+* Background jobs
+* Telemetry storage
+* Audit log storage
+
+For each area provide:
+
+Current State
+Failure Risks
+Recovery Capability
+Severity
+
+==================================================
+PHASE B — BACKUP AUDIT
+======================
+
+Analyze:
+
+1. Database backup strategy
+2. Backup frequency
+3. Restore capability
+4. Point-in-time recovery
+5. Cross-region recovery
+6. Disaster recovery procedures
+
+For each answer:
+
+Can we recover?
+
+How much data can be lost?
+
+Recovery Time Objective (RTO)
+
+Recovery Point Objective (RPO)
+
+==================================================
+PHASE C — SCALE AUDIT
+=====================
+
+Estimate behavior at:
+
+10 laundries
+50 laundries
+100 laundries
+500 laundries
+1000 laundries
+
+Analyze:
+
+* API load
+* Database load
+* Sync traffic
+* Telemetry traffic
+* Operations dashboard load
+* Storage growth
+
+Identify bottlenecks.
+
+==================================================
+PHASE D — ARCHITECTURE HARDENING PLAN
+=====================================
+
+Design:
+
+1. Backup architecture
+2. Restore procedures
+3. Migration strategy
+4. Deployment rollback strategy
+5. Database maintenance plan
+6. Monitoring strategy
+
+Prioritize by:
+
+Critical
+High
+Medium
+Low
+
+==================================================
+PHASE E — IMPLEMENTATION
+========================
+
+Implement ONLY critical protections:
+
+1. Automated backups
+2. Backup verification
+3. Restore verification
+4. Migration safety guardrails
+5. Deployment rollback safeguards
+
+Avoid feature work.
+
+==================================================
+PHASE F — VALIDATION
+====================
+
+Create tests proving:
+
+1. Backups execute
+2. Backups restore correctly
+3. Rollbacks work
+4. Migrations are reversible
+5. Recovery procedures are documented
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Infrastructure Audit
+2. Backup Audit
+3. Scalability Assessment
+4. Hardening Plan
+5. Implementation Report
+6. Validation Results
+7. Remaining Catastrophic Risks
+
+Focus on:
+
+data durability
+business continuity
+disaster recovery
+deployment safety
+long-term scale
+
+Do NOT build new customer features.
+Do NOT build analytics.
+Do NOT build notifications.

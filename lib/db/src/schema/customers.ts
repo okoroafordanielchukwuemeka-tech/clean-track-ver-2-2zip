@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, index } from "drizzle-orm/pg-core";
 import { laundries } from "./laundries.js";
 import { branches } from "./branches.js";
 
@@ -16,7 +16,12 @@ export const customers = pgTable("customers", {
   deletedById: integer("deleted_by_id"),
   deletedByType: text("deleted_by_type"),
   deletedByName: text("deleted_by_name"),
-});
+}, (t) => [
+  index("customers_laundry_id_idx").on(t.laundryId),
+  index("customers_branch_id_idx").on(t.branchId),
+  index("customers_phone_idx").on(t.phone),
+  index("customers_deleted_at_idx").on(t.deletedAt),
+]);
 
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
