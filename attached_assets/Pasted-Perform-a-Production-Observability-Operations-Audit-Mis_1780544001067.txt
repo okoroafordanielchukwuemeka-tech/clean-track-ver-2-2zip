@@ -1,0 +1,148 @@
+Perform a Production Observability & Operations Audit.
+
+Mission:
+
+Evaluate whether CleanTrack can be operated safely by real laundry owners and support staff when problems occur.
+
+Do NOT modify code initially.
+
+==================================================
+PHASE A — AUDIT
+===============
+
+Audit:
+
+* sync_log table
+* failed sync panel
+* conflict handling
+* retry system
+* queue visibility
+* payment audit trail
+* pickup audit trail
+* status-change audit trail
+* worker actions
+* admin actions
+
+For each area provide:
+
+Current State
+Operational Gaps
+Owner Experience
+Support Experience
+Severity
+
+==================================================
+PHASE B — INCIDENT SCENARIOS
+============================
+
+Analyze these scenarios:
+
+1. Payment never appears
+2. Pickup conflict occurs
+3. Order status sync fails
+4. Customer creation fails offline
+5. Worker claims "I already recorded payment"
+6. Owner disputes a refund
+7. Order shows wrong balance
+8. Sync queue becomes stuck
+9. Device offline for several days
+10. Multiple workers edit same order
+
+For each scenario answer:
+
+Can owner diagnose it?
+Can support diagnose it?
+Can system explain it?
+What data is missing?
+
+==================================================
+PHASE C — OPERATIONS DASHBOARD DESIGN
+=====================================
+
+Design a lightweight Operations Center.
+
+Required sections:
+
+1. Sync History
+2. Failed Actions
+3. Conflict Queue
+4. Recent Payments
+5. Recent Pickups
+6. Status Changes
+7. Worker Activity
+8. System Health
+
+Each section should include:
+
+Purpose
+Data Source
+Filters
+Permissions
+Performance Impact
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement only high-value operational tooling.
+
+Priority order:
+
+1. Sync Log Viewer
+2. Failed Sync Viewer
+3. Conflict Viewer
+4. Worker Activity Feed
+5. Queue Inspector
+
+Requirements:
+
+* Read-only
+* No business logic changes
+* No payment logic changes
+* No sync logic changes
+* No data migrations unless required
+
+==================================================
+PHASE E — VALIDATION
+====================
+
+Create tests covering:
+
+1. Synced actions visible
+2. Failed actions visible
+3. Conflict actions visible
+4. Payment audit entries visible
+5. Pickup audit entries visible
+6. Status changes visible
+7. Worker actions visible
+8. Filters work
+9. Multi-tenant isolation
+10. Performance with large datasets
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Audit Report
+2. Operational Risk Report
+3. Dashboard Architecture
+4. Implementation Report
+5. Validation Results
+6. Remaining Blind Spots
+
+Focus on:
+
+* visibility
+* supportability
+* troubleshooting
+* auditability
+* operational excellence
+
+Do NOT build analytics.
+Do NOT build notifications.
+Do NOT build WebSockets.
+Do NOT build customer-facing features.
+
+The goal is to ensure that when something goes wrong in production, owners and support staff can quickly understand what happened and why.
