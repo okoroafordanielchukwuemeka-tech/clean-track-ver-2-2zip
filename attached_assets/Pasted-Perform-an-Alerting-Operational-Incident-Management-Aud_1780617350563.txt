@@ -1,0 +1,223 @@
+Perform an Alerting & Operational Incident Management Audit.
+
+Mission:
+
+Build the operational alert layer for CleanTrack.
+
+The goal is:
+
+When something important breaks, degrades, becomes risky, or requires attention, the system should automatically create an alert that owners and CleanTrack admins can see.
+
+Do NOT implement notifications yet.
+
+Do NOT implement email.
+
+Do NOT implement WhatsApp.
+
+Do NOT implement SMS.
+
+Only build the alerting foundation.
+
+==================================================
+PHASE A — AUDIT
+===============
+
+Audit all existing monitoring systems:
+
+* Sync Health
+* Device Heartbeats
+* Recovery Center
+* Backup Center
+* Schema Checkpoints
+* Operations Dashboard
+* Worker Activity
+* Audit Logs
+* Payment Integrity Checks
+* Queue Monitoring
+
+For each system report:
+
+Current Visibility
+Current Detection
+Current Blind Spots
+Current Severity
+Alert Opportunities
+
+==================================================
+PHASE B — INCIDENT MODEL
+========================
+
+Design an Alert Model.
+
+Required fields:
+
+id
+laundryId
+branchId
+deviceId
+severity
+category
+title
+message
+status
+createdAt
+resolvedAt
+metadata
+
+Alert Status:
+
+open
+acknowledged
+resolved
+
+Severity Levels:
+
+info
+warning
+critical
+
+Categories:
+
+sync
+backup
+recovery
+payment
+pickup
+worker
+system
+version
+security
+
+==================================================
+PHASE C — ALERT RULES
+=====================
+
+Create alert rules for:
+
+1. Device offline > 30 minutes
+2. Device offline > 24 hours
+3. Pending queue > 500
+4. Pending queue > 1000
+5. Failed sync count > threshold
+6. Conflict count > threshold
+7. Backup missing
+8. Backup verification failed
+9. Schema checkpoint missing before migration
+10. Outdated application version
+11. Payment integrity mismatch
+12. Order balance inconsistency
+13. Repeated worker failures
+14. Excessive queue growth
+15. Heartbeat missing
+
+For each rule provide:
+
+Trigger
+Severity
+Auto Resolution Logic
+Required Metadata
+
+==================================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement only:
+
+1. Alert table
+2. Alert generation service
+3. Alert API
+4. Alert Center UI
+5. Alert counters
+
+Requirements:
+
+Read-only actions only.
+
+Allowed actions:
+
+Acknowledge Alert
+Resolve Alert
+
+Do NOT:
+
+Send notifications
+Send emails
+Send WhatsApp messages
+Modify business logic
+
+==================================================
+PHASE E — OPERATIONS CENTER
+===========================
+
+Add a new tab:
+
+Alert Center
+
+Required sections:
+
+Open Alerts
+Acknowledged Alerts
+Resolved Alerts
+
+Filters:
+
+Severity
+Category
+Laundry
+Branch
+Date
+
+Summary Cards:
+
+Critical
+Warning
+Info
+Unresolved
+
+==================================================
+PHASE F — VALIDATION
+====================
+
+Create tests covering:
+
+1. Alert generation
+2. Alert acknowledgement
+3. Alert resolution
+4. Multi-tenant isolation
+5. Severity filtering
+6. Category filtering
+7. Duplicate suppression
+8. Alert auto-resolution
+9. Dashboard counts
+10. Performance under large datasets
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Alert Architecture
+2. Alert Rule Catalog
+3. Implementation Report
+4. Validation Results
+5. Remaining Blind Spots
+
+Focus on:
+
+Operational awareness
+Owner visibility
+Support visibility
+Incident tracking
+System reliability
+
+Do NOT build notifications yet.
+
+The Alert Center must become the foundation for future:
+
+* Email alerts
+* WhatsApp alerts
+* Telegram alerts
+* Push notifications
+
+without requiring future redesign.

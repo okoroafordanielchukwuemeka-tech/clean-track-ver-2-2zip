@@ -20,6 +20,8 @@ import type {
   BackupTriggerResult,
   BackupVerifyResult,
   SchemaSnapshot,
+  AlertRecord,
+  AlertCounts,
 } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +75,7 @@ import {
   CheckSquare,
   AlertTriangle,
   Zap,
+  Bell,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -1685,6 +1688,357 @@ function RecoveryTab() {
   );
 }
 
+const ALERT_SEVERITY_STYLES = {
+  critical: {
+    bg: "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800",
+    badge: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400",
+    icon: <ShieldX className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />,
+    label: "Critical",
+    cardBg: "bg-red-50 dark:bg-red-900/20",
+  },
+  warning: {
+    bg: "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800",
+    badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400",
+    icon: <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />,
+    label: "Warning",
+    cardBg: "bg-amber-50 dark:bg-amber-900/20",
+  },
+  info: {
+    bg: "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800",
+    badge: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400",
+    icon: <ShieldCheck className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />,
+    label: "Info",
+    cardBg: "bg-blue-50 dark:bg-blue-900/20",
+  },
+} as const;
+
+function AlertCenterTab() {
+  const queryClient = useQueryClient();
+  const [statusTab, setStatusTab] = useState<"open" | "acknowledged" | "resolved">("open");
+  const [severity, setSeverity] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [page, setPage] = useState(0);
+
+  const { data: counts, isLoading: countsLoading, refetch: refetchCounts } = useQuery({
+    queryKey: ["alert-counts"],
+    queryFn: api.alerts.counts,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const { data, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["alerts", statusTab, severity, category, page],
+    queryFn: () =>
+      api.alerts.list({
+        status: statusTab,
+        severity: severity !== "all" ? severity : undefined,
+        category: category !== "all" ? category : undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const ackMutation = useMutation({
+    mutationFn: (id: number) => api.alerts.acknowledge(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["alert-counts"] });
+    },
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: (id: number) => api.alerts.resolve(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["alert-counts"] });
+    },
+  });
+
+  const runCheckMutation = useMutation({
+    mutationFn: api.alerts.runCheck,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["alert-counts"] });
+    },
+  });
+
+  const handleStatusChange = (v: string) => {
+    setStatusTab(v as "open" | "acknowledged" | "resolved");
+    setPage(0);
+  };
+
+  const alertList: AlertRecord[] = data?.alerts ?? [];
+  const total = data?.total ?? 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800">
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-red-600 dark:text-red-400 font-medium">Critical</p>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-300">
+                  {countsLoading ? "—" : (counts?.critical ?? 0)}
+                </p>
+              </div>
+              <ShieldX className="h-7 w-7 text-red-400 opacity-60" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Warning</p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+                  {countsLoading ? "—" : (counts?.warning ?? 0)}
+                </p>
+              </div>
+              <ShieldAlert className="h-7 w-7 text-amber-400 opacity-60" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Info</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                  {countsLoading ? "—" : (counts?.info ?? 0)}
+                </p>
+              </div>
+              <ShieldCheck className="h-7 w-7 text-blue-400 opacity-60" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3 px-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Unresolved</p>
+                <p className="text-2xl font-bold">
+                  {countsLoading ? "—" : (counts?.unresolved ?? 0)}
+                </p>
+              </div>
+              <Bell className="h-7 w-7 text-muted-foreground/40" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter + Action Row */}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-wrap gap-2">
+          <Select value={severity} onValueChange={(v) => { setSeverity(v); setPage(0); }}>
+            <SelectTrigger className="w-34 h-8 text-xs">
+              <SelectValue placeholder="Severity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Severities</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+              <SelectItem value="info">Info</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={category} onValueChange={(v) => { setCategory(v); setPage(0); }}>
+            <SelectTrigger className="w-36 h-8 text-xs">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="sync">Sync</SelectItem>
+              <SelectItem value="backup">Backup</SelectItem>
+              <SelectItem value="recovery">Recovery</SelectItem>
+              <SelectItem value="payment">Payment</SelectItem>
+              <SelectItem value="pickup">Pickup</SelectItem>
+              <SelectItem value="worker">Worker</SelectItem>
+              <SelectItem value="system">System</SelectItem>
+              <SelectItem value="version">Version</SelectItem>
+              <SelectItem value="security">Security</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1.5"
+            disabled={runCheckMutation.isPending}
+            onClick={() => runCheckMutation.mutate()}
+          >
+            <Zap className={cn("h-3.5 w-3.5", runCheckMutation.isPending && "animate-pulse")} />
+            {runCheckMutation.isPending ? "Checking…" : "Run Check"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0"
+            disabled={isFetching}
+            onClick={() => { refetch(); refetchCounts(); }}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+          </Button>
+        </div>
+      </div>
+
+      {/* Status Tabs */}
+      <Tabs value={statusTab} onValueChange={handleStatusChange}>
+        <TabsList className="h-8 gap-1">
+          <TabsTrigger value="open" className="text-xs h-7 gap-1 px-3">
+            <AlertCircle className="h-3 w-3" />
+            Open
+            {(counts?.open ?? 0) > 0 && (
+              <span className="ml-0.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {counts!.open}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="acknowledged" className="text-xs h-7 gap-1 px-3">
+            <CheckCircle className="h-3 w-3" />
+            Acknowledged
+            {(counts?.acknowledged ?? 0) > 0 && (
+              <span className="ml-0.5 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {counts!.acknowledged}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="resolved" className="text-xs h-7 gap-1 px-3">
+            <CheckSquare className="h-3 w-3" />
+            Resolved
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={statusTab} className="mt-3">
+          {isLoading ? (
+            <p className="text-xs text-muted-foreground py-10 text-center">Loading alerts…</p>
+          ) : alertList.length === 0 ? (
+            <div className="text-center py-14 text-muted-foreground text-sm space-y-2">
+              <Bell className="h-8 w-8 mx-auto opacity-20" />
+              <p className="font-medium">No {statusTab} alerts</p>
+              {statusTab === "open" && (
+                <p className="text-xs">
+                  Click <strong>Run Check</strong> above to evaluate alert rules now, or wait for the
+                  next automatic check (every 5 minutes).
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {alertList.map((alert) => {
+                const sev = ALERT_SEVERITY_STYLES[alert.severity];
+                return (
+                  <div
+                    key={alert.id}
+                    className={cn(
+                      "rounded-lg border p-3",
+                      sev.bg
+                    )}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {sev.icon}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                          <span
+                            className={cn(
+                              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                              sev.badge
+                            )}
+                          >
+                            {sev.label}
+                          </span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 uppercase tracking-wide">
+                            {alert.category}
+                          </span>
+                          {alert.status === "acknowledged" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400">
+                              Ack'd by {alert.acknowledgedBy}
+                            </span>
+                          )}
+                          {alert.status === "resolved" && alert.resolvedBy === "system" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                              Auto-resolved
+                            </span>
+                          )}
+                          {alert.status === "resolved" && alert.resolvedBy !== "system" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                              Resolved by {alert.resolvedBy}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold leading-snug">{alert.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                          {alert.message}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[10px] text-muted-foreground">
+                          <span title={fmtDate(alert.createdAt)}>{fmtAge(alert.createdAt)}</span>
+                          {alert.deviceId && (
+                            <span className="font-mono opacity-70">
+                              device: {alert.deviceId.slice(0, 8)}…
+                            </span>
+                          )}
+                          {alert.acknowledgedAt && (
+                            <span>ack'd {fmtAge(alert.acknowledgedAt)}</span>
+                          )}
+                          {alert.resolvedAt && (
+                            <span>resolved {fmtAge(alert.resolvedAt)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0 mt-0.5">
+                        {alert.status === "open" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10px] px-2 gap-1 font-medium"
+                              disabled={ackMutation.isPending}
+                              onClick={() => ackMutation.mutate(alert.id)}
+                            >
+                              <CheckCircle className="h-3 w-3" />
+                              Ack
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10px] px-2 gap-1 font-medium"
+                              disabled={resolveMutation.isPending}
+                              onClick={() => resolveMutation.mutate(alert.id)}
+                            >
+                              <CheckSquare className="h-3 w-3" />
+                              Resolve
+                            </Button>
+                          </>
+                        )}
+                        {alert.status === "acknowledged" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[10px] px-2 gap-1 font-medium"
+                            disabled={resolveMutation.isPending}
+                            onClick={() => resolveMutation.mutate(alert.id)}
+                          >
+                            <CheckSquare className="h-3 w-3" />
+                            Resolve
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
 export default function OperationsPage() {
   return (
     <div className="space-y-5">
@@ -1724,6 +2078,9 @@ export default function OperationsPage() {
           <TabsTrigger value="runbook" className="text-xs gap-1.5">
             <BookOpen className="h-3.5 w-3.5" /> Runbook
           </TabsTrigger>
+          <TabsTrigger value="alerts" className="text-xs gap-1.5">
+            <Bell className="h-3.5 w-3.5" /> Alert Center
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="audit-log" className="mt-4"><AuditLogTab /></TabsContent>
@@ -1734,6 +2091,7 @@ export default function OperationsPage() {
         <TabsContent value="sync-health" className="mt-4"><SyncHealthTab /></TabsContent>
         <TabsContent value="recovery" className="mt-4"><RecoveryTab /></TabsContent>
         <TabsContent value="runbook" className="mt-4"><RunbookTab /></TabsContent>
+        <TabsContent value="alerts" className="mt-4"><AlertCenterTab /></TabsContent>
       </Tabs>
     </div>
   );

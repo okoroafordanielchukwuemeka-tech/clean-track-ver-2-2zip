@@ -2,12 +2,14 @@ import app from "./app.js";
 import { db } from "@workspace/db";
 import { idempotencyKeys } from "@workspace/db/schema";
 import { lt } from "drizzle-orm";
+import { runAlertChecks } from "./lib/alert-engine.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`API server running on port ${PORT}`);
   scheduleIdempotencyCleanup();
+  scheduleAlertChecks();
 });
 
 function scheduleIdempotencyCleanup() {
@@ -26,6 +28,22 @@ function scheduleIdempotencyCleanup() {
   };
 
   const timer = setInterval(runCleanup, INTERVAL_MS);
+  timer.unref();
+}
+
+function scheduleAlertChecks() {
+  const INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
+
+  // Run once immediately on startup (non-blocking)
+  runAlertChecks().catch((err) =>
+    console.error("[alert-engine] startup check failed:", err)
+  );
+
+  const timer = setInterval(() => {
+    runAlertChecks().catch((err) =>
+      console.error("[alert-engine] scheduled check failed:", err)
+    );
+  }, INTERVAL_MS);
   timer.unref();
 }
 

@@ -19,6 +19,7 @@ import { branchesRouter } from "./branches.js";
 import { operationsRouter } from "./operations.js";
 import { telemetryRouter } from "./telemetry.js";
 import { recoveryRouter } from "./recovery.js";
+import { alertsRouter } from "./alerts.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 export const router = Router();
@@ -50,3 +51,4 @@ router.use("/branches", requireAuth, branchesRouter);
 router.use("/operations", requireOwner, operationsRouter);
 router.use("/telemetry", requireAuth, telemetryRouter);
 router.use("/recovery", requireOwner, recoveryRouter);
+router.use("/alerts", requireOwner, alertsRouter);

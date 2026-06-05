@@ -310,6 +310,35 @@ export const api = {
     getForOrder: (orderId: number) => request<import("@/components/receipt-view").ReceiptData>("GET", `/orders/${orderId}/receipt`),
     getCustomerReceipts: (customerId: number) => request<ReceiptListResponse>("GET", `/customers/${customerId}/receipts`),
   },
+  alerts: {
+    list: (params?: {
+      status?: string;
+      severity?: string;
+      category?: string;
+      branchId?: number;
+      from?: string;
+      to?: string;
+      limit?: number;
+      offset?: number;
+    }) => {
+      const qs = params
+        ? "?" +
+          new URLSearchParams(
+            Object.fromEntries(
+              Object.entries(params)
+                .filter(([, v]) => v != null)
+                .map(([k, v]) => [k, String(v)])
+            )
+          ).toString()
+        : "";
+      return request<AlertsListResponse>("GET", `/alerts${qs}`);
+    },
+    counts: () => request<AlertCounts>("GET", "/alerts/counts"),
+    acknowledge: (id: number) => request<AlertRecord>("POST", `/alerts/${id}/acknowledge`),
+    resolve: (id: number) => request<AlertRecord>("POST", `/alerts/${id}/resolve`),
+    runCheck: () =>
+      request<{ success: boolean; created: number }>("POST", "/alerts/run-check"),
+  },
 };
 
 export interface AuthUser {
@@ -1217,4 +1246,51 @@ export interface SlaAnalytics {
   totalCompleted: number;
   totalActive: number;
   byServiceType: Record<string, { count: number; overdueCount: number; avgHours: number | null }>;
+}
+
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertCategory =
+  | "sync"
+  | "backup"
+  | "recovery"
+  | "payment"
+  | "pickup"
+  | "worker"
+  | "system"
+  | "version"
+  | "security";
+export type AlertStatus = "open" | "acknowledged" | "resolved";
+
+export interface AlertRecord {
+  id: number;
+  laundryId: number | null;
+  branchId: number | null;
+  deviceId: string | null;
+  severity: AlertSeverity;
+  category: AlertCategory;
+  title: string;
+  message: string;
+  status: AlertStatus;
+  fingerprint: string | null;
+  acknowledgedBy: string | null;
+  acknowledgedAt: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AlertsListResponse {
+  alerts: AlertRecord[];
+  total: number;
+}
+
+export interface AlertCounts {
+  critical: number;
+  warning: number;
+  info: number;
+  unresolved: number;
+  open: number;
+  acknowledged: number;
+  resolved: number;
 }
