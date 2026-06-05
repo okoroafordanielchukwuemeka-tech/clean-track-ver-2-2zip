@@ -21,6 +21,7 @@ import { telemetryRouter } from "./telemetry.js";
 import { recoveryRouter } from "./recovery.js";
 import { alertsRouter } from "./alerts.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
+import { adminRouter } from "./admin/index.js";
 
 export const router = Router();
 
@@ -52,3 +53,6 @@ router.use("/operations", requireOwner, operationsRouter);
 router.use("/telemetry", requireAuth, telemetryRouter);
 router.use("/recovery", requireOwner, recoveryRouter);
 router.use("/alerts", requireOwner, alertsRouter);
+
+// Platform admin routes (CleanTrack internal — not for laundry owners)
+router.use("/admin", adminRouter);

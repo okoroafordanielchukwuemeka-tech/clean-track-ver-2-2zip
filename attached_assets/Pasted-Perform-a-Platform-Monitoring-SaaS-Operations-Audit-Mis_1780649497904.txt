@@ -1,0 +1,145 @@
+Perform a Platform Monitoring & SaaS Operations Audit.
+
+Mission:
+
+Design the internal CleanTrack Admin Command Center.
+
+This dashboard is NOT for laundry owners.
+
+This dashboard is ONLY for CleanTrack administrators.
+
+Do NOT modify customer-facing features.
+
+====================================
+PHASE A — PLATFORM AUDIT
+========================
+
+Audit:
+
+* tenant management
+* device telemetry
+* sync health
+* alert engine
+* backups
+* schema snapshots
+* audit logs
+* WhatsApp readiness
+* storage growth
+* database usage
+
+For each area provide:
+
+Current State
+Blind Spots
+Operational Risk
+Severity
+
+====================================
+PHASE B — PLATFORM MONITORING DESIGN
+====================================
+
+Design an Admin Command Center.
+
+Sections:
+
+1. Platform Overview
+2. Tenant Health
+3. Device Fleet
+4. Sync Reliability
+5. Backup Health
+6. Storage Usage
+7. Alert Summary
+8. Revenue Readiness
+9. WhatsApp Readiness
+
+For each section define:
+
+Purpose
+Metrics
+Refresh Frequency
+Permissions
+Performance Impact
+
+====================================
+PHASE C — STORAGE & SCALE ANALYSIS
+==================================
+
+Estimate:
+
+* 10 laundries
+* 100 laundries
+* 1,000 laundries
+
+Analyze:
+
+* database growth
+* orders
+* payments
+* pickups
+* audit logs
+* device telemetry
+* backups
+
+Provide:
+
+monthly growth estimates
+storage projections
+recommended retention strategy
+
+====================================
+PHASE D — IMPLEMENTATION
+========================
+
+Implement ONLY high-value monitoring.
+
+Priority:
+
+1. Platform Overview
+2. Tenant Health
+3. Device Fleet
+4. Storage Health
+5. Backup Health
+
+Requirements:
+
+* admin only
+* read only
+* no business logic changes
+* no sync logic changes
+
+====================================
+PHASE E — VALIDATION
+====================
+
+Validate:
+
+* multi-tenant isolation
+* dashboard performance
+* storage calculations
+* alert visibility
+* backup visibility
+
+====================================
+DELIVERABLES
+============
+
+Return:
+
+1. Platform Audit
+2. Storage Forecast
+3. Monitoring Architecture
+4. Implementation Report
+5. Validation Results
+6. Remaining Scale Risks
+
+Focus on:
+
+operational excellence
+storage growth
+scalability
+admin visibility
+future WhatsApp readiness
+
+Do NOT build WhatsApp messaging yet.
+Do NOT build billing yet.
+Do NOT build customer-facing features.

@@ -5,6 +5,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { BranchProvider } from "@/context/branch-context";
+import { AdminProvider, useAdmin } from "@/context/admin-context";
+import AdminLogin from "@/pages/admin-login";
+import AdminCommandCenter from "@/pages/admin-command-center";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Layout } from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
@@ -70,12 +73,17 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BranchProvider>
+          <AdminProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/worker-login" element={<WorkerLogin />} />
               <Route path="/demo-access" element={<DemoLogin />} />
+
+              {/* CleanTrack Admin Portal — internal only */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin" element={<AdminCommandCenter />} />
 
               <Route
                 path="/"
@@ -107,6 +115,7 @@ export default function App() {
             </Routes>
           </BrowserRouter>
           <Toaster richColors />
+          </AdminProvider>
         </BranchProvider>
       </AuthProvider>
     </QueryClientProvider>

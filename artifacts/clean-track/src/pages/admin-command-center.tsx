@@ -1,0 +1,760 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAdmin } from "@/context/admin-context";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Shield, LayoutDashboard, Building2, MonitorSmartphone,
+  HardDrive, Database, LogOut, RefreshCw, AlertTriangle,
+  CheckCircle2, XCircle, Clock, Wifi, WifiOff, Activity,
+  ChevronRight, Server, Users, ShoppingCart, Layers,
+  TrendingUp, BarChart3, Archive, Package,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+const API_BASE = "/api";
+
+function adminFetch(path: string, token: string) {
+  return fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(async (r) => {
+    if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
+    return r.json();
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return "Never";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function StatusDot({ status }: { status: "online" | "stale" | "offline" | "healthy" | "warning" | "critical" }) {
+  const colors = {
+    online: "bg-emerald-500",
+    healthy: "bg-emerald-500",
+    stale: "bg-amber-400",
+    warning: "bg-amber-400",
+    offline: "bg-red-500",
+    critical: "bg-red-500",
+  };
+  return (
+    <span className={cn("inline-block w-2 h-2 rounded-full shrink-0", colors[status])} />
+  );
+}
+
+function SeverityBadge({ severity }: { severity: string }) {
+  const cls = severity === "critical" ? "bg-red-900/50 text-red-300 border-red-700"
+    : severity === "warning" ? "bg-amber-900/50 text-amber-300 border-amber-700"
+    : "bg-blue-900/50 text-blue-300 border-blue-700";
+  return (
+    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-xs border font-medium", cls)}>
+      {severity}
+    </span>
+  );
+}
+
+// ─── Platform Overview ─────────────────────────────────────────────────────
+
+function OverviewTab({ token }: { token: string }) {
+  const { data, isLoading, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ["admin", "overview"],
+    queryFn: () => adminFetch("/admin/overview", token),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return <ErrorState />;
+
+  const d = data as any;
+  const deviceStatus = d.devices.total
+    ? Math.round((d.devices.online / d.devices.total) * 100)
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">Platform Overview</h2>
+          <p className="text-slate-400 text-sm mt-0.5">
+            Updated {timeAgo(new Date(dataUpdatedAt).toISOString())} · Auto-refreshes every 60s
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard icon={Building2} label="Total Tenants" value={d.tenants.total}
+          sub={`${d.tenants.active} active`} color="violet" />
+        <MetricCard icon={ShoppingCart} label="Orders This Week" value={d.orders.thisWeek.toLocaleString()}
+          sub={`${d.orders.total.toLocaleString()} total`} color="blue" />
+        <MetricCard icon={MonitorSmartphone} label="Active Devices" value={d.devices.online}
+          sub={`${deviceStatus}% online rate`} color={deviceStatus >= 80 ? "green" : deviceStatus >= 50 ? "amber" : "red"} />
+        <MetricCard icon={AlertTriangle} label="Open Alerts" value={d.alerts.open}
+          sub={`${d.alerts.critical} critical`} color={d.alerts.critical > 0 ? "red" : d.alerts.open > 0 ? "amber" : "green"} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-violet-400" /> Tenant Health
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 space-y-2">
+            <ProgressRow label="Active" value={d.tenants.active} total={d.tenants.total} color="emerald" />
+            <ProgressRow label="Inactive" value={d.tenants.inactive} total={d.tenants.total} color="slate" />
+            <div className="pt-1 border-t border-slate-800 flex justify-between text-xs text-slate-400">
+              <span>{d.infrastructure.branches} branches</span>
+              <span>{d.infrastructure.workers} workers</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+              <MonitorSmartphone className="w-4 h-4 text-blue-400" /> Device Fleet
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 space-y-2">
+            <ProgressRow label="Online (<30m)" value={d.devices.online} total={d.devices.total} color="emerald" />
+            <ProgressRow label="Stale (30m–24h)" value={d.devices.stale} total={d.devices.total} color="amber" />
+            <ProgressRow label="Offline (>24h)" value={d.devices.offline} total={d.devices.total} color="red" />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+              <Database className="w-4 h-4 text-teal-400" /> Database
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 text-sm">Total Size</span>
+              <span className="text-white font-semibold text-sm">{d.database.sizeFormatted}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 text-sm">Alert Tenants</span>
+              <span className={cn("font-semibold text-sm", d.alerts.affectedTenants > 0 ? "text-red-400" : "text-emerald-400")}>
+                {d.alerts.affectedTenants} affected
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 text-sm">Critical Alerts</span>
+              <SeverityBadge severity={d.alerts.critical > 0 ? "critical" : "info"} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tenant Health ─────────────────────────────────────────────────────────
+
+function TenantsTab({ token }: { token: string }) {
+  const [selected, setSelected] = useState<any | null>(null);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "tenants"],
+    queryFn: () => adminFetch("/admin/tenants", token),
+    staleTime: 30_000,
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return <ErrorState />;
+
+  const tenants = (data as any).tenants ?? [];
+
+  if (selected) {
+    const t = selected;
+    return (
+      <div className="space-y-4">
+        <button onClick={() => setSelected(null)}
+          className="flex items-center gap-1 text-slate-400 hover:text-white text-sm transition-colors">
+          ← Back to all tenants
+        </button>
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-white">{t.businessName}</h2>
+            <p className="text-slate-400 text-sm">{t.ownerEmail}</p>
+          </div>
+          <div className="flex gap-2">
+            <Badge className={t.isActive ? "bg-emerald-900/50 text-emerald-300 border-emerald-700" : "bg-red-900/50 text-red-300 border-red-700"}>
+              {t.isActive ? "Active" : "Inactive"}
+            </Badge>
+            <Badge className="bg-slate-800 text-slate-300 border-slate-700">{t.subscriptionTier}</Badge>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <MiniStat label="Orders (7d)" value={t.stats.orders7d} />
+          <MiniStat label="Orders (Total)" value={t.stats.ordersTotal} />
+          <MiniStat label="Branches" value={t.stats.branches} />
+          <MiniStat label="Workers" value={t.stats.workers} />
+          <MiniStat label="Devices" value={t.stats.devices} />
+          <MiniStat label="Online" value={t.stats.onlineDevices} />
+          <MiniStat label="Open Alerts" value={t.stats.openAlerts} highlight={t.stats.openAlerts > 0} />
+          <MiniStat label="Critical" value={t.stats.criticalAlerts} highlight={t.stats.criticalAlerts > 0} />
+        </div>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="px-5 py-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Last Snapshot</span>
+              <span className={cn("font-medium", t.stats.lastSnapshotAt ? "text-white" : "text-red-400")}>
+                {t.stats.lastSnapshotAt ? timeAgo(t.stats.lastSnapshotAt) : "Never"}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Registered</span>
+              <span className="text-white">{new Date(t.createdAt).toLocaleDateString()}</span>
+            </div>
+            {t.businessProfile?.whatsapp && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">WhatsApp</span>
+                <span className="text-emerald-400">{t.businessProfile.whatsapp}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">Tenant Health <span className="text-slate-500 font-normal text-sm ml-1">({tenants.length})</span></h2>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {tenants.map((t: any) => (
+          <button key={t.id} onClick={() => setSelected(t)}
+            className="w-full text-left bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 hover:border-slate-600 hover:bg-slate-800/70 transition-all">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn("w-2 h-2 rounded-full shrink-0",
+                  t.stats.criticalAlerts > 0 ? "bg-red-500" :
+                  t.stats.openAlerts > 0 ? "bg-amber-400" :
+                  t.isActive ? "bg-emerald-500" : "bg-slate-500"
+                )} />
+                <div className="min-w-0">
+                  <div className="text-white font-medium text-sm truncate">{t.businessName}</div>
+                  <div className="text-slate-400 text-xs truncate">{t.ownerEmail}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="hidden sm:flex gap-4 text-xs text-slate-400">
+                  <span>{t.stats.orders7d} orders/7d</span>
+                  <span>{t.stats.devices} devices</span>
+                  {t.stats.openAlerts > 0 && (
+                    <span className={t.stats.criticalAlerts > 0 ? "text-red-400" : "text-amber-400"}>
+                      {t.stats.openAlerts} alerts
+                    </span>
+                  )}
+                </div>
+                <Badge className={cn("text-xs",
+                  t.isActive ? "bg-emerald-900/40 text-emerald-400 border-emerald-800" :
+                  "bg-slate-800 text-slate-400 border-slate-700"
+                )}>
+                  {t.subscriptionTier}
+                </Badge>
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Device Fleet ──────────────────────────────────────────────────────────
+
+function DevicesTab({ token }: { token: string }) {
+  const [filter, setFilter] = useState<"all" | "online" | "stale" | "offline">("all");
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "devices"],
+    queryFn: () => adminFetch("/admin/devices", token),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return <ErrorState />;
+
+  const { devices, summary } = data as any;
+  const filtered = filter === "all" ? devices : devices.filter((d: any) => d.status === filter);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-white">Device Fleet</h2>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <button onClick={() => setFilter("all")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "all" ? "border-violet-600 bg-violet-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-white">{summary.total}</div>
+          <div className="text-xs text-slate-400 mt-0.5">All Devices</div>
+        </button>
+        <button onClick={() => setFilter("online")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "online" ? "border-emerald-600 bg-emerald-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-emerald-400">{summary.online}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Online</div>
+        </button>
+        <button onClick={() => setFilter("stale")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "stale" ? "border-amber-600 bg-amber-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-amber-400">{summary.stale}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Stale</div>
+        </button>
+        <button onClick={() => setFilter("offline")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "offline" ? "border-red-600 bg-red-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-red-400">{summary.offline}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Offline</div>
+        </button>
+      </div>
+
+      {(summary.totalPending > 0 || summary.totalFailed > 0 || summary.totalConflicts > 0) && (
+        <div className="flex gap-4 bg-amber-950/20 border border-amber-800/30 rounded-lg px-4 py-2.5 text-sm">
+          {summary.totalPending > 0 && <span className="text-amber-300">⚡ {summary.totalPending.toLocaleString()} pending syncs</span>}
+          {summary.totalFailed > 0 && <span className="text-red-300">✗ {summary.totalFailed} failed</span>}
+          {summary.totalConflicts > 0 && <span className="text-orange-300">⚠ {summary.totalConflicts} conflicts</span>}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filtered.length === 0 ? (
+          <div className="text-center py-12 text-slate-500">No {filter === "all" ? "" : filter} devices found</div>
+        ) : filtered.map((d: any) => (
+          <div key={d.id} className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <StatusDot status={d.status} />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm font-medium font-mono truncate">{d.deviceId}</span>
+                    <Badge className={cn("text-xs shrink-0",
+                      d.status === "online" ? "bg-emerald-900/40 text-emerald-400 border-emerald-800" :
+                      d.status === "stale" ? "bg-amber-900/40 text-amber-400 border-amber-800" :
+                      "bg-red-900/40 text-red-400 border-red-800"
+                    )}>
+                      {d.status}
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5 truncate">
+                    {d.tenantName ?? `Tenant #${d.laundryId}`}
+                    {d.branchName && <span className="text-slate-500"> · {d.branchName}</span>}
+                    {d.workerName && <span className="text-slate-500"> · {d.workerName}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-xs text-slate-400">{timeAgo(d.lastSeenAt)}</div>
+                {d.appVersion && <div className="text-xs text-slate-500 font-mono">{d.appVersion}</div>}
+              </div>
+            </div>
+            {(d.pendingCount > 0 || d.failedCount > 0 || d.conflictCount > 0) && (
+              <div className="flex gap-3 mt-2 pt-2 border-t border-slate-800/60 text-xs">
+                {d.pendingCount > 0 && <span className="text-amber-400">{d.pendingCount} pending</span>}
+                {d.failedCount > 0 && <span className="text-red-400">{d.failedCount} failed</span>}
+                {d.conflictCount > 0 && <span className="text-orange-400">{d.conflictCount} conflicts</span>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Storage Health ────────────────────────────────────────────────────────
+
+function StorageTab({ token }: { token: string }) {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "storage"],
+    queryFn: () => adminFetch("/admin/storage", token),
+    staleTime: 120_000,
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return <ErrorState />;
+
+  const d = data as any;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">Storage Health</h2>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <MetricCard icon={Database} label="DB Total Size" value={d.database.sizeFormatted} color="teal" />
+        <MetricCard icon={ShoppingCart} label="Total Orders" value={d.exactCounts.orders.toLocaleString()} color="blue" />
+        <MetricCard icon={Activity} label="Audit Log Rows" value={d.exactCounts.auditLog.toLocaleString()} color="violet" />
+        <MetricCard icon={MonitorSmartphone} label="Devices" value={d.exactCounts.deviceHeartbeats.toLocaleString()} color="slate" />
+      </div>
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="px-5 pt-4 pb-2">
+          <CardTitle className="text-slate-200 text-sm font-semibold">Table Sizes</CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-4">
+          <div className="space-y-2">
+            {d.tables.slice(0, 15).map((t: any) => (
+              <div key={t.table} className="flex items-center gap-3">
+                <span className="text-slate-300 text-sm font-mono w-48 truncate shrink-0">{t.table}</span>
+                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-violet-500 rounded-full"
+                    style={{ width: `${Math.max(1, Math.min(100, (t.totalSizeBytes / d.database.sizeBytes) * 100 * 8))}%` }}
+                  />
+                </div>
+                <span className="text-slate-400 text-xs text-right w-16 shrink-0">{t.totalSize}</span>
+                <span className="text-slate-500 text-xs text-right w-20 shrink-0 hidden sm:block">
+                  ~{Number(t.estimatedRows).toLocaleString()} rows
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div>
+        <h3 className="text-white font-semibold mb-3 text-sm">Scale Projections</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {d.scaleProjections.map((p: any) => (
+            <Card key={p.tenants} className="bg-slate-900 border-slate-800">
+              <CardHeader className="px-5 pt-4 pb-2">
+                <CardTitle className="text-slate-200 text-sm font-semibold">{p.tenants.toLocaleString()} Tenants</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Monthly orders</span>
+                  <span className="text-white">{p.monthlyOrders.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Monthly growth</span>
+                  <span className="text-white">{p.monthlyGrowthEstimate}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Yearly growth</span>
+                  <span className="text-white">{p.yearlyGrowthEstimate}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-800 text-xs text-slate-500">
+                  Retention: {p.recommendedRetention}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Backup Health ─────────────────────────────────────────────────────────
+
+function BackupsTab({ token }: { token: string }) {
+  const [filter, setFilter] = useState<"all" | "healthy" | "warning" | "critical">("all");
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "backups"],
+    queryFn: () => adminFetch("/admin/backups", token),
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return <ErrorState />;
+
+  const { summary, tenants } = data as any;
+  const filtered = filter === "all" ? tenants : tenants.filter((t: any) => t.backupHealth === filter);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">Backup Health</h2>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <button onClick={() => setFilter("all")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "all" ? "border-violet-600 bg-violet-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-white">{summary.total}</div>
+          <div className="text-xs text-slate-400 mt-0.5">All Tenants</div>
+        </button>
+        <button onClick={() => setFilter("healthy")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "healthy" ? "border-emerald-600 bg-emerald-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-emerald-400">{summary.healthy}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Healthy</div>
+        </button>
+        <button onClick={() => setFilter("warning")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "warning" ? "border-amber-600 bg-amber-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-amber-400">{summary.warning}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Warning</div>
+        </button>
+        <button onClick={() => setFilter("critical")}
+          className={cn("bg-slate-900 border rounded-lg px-4 py-3 text-center transition-all",
+            filter === "critical" ? "border-red-600 bg-red-950/30" : "border-slate-800 hover:border-slate-600")}>
+          <div className="text-2xl font-bold text-red-400">{summary.critical}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Critical</div>
+        </button>
+      </div>
+
+      {summary.critical > 0 && (
+        <div className="flex items-center gap-2 text-red-300 bg-red-950/20 border border-red-800/30 rounded-lg px-4 py-2.5 text-sm">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {summary.critical} tenant{summary.critical > 1 ? "s" : ""} have no recent schema snapshots — backup risk is elevated.
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {filtered.map((t: any) => (
+          <div key={t.laundryId} className={cn("bg-slate-900 border rounded-lg px-4 py-3",
+            t.backupHealth === "critical" ? "border-red-800/50" :
+            t.backupHealth === "warning" ? "border-amber-800/50" :
+            "border-slate-800"
+          )}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <StatusDot status={t.backupHealth as any} />
+                <div className="min-w-0">
+                  <div className="text-white text-sm font-medium truncate">{t.businessName}</div>
+                  <div className="text-slate-400 text-xs">{t.ownerEmail}</div>
+                </div>
+              </div>
+              <div className="text-right shrink-0 space-y-0.5">
+                <div className={cn("text-sm font-medium",
+                  t.backupHealth === "critical" ? "text-red-400" :
+                  t.backupHealth === "warning" ? "text-amber-400" :
+                  "text-emerald-400"
+                )}>
+                  {t.latestSnapshot ? timeAgo(t.latestSnapshot.createdAt) : "Never"}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {t.snapshotsLast7Days} snap{t.snapshotsLast7Days !== 1 ? "s" : ""}/7d
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared UI Helpers ─────────────────────────────────────────────────────
+
+const colorMap = {
+  violet: { bg: "bg-violet-950/40", icon: "text-violet-400", border: "border-violet-800/30" },
+  blue: { bg: "bg-blue-950/40", icon: "text-blue-400", border: "border-blue-800/30" },
+  green: { bg: "bg-emerald-950/40", icon: "text-emerald-400", border: "border-emerald-800/30" },
+  amber: { bg: "bg-amber-950/40", icon: "text-amber-400", border: "border-amber-800/30" },
+  red: { bg: "bg-red-950/40", icon: "text-red-400", border: "border-red-800/30" },
+  teal: { bg: "bg-teal-950/40", icon: "text-teal-400", border: "border-teal-800/30" },
+  slate: { bg: "bg-slate-800/60", icon: "text-slate-400", border: "border-slate-700/30" },
+};
+
+function MetricCard({ icon: Icon, label, value, sub, color = "slate" }: any) {
+  const c = colorMap[color as keyof typeof colorMap] ?? colorMap.slate;
+  return (
+    <Card className={cn("border", c.bg, c.border)}>
+      <CardContent className="px-4 py-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-slate-400 text-xs mb-1">{label}</div>
+            <div className="text-2xl font-bold text-white">{value}</div>
+            {sub && <div className="text-slate-500 text-xs mt-0.5">{sub}</div>}
+          </div>
+          <Icon className={cn("w-5 h-5 mt-0.5", c.icon)} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniStat({ label, value, highlight = false }: { label: string; value: any; highlight?: boolean }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-3 text-center">
+      <div className={cn("text-xl font-bold", highlight && value > 0 ? "text-red-400" : "text-white")}>{value}</div>
+      <div className="text-xs text-slate-400 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function ProgressRow({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? (value / total) * 100 : 0;
+  const barColor = color === "emerald" ? "bg-emerald-500" : color === "amber" ? "bg-amber-400" : color === "red" ? "bg-red-500" : "bg-slate-600";
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-slate-400">{label}</span>
+        <span className="text-slate-300">{value} / {total}</span>
+      </div>
+      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="w-8 h-8 rounded-full border-2 border-slate-700 border-t-violet-500 animate-spin" />
+    </div>
+  );
+}
+
+function ErrorState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 gap-2 text-slate-500">
+      <XCircle className="w-8 h-8" />
+      <p>Failed to load data</p>
+    </div>
+  );
+}
+
+// ─── Main Shell ────────────────────────────────────────────────────────────
+
+export default function AdminCommandCenter() {
+  const navigate = useNavigate();
+  const { admin, token, isAuthenticated, logout } = useAdmin();
+  const [tab, setTab] = useState("overview");
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate("/admin/login", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  if (!isAuthenticated || !token) return null;
+
+  const handleLogout = () => {
+    logout();
+    toast.success("Signed out of admin portal");
+    navigate("/admin/login", { replace: true });
+  };
+
+  const navTabs = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "tenants", label: "Tenants", icon: Building2 },
+    { id: "devices", label: "Devices", icon: MonitorSmartphone },
+    { id: "storage", label: "Storage", icon: HardDrive },
+    { id: "backups", label: "Backups", icon: Archive },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col">
+      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
+            <Shield className="w-4.5 h-4.5 text-white w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-white font-semibold text-sm leading-none">CleanTrack Admin</div>
+            <div className="text-slate-500 text-xs mt-0.5">Platform Command Center</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-slate-400 text-sm hidden sm:block">{admin?.name}</span>
+          <Button variant="ghost" size="sm" onClick={handleLogout}
+            className="text-slate-400 hover:text-white hover:bg-slate-800">
+            <LogOut className="w-4 h-4 mr-1.5" /> Sign Out
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        <aside className="hidden lg:flex flex-col w-52 bg-slate-900 border-r border-slate-800 py-4 px-3 shrink-0">
+          <nav className="space-y-1 flex-1">
+            {navTabs.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={cn(
+                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all",
+                  tab === id
+                    ? "bg-violet-600/20 text-violet-300 border border-violet-700/40"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                )}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="pt-4 border-t border-slate-800 px-3">
+            <div className="text-slate-600 text-xs">admin@cleantrack</div>
+          </div>
+        </aside>
+
+        <main className="flex-1 overflow-y-auto">
+          <div className="lg:hidden border-b border-slate-800 bg-slate-900 px-4 py-2">
+            <div className="flex gap-1 overflow-x-auto">
+              {navTabs.map(({ id, label, icon: Icon }) => (
+                <button key={id} onClick={() => setTab(id)}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-all",
+                    tab === id ? "bg-violet-600/20 text-violet-300" : "text-slate-400 hover:text-white"
+                  )}>
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6">
+            {tab === "overview" && <OverviewTab token={token} />}
+            {tab === "tenants" && <TenantsTab token={token} />}
+            {tab === "devices" && <DevicesTab token={token} />}
+            {tab === "storage" && <StorageTab token={token} />}
+            {tab === "backups" && <BackupsTab token={token} />}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}

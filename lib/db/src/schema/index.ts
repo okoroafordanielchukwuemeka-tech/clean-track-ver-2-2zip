@@ -21,3 +21,4 @@ export * from "./receipt-number-counters.js";
 export * from "./device-heartbeats.js";
 export * from "./schema-snapshots.js";
 export * from "./alerts.js";
+export * from "./platform-admins.js";
