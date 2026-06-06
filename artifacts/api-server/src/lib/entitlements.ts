@@ -1,0 +1,101 @@
+export const SUBSCRIPTION_PLANS = ["free", "starter", "pro", "business"] as const;
+export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
+
+export const PLAN_DISPLAY_NAMES: Record<SubscriptionPlan, string> = {
+  free: "Free",
+  starter: "Starter",
+  pro: "Professional",
+  business: "Business",
+};
+
+export const PLAN_FEATURES = {
+  free: {
+    HAS_WHATSAPP: false,
+    HAS_MULTI_BRANCH: false,
+    HAS_MARKETING_TOOLS: false,
+    HAS_ANALYTICS: false,
+    HAS_BATCH_PROCESSING: false,
+  },
+  starter: {
+    HAS_WHATSAPP: false,
+    HAS_MULTI_BRANCH: false,
+    HAS_MARKETING_TOOLS: false,
+    HAS_ANALYTICS: true,
+    HAS_BATCH_PROCESSING: true,
+  },
+  pro: {
+    HAS_WHATSAPP: true,
+    HAS_MULTI_BRANCH: true,
+    HAS_MARKETING_TOOLS: false,
+    HAS_ANALYTICS: true,
+    HAS_BATCH_PROCESSING: true,
+  },
+  business: {
+    HAS_WHATSAPP: true,
+    HAS_MULTI_BRANCH: true,
+    HAS_MARKETING_TOOLS: true,
+    HAS_ANALYTICS: true,
+    HAS_BATCH_PROCESSING: true,
+  },
+} as const satisfies Record<SubscriptionPlan, Record<string, boolean>>;
+
+export type PlanFeature = keyof typeof PLAN_FEATURES.business;
+
+export const PLAN_LIMITS: Record<SubscriptionPlan, {
+  maxBranches: number;
+  maxWorkers: number;
+  maxOrdersPerMonth: number;
+}> = {
+  free: { maxBranches: 1, maxWorkers: 3, maxOrdersPerMonth: 100 },
+  starter: { maxBranches: 1, maxWorkers: 10, maxOrdersPerMonth: 500 },
+  pro: { maxBranches: 5, maxWorkers: 50, maxOrdersPerMonth: Infinity },
+  business: { maxBranches: Infinity, maxWorkers: Infinity, maxOrdersPerMonth: Infinity },
+};
+
+export const DEFAULT_TRIAL_DAYS = 14;
+
+export function getPlanFeatures(plan: string): typeof PLAN_FEATURES.free {
+  return (PLAN_FEATURES as any)[plan] ?? PLAN_FEATURES.free;
+}
+
+export function getPlanLimits(plan: string): typeof PLAN_LIMITS.free {
+  return (PLAN_LIMITS as any)[plan] ?? PLAN_LIMITS.free;
+}
+
+export function hasFeature(plan: string, feature: PlanFeature): boolean {
+  const features = getPlanFeatures(plan);
+  return (features as any)[feature] ?? false;
+}
+
+export function getEntitlementReport(): {
+  plans: Array<{
+    plan: string;
+    displayName: string;
+    features: Record<string, boolean>;
+    limits: { maxBranches: number; maxWorkers: number; maxOrdersPerMonth: number };
+  }>;
+  enforcement: string[];
+  futureCompatible: string[];
+} {
+  return {
+    plans: SUBSCRIPTION_PLANS.map((plan) => ({
+      plan,
+      displayName: PLAN_DISPLAY_NAMES[plan],
+      features: getPlanFeatures(plan) as Record<string, boolean>,
+      limits: getPlanLimits(plan),
+    })),
+    enforcement: [
+      "HAS_WHATSAPP — checked before sending WhatsApp messages via communication routes",
+      "HAS_MULTI_BRANCH — checked before creating a second branch",
+      "HAS_MARKETING_TOOLS — reserved for future marketing campaign routes",
+      "HAS_ANALYTICS — checked before accessing advanced analytics endpoints",
+      "HAS_BATCH_PROCESSING — checked before using batch order processing",
+    ],
+    futureCompatible: [
+      "Add new features to PLAN_FEATURES without schema changes",
+      "Add new plans by extending SUBSCRIPTION_PLANS and PLAN_FEATURES",
+      "hasFeature() is the single check point — no redesign needed for new features",
+      "getPlanLimits() provides numeric enforcement separate from feature flags",
+    ],
+  };
+}

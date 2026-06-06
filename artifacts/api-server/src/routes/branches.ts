@@ -5,6 +5,7 @@ import { eq, and, desc, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { logAction } from "../lib/audit.js";
+import { requireOperational } from "../middleware/subscription.js";
 
 export const branchesRouter = Router();
 
@@ -27,7 +28,7 @@ branchesRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
   }
 });
 
-branchesRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
+branchesRouter.post("/", requireOwner, requireOperational, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = branchInputSchema.parse(req.body);

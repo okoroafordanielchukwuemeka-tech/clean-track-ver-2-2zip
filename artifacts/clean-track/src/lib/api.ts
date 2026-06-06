@@ -369,6 +369,9 @@ export const api = {
     runCheck: () =>
       request<{ success: boolean; created: number }>("POST", "/alerts/run-check"),
   },
+  subscription: {
+    getStatus: () => request<SubscriptionStatus>("GET", "/subscription/status"),
+  },
 };
 
 export interface AuthUser {
@@ -1394,7 +1397,8 @@ export type AlertCategory =
   | "worker"
   | "system"
   | "version"
-  | "security";
+  | "security"
+  | "subscription";
 export type AlertStatus = "open" | "acknowledged" | "resolved";
 
 export interface AlertRecord {
@@ -1429,4 +1433,27 @@ export interface AlertCounts {
   open: number;
   acknowledged: number;
   resolved: number;
+}
+
+export interface SubscriptionStatus {
+  status: "trial" | "active" | "past_due" | "suspended" | "cancelled";
+  plan: string;
+  planDisplayName: string;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  trialDaysRemaining: number | null;
+  convertedAt: string | null;
+  subscriptionRenewsAt: string | null;
+  features: {
+    HAS_WHATSAPP: boolean;
+    HAS_MULTI_BRANCH: boolean;
+    HAS_MARKETING_TOOLS: boolean;
+    HAS_ANALYTICS: boolean;
+    HAS_BATCH_PROCESSING: boolean;
+  };
+  limits: {
+    maxBranches: number;
+    maxWorkers: number;
+    maxOrdersPerMonth: number;
+  };
 }

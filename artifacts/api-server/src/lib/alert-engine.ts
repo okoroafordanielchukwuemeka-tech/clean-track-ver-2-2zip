@@ -90,8 +90,15 @@ function getLatestBackupAgeHours(): number | null {
   }
 }
 
+interface LaundrySubscriptionData {
+  subscriptionStatus?: string | null;
+  trialEndsAt?: Date | null;
+  subscriptionTier?: string | null;
+}
+
 export async function runAlertChecksForLaundry(
-  laundryId: number
+  laundryId: number,
+  laundryData?: LaundrySubscriptionData
 ): Promise<{ created: number }> {
   let created = 0;
   const bump = (ok: boolean) => { if (ok) created++; };
@@ -289,6 +296,90 @@ export async function runAlertChecksForLaundry(
     await autoResolve(laundryId, fp9);
   }
 
+  // ── Subscription / Trial alert rules ────────────────────────────────────
+  if (laundryData?.subscriptionStatus === "trial" && laundryData?.trialEndsAt) {
+    const trialEndsAt = new Date(laundryData.trialEndsAt);
+    const daysRemaining = (trialEndsAt.getTime() - now) / 86_400_000;
+
+    const fpExpired = `subscription:trial_expired:${laundryId}`;
+    if (daysRemaining <= 0) {
+      bump(await ensureAlert({
+        laundryId, severity: "critical", category: "subscription",
+        title: "Trial Period Expired",
+        message: "Your free trial has ended. Upgrade to a paid plan to continue full access to CleanTrack.",
+        fingerprint: fpExpired,
+        metadata: { trialEndsAt: laundryData.trialEndsAt, daysRemaining: Math.floor(daysRemaining) },
+      }));
+    } else {
+      await autoResolve(laundryId, fpExpired);
+    }
+
+    const fp1d = `subscription:trial_1d:${laundryId}`;
+    if (daysRemaining > 0 && daysRemaining <= 1) {
+      bump(await ensureAlert({
+        laundryId, severity: "critical", category: "subscription",
+        title: "Trial Ends Tomorrow",
+        message: "Your trial expires in less than 24 hours. Upgrade now to avoid service interruption.",
+        fingerprint: fp1d,
+        metadata: { trialEndsAt: laundryData.trialEndsAt, daysRemaining: Math.ceil(daysRemaining) },
+      }));
+    } else {
+      await autoResolve(laundryId, fp1d);
+    }
+
+    const fp3d = `subscription:trial_3d:${laundryId}`;
+    if (daysRemaining > 1 && daysRemaining <= 3) {
+      bump(await ensureAlert({
+        laundryId, severity: "warning", category: "subscription",
+        title: "Trial Ending in 3 Days",
+        message: `Your trial ends in ${Math.ceil(daysRemaining)} day(s). Upgrade to keep full access.`,
+        fingerprint: fp3d,
+        metadata: { trialEndsAt: laundryData.trialEndsAt, daysRemaining: Math.ceil(daysRemaining) },
+      }));
+    } else {
+      await autoResolve(laundryId, fp3d);
+    }
+
+    const fp7d = `subscription:trial_7d:${laundryId}`;
+    if (daysRemaining > 3 && daysRemaining <= 7) {
+      bump(await ensureAlert({
+        laundryId, severity: "info", category: "subscription",
+        title: "Trial Ending in 7 Days",
+        message: `You have ${Math.ceil(daysRemaining)} days left in your trial. Consider upgrading now.`,
+        fingerprint: fp7d,
+        metadata: { trialEndsAt: laundryData.trialEndsAt, daysRemaining: Math.ceil(daysRemaining) },
+      }));
+    } else {
+      await autoResolve(laundryId, fp7d);
+    }
+  }
+
+  const fpPastDue = `subscription:past_due:${laundryId}`;
+  if (laundryData?.subscriptionStatus === "past_due") {
+    bump(await ensureAlert({
+      laundryId, severity: "warning", category: "subscription",
+      title: "Payment Past Due",
+      message: "Your subscription payment is overdue. Please update your billing to avoid suspension.",
+      fingerprint: fpPastDue,
+      metadata: { subscriptionStatus: laundryData.subscriptionStatus },
+    }));
+  } else {
+    await autoResolve(laundryId, fpPastDue);
+  }
+
+  const fpSuspended = `subscription:suspended:${laundryId}`;
+  if (laundryData?.subscriptionStatus === "suspended") {
+    bump(await ensureAlert({
+      laundryId, severity: "critical", category: "subscription",
+      title: "Account Suspended",
+      message: "This account is suspended. New orders, workers, and branch creation are blocked.",
+      fingerprint: fpSuspended,
+      metadata: { subscriptionStatus: laundryData.subscriptionStatus },
+    }));
+  } else {
+    await autoResolve(laundryId, fpSuspended);
+  }
+
   return { created };
 }
 
@@ -302,13 +393,22 @@ export async function runAlertChecks(): Promise<{ created: number }> {
   alertCheckRunning = true;
   try {
     const allLaundries = await db
-      .select({ id: laundries.id })
+      .select({
+        id: laundries.id,
+        subscriptionStatus: laundries.subscriptionStatus,
+        subscriptionTier: laundries.subscriptionTier,
+        trialEndsAt: laundries.trialEndsAt,
+      })
       .from(laundries)
       .where(eq(laundries.isActive, true));
 
     let totalCreated = 0;
     for (const l of allLaundries) {
-      const r = await runAlertChecksForLaundry(l.id);
+      const r = await runAlertChecksForLaundry(l.id, {
+        subscriptionStatus: l.subscriptionStatus,
+        subscriptionTier: l.subscriptionTier,
+        trialEndsAt: l.trialEndsAt,
+      });
       totalCreated += r.created;
     }
     if (totalCreated > 0) {

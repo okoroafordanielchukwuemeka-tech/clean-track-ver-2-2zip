@@ -1,5 +1,8 @@
 import { pgTable, serial, text, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
+export const SUBSCRIPTION_STATUSES = ["trial", "active", "past_due", "suspended", "cancelled"] as const;
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+
 export const laundries = pgTable("laundries", {
   id: serial("id").primaryKey(),
   businessName: text("business_name").notNull(),
@@ -7,7 +10,13 @@ export const laundries = pgTable("laundries", {
   passwordHash: text("password_hash").notNull(),
   phone: text("phone"),
   isActive: boolean("is_active").notNull().default(true),
-  subscriptionTier: text("subscription_tier", { enum: ["free", "starter", "pro"] }).notNull().default("free"),
+  subscriptionTier: text("subscription_tier", { enum: ["free", "starter", "pro", "business"] }).notNull().default("free"),
+  subscriptionStatus: text("subscription_status", { enum: SUBSCRIPTION_STATUSES }).notNull().default("trial"),
+  trialStartedAt: timestamp("trial_started_at"),
+  trialEndsAt: timestamp("trial_ends_at"),
+  trialDurationDays: integer("trial_duration_days").notNull().default(14),
+  convertedAt: timestamp("converted_at"),
+  subscriptionRenewsAt: timestamp("subscription_renews_at"),
   standardTurnaroundHours: integer("standard_turnaround_hours").notNull().default(72),
   expressTurnaroundHours: integer("express_turnaround_hours").notNull().default(24),
   premiumTurnaroundHours: integer("premium_turnaround_hours").notNull().default(48),

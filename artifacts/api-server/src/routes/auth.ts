@@ -59,11 +59,19 @@ authRouter.post("/signup", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(data.password, 12);
 
+    const trialStartedAt = new Date();
+    const trialDurationDays = 14;
+    const trialEndsAt = new Date(trialStartedAt.getTime() + trialDurationDays * 86_400_000);
+
     const [laundry] = await db.insert(laundries).values({
       businessName: data.businessName,
       ownerEmail: data.ownerEmail.toLowerCase(),
       passwordHash,
       phone: data.phone,
+      subscriptionStatus: "trial",
+      trialStartedAt,
+      trialEndsAt,
+      trialDurationDays,
     }).returning();
 
     await seedLaundryDefaults(laundry.id);

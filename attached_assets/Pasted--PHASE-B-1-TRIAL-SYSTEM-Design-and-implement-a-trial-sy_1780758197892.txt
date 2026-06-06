@@ -1,0 +1,201 @@
+---
+
+## PHASE B.1 — TRIAL SYSTEM
+
+Design and implement a trial system for new laundries.
+
+Requirements:
+
+Trial Statuses:
+
+* Trial
+* Active
+* Past Due
+* Suspended
+* Cancelled
+
+Track:
+
+* trialStartedAt
+* trialEndsAt
+* trialDaysRemaining
+* convertedAt
+
+Default:
+
+* New laundry receives a configurable trial period
+* Trial duration should be configurable (e.g. 14 days)
+
+Owner Dashboard:
+
+Display:
+
+* Trial Status
+* Trial Days Remaining
+* Trial End Date
+
+Admin Dashboard:
+
+Display:
+
+* Trial Tenants
+* Trial End Dates
+* Trial Conversion Candidates
+
+Alert Center:
+
+Generate alerts when:
+
+* 7 days remaining
+* 3 days remaining
+* 1 day remaining
+* Trial expired
+
+Requirements:
+
+* Multi-tenant safe
+* Future payment-provider compatible
+* Auditable
+
+---
+
+## PHASE B.2 — SUBSCRIPTION STATE SYSTEM
+
+Implement subscription lifecycle states.
+
+States:
+
+* Trial
+* Active
+* Past Due
+* Suspended
+* Cancelled
+
+Requirements:
+
+Every laundry must have exactly one current subscription state.
+
+Enforcement Rules:
+
+TRIAL
+
+* Full access according to trial limits
+
+ACTIVE
+
+* Full access according to subscribed plan
+
+PAST DUE
+
+* Access allowed
+* Warning banners displayed
+* Billing alerts generated
+
+SUSPENDED
+
+* Login allowed
+* View-only access
+* Cannot create orders
+* Cannot create workers
+* Cannot create branches
+* Cannot send WhatsApp messages
+
+CANCELLED
+
+* Login allowed
+* Historical data accessible
+* No operational actions allowed
+
+Owner Dashboard:
+
+Display:
+
+* Current State
+* Current Plan
+* Renewal Date
+* Days Until Renewal
+* Status Warnings
+
+Admin Dashboard:
+
+Display:
+
+* Tenant State
+* Plan
+* Renewal Date
+* Suspension Status
+* Past Due Status
+
+Alert Center:
+
+Generate alerts when:
+
+* State changes
+* Trial expires
+* Tenant becomes Past Due
+* Tenant becomes Suspended
+
+Validation:
+
+Verify state transitions:
+
+Trial → Active
+
+Active → Past Due
+
+Past Due → Suspended
+
+Suspended → Active
+
+Active → Cancelled
+
+Cancelled → Active
+
+Provide a complete state transition report.
+
+---
+
+## PHASE B.3 — FEATURE ENTITLEMENT SYSTEM
+
+Do not only enforce numeric limits.
+
+Create plan feature entitlements.
+
+Examples:
+
+Starter:
+
+* WhatsApp = Disabled
+* Multi-Branch = Disabled
+
+Professional:
+
+* WhatsApp = Enabled
+* Multi-Branch = Enabled
+
+Business:
+
+* WhatsApp = Enabled
+* Multi-Branch = Enabled
+* Future Marketing Tools = Enabled
+
+Requirements:
+
+Build a reusable entitlement system that future features can check without redesigning billing.
+
+Examples:
+
+HAS_WHATSAPP
+
+HAS_MULTI_BRANCH
+
+HAS_MARKETING_TOOLS
+
+Integrate entitlement checks into the enforcement layer.
+
+Provide a report showing:
+
+* Plan Limits
+* Plan Features
+* Enforcement Rules
+* Future Compatibility

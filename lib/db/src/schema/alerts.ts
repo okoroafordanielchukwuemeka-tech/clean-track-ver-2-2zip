@@ -21,6 +21,7 @@ export const ALERT_CATEGORIES = [
   "system",
   "version",
   "security",
+  "subscription",
 ] as const;
 export const ALERT_STATUSES = ["open", "acknowledged", "resolved"] as const;
 

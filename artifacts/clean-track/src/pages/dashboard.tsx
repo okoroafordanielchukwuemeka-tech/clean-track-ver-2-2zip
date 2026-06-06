@@ -16,7 +16,9 @@ import {
   TrendingDown, Clock, CheckCircle, ShoppingBag, Package,
   Crown, RefreshCw, ArrowUpRight, ArrowDownRight, Minus,
   Activity, UserCheck, Zap, Receipt, Settings, Percent,
+  FlaskConical, XCircle, AlertCircle, Hourglass,
 } from "lucide-react";
+import { type SubscriptionStatus } from "@/lib/api";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
@@ -67,6 +69,72 @@ function KpiCard({
       </CardContent>
     </Card>
   );
+}
+
+function SubscriptionBanner({ sub }: { sub: SubscriptionStatus | null }) {
+  if (!sub || sub.status === "active") return null;
+
+  if (sub.status === "trial") {
+    const days = sub.trialDaysRemaining ?? 0;
+    const urgent = days <= 3;
+    return (
+      <div className={`flex items-center gap-3 rounded-lg px-4 py-3 border text-sm ${urgent ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300" : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300"}`}>
+        <FlaskConical className="h-4 w-4 shrink-0" />
+        <div className="flex-1">
+          <span className="font-semibold">Free Trial — </span>
+          {days <= 0
+            ? "Your trial has expired. Upgrade to continue operations."
+            : days === 1
+            ? "1 day remaining in your trial. Upgrade now to avoid interruption."
+            : `${days} days remaining in your trial.`}
+          {sub.trialEndsAt && (
+            <span className="ml-1 opacity-75">
+              Ends {new Date(sub.trialEndsAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}.
+            </span>
+          )}
+        </div>
+        <span className="hidden sm:block text-xs font-medium opacity-75 capitalize">{sub.planDisplayName} plan</span>
+      </div>
+    );
+  }
+
+  if (sub.status === "past_due") {
+    return (
+      <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-sm">
+        <Hourglass className="h-4 w-4 shrink-0" />
+        <div className="flex-1">
+          <span className="font-semibold">Payment Past Due — </span>
+          Your subscription payment is overdue. Please update your billing to avoid account suspension.
+        </div>
+      </div>
+    );
+  }
+
+  if (sub.status === "suspended") {
+    return (
+      <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 text-sm">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        <div className="flex-1">
+          <span className="font-semibold">Account Suspended — </span>
+          New orders, workers, and branches are blocked. Contact support to resume operations.
+        </div>
+      </div>
+    );
+  }
+
+  if (sub.status === "cancelled") {
+    return (
+      <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 text-sm">
+        <XCircle className="h-4 w-4 shrink-0" />
+        <div className="flex-1">
+          <span className="font-semibold">Account Cancelled — </span>
+          Your account has been cancelled. Historical data is still accessible.
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 const PERIOD_LABELS: Record<AnalyticsPeriod, string> = {
@@ -130,6 +198,13 @@ export default function Dashboard() {
     refetchInterval: 30_000,
   });
 
+  const { data: subStatus } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: () => api.subscription.getStatus(),
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+  });
+
   const ov = full?.overview;
   const gr = full?.growth;
   const profit = ov?.estimatedProfit ?? 0;
@@ -137,6 +212,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <SubscriptionBanner sub={subStatus ?? null} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>

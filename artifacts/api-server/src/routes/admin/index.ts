@@ -6,6 +6,7 @@ import { adminTenantsRouter } from "./tenants.js";
 import { adminDevicesRouter } from "./devices.js";
 import { adminStorageRouter } from "./storage.js";
 import { adminBackupsRouter } from "./backups.js";
+import { adminSubscriptionsRouter } from "./subscriptions.js";
 
 export const adminRouter = Router();
 
@@ -16,3 +17,4 @@ adminRouter.use("/tenants", requireAdmin, adminTenantsRouter);
 adminRouter.use("/devices", requireAdmin, adminDevicesRouter);
 adminRouter.use("/storage", requireAdmin, adminStorageRouter);
 adminRouter.use("/backups", requireAdmin, adminBackupsRouter);
+adminRouter.use("/subscriptions", requireAdmin, adminSubscriptionsRouter);

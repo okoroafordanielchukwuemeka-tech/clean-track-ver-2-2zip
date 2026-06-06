@@ -15,6 +15,7 @@ import {
 import { and, eq, desc, count, sql, or } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/subscription.js";
 import { providerRegistry } from "../lib/providers/registry.js";
 import { WhatsAppCloudProvider, normalizePhoneE164 } from "../lib/providers/whatsapp-cloud.js";
 import { interpolate } from "../lib/notification-dispatcher.js";
@@ -646,6 +647,7 @@ communicationRouter.delete(
 communicationRouter.post(
   "/test-message",
   requireOwner,
+  requireEntitlement("HAS_WHATSAPP"),
   async (req: AuthRequest, res) => {
     try {
       const { laundryId } = req.auth!;

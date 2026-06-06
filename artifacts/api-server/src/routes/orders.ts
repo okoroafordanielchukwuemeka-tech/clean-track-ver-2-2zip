@@ -6,6 +6,7 @@ import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
+import { requireOperational } from "../middleware/subscription.js";
 import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 
@@ -254,7 +255,7 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
   }
 });
 
-ordersRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
+ordersRouter.post("/", requireOperational, checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";

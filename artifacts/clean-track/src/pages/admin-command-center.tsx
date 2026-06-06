@@ -7,7 +7,8 @@ import {
   HardDrive, Database, LogOut, RefreshCw, AlertTriangle,
   CheckCircle2, XCircle, Clock, Wifi, WifiOff, Activity,
   ChevronRight, Server, Users, ShoppingCart, Layers,
-  TrendingUp, BarChart3, Archive, Package,
+  TrendingUp, BarChart3, Archive, Package, FlaskConical,
+  CreditCard, Ban, Hourglass, CheckCircle, ChevronDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,22 @@ function StatusDot({ status }: { status: "online" | "stale" | "offline" | "healt
   };
   return (
     <span className={cn("inline-block w-2 h-2 rounded-full shrink-0", colors[status])} />
+  );
+}
+
+function SubStatusBadge({ status, plan }: { status: string; plan?: string }) {
+  const cfg: Record<string, { cls: string; icon: React.ReactNode; label: string }> = {
+    trial:     { cls: "bg-blue-900/50 text-blue-300 border-blue-700",   icon: <FlaskConical className="w-3 h-3" />, label: "Trial" },
+    active:    { cls: "bg-emerald-900/50 text-emerald-300 border-emerald-700", icon: <CheckCircle className="w-3 h-3" />, label: plan ?? "Active" },
+    past_due:  { cls: "bg-amber-900/50 text-amber-300 border-amber-700", icon: <Hourglass className="w-3 h-3" />, label: "Past Due" },
+    suspended: { cls: "bg-red-900/50 text-red-300 border-red-700",      icon: <Ban className="w-3 h-3" />, label: "Suspended" },
+    cancelled: { cls: "bg-slate-800 text-slate-400 border-slate-600",   icon: <XCircle className="w-3 h-3" />, label: "Cancelled" },
+  };
+  const c = cfg[status] ?? cfg.trial;
+  return (
+    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border font-medium", c.cls)}>
+      {c.icon}{c.label}
+    </span>
   );
 }
 
@@ -221,6 +238,28 @@ function TenantsTab({ token }: { token: string }) {
         </div>
         <Card className="bg-slate-900 border-slate-800">
           <CardContent className="px-5 py-4 space-y-2">
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-400">Subscription</span>
+              <SubStatusBadge status={t.subscriptionStatus ?? "trial"} plan={t.subscriptionTier} />
+            </div>
+            {t.trialEndsAt && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Trial Ends</span>
+                <span className="text-white">{new Date(t.trialEndsAt).toLocaleDateString()}</span>
+              </div>
+            )}
+            {t.convertedAt && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Converted</span>
+                <span className="text-emerald-400">{new Date(t.convertedAt).toLocaleDateString()}</span>
+              </div>
+            )}
+            {t.subscriptionRenewsAt && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Renews</span>
+                <span className="text-white">{new Date(t.subscriptionRenewsAt).toLocaleDateString()}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Last Snapshot</span>
               <span className={cn("font-medium", t.stats.lastSnapshotAt ? "text-white" : "text-red-400")}>
@@ -278,12 +317,7 @@ function TenantsTab({ token }: { token: string }) {
                     </span>
                   )}
                 </div>
-                <Badge className={cn("text-xs",
-                  t.isActive ? "bg-emerald-900/40 text-emerald-400 border-emerald-800" :
-                  "bg-slate-800 text-slate-400 border-slate-700"
-                )}>
-                  {t.subscriptionTier}
-                </Badge>
+                <SubStatusBadge status={t.subscriptionStatus ?? "trial"} plan={t.subscriptionTier} />
                 <ChevronRight className="w-4 h-4 text-slate-600" />
               </div>
             </div>
@@ -585,6 +619,149 @@ function BackupsTab({ token }: { token: string }) {
   );
 }
 
+// ─── Subscriptions Tab ─────────────────────────────────────────────────────
+
+function SubscriptionsTab({ token }: { token: string }) {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "subscriptions"],
+    queryFn: () => adminFetch("/admin/subscriptions/trial-candidates", token),
+    staleTime: 60_000,
+  });
+  const [transitioning, setTransitioning] = useState<number | null>(null);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!data) return <ErrorState />;
+
+  const d = data as any;
+
+  async function transition(laundryId: number, newStatus: string, plan?: string) {
+    setTransitioning(laundryId);
+    try {
+      const body: Record<string, string> = { laundryId: String(laundryId), newStatus };
+      if (plan) body.plan = plan;
+      await adminFetch("/admin/subscriptions/state-transitions", token);
+      // POST manually
+      const r = await fetch(`${API_BASE}/admin/subscriptions/state-transitions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
+      await refetch();
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setTransitioning(null);
+    }
+  }
+
+  const statColors: Record<string, string> = {
+    trial: "text-blue-400",
+    active: "text-emerald-400",
+    past_due: "text-amber-400",
+    suspended: "text-red-400",
+    cancelled: "text-slate-500",
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">Subscriptions</h2>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      {d.summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {Object.entries(d.summary as Record<string, number>).map(([k, v]) => (
+            <div key={k} className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-3 text-center">
+              <div className={cn("text-xl font-bold", statColors[k] ?? "text-white")}>{v}</div>
+              <div className="text-xs text-slate-400 mt-0.5 capitalize">{k.replace("_", " ")}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {d.trialCandidates?.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+            <FlaskConical className="w-4 h-4 text-blue-400" /> Trial Tenants ({d.trialCandidates.length})
+          </h3>
+          <div className="space-y-2">
+            {d.trialCandidates.map((t: any) => {
+              const daysLeft = t.trialEndsAt
+                ? Math.ceil((new Date(t.trialEndsAt).getTime() - Date.now()) / 86400000)
+                : null;
+              return (
+                <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{t.businessName}</div>
+                      <div className="text-slate-400 text-xs">{t.ownerEmail}</div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className={cn("text-xs font-medium", daysLeft != null && daysLeft <= 0 ? "text-red-400" : daysLeft != null && daysLeft <= 3 ? "text-amber-400" : "text-blue-400")}>
+                        {daysLeft == null ? "—" : daysLeft <= 0 ? "Expired" : `${daysLeft}d left`}
+                      </div>
+                      <button
+                        onClick={() => transition(t.id, "active", t.subscriptionTier)}
+                        disabled={transitioning === t.id}
+                        className="text-xs px-2 py-1 rounded bg-emerald-700/30 text-emerald-300 border border-emerald-700/50 hover:bg-emerald-700/50 transition-colors disabled:opacity-50"
+                      >
+                        {transitioning === t.id ? "…" : "Convert → Active"}
+                      </button>
+                      <button
+                        onClick={() => transition(t.id, "cancelled")}
+                        disabled={transitioning === t.id}
+                        className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                  {t.trialEndsAt && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      Trial ends {new Date(t.trialEndsAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {d.allTenants && (
+        <div>
+          <h3 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+            <CreditCard className="w-4 h-4 text-slate-400" /> All Tenants
+          </h3>
+          <div className="space-y-2">
+            {d.allTenants.map((t: any) => (
+              <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="text-white text-sm font-medium truncate">{t.businessName}</div>
+                  <div className="text-slate-400 text-xs">{t.ownerEmail}</div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <SubStatusBadge status={t.subscriptionStatus ?? "trial"} plan={t.subscriptionTier} />
+                  {t.subscriptionRenewsAt && (
+                    <span className="text-xs text-slate-500">
+                      Renews {new Date(t.subscriptionRenewsAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Shared UI Helpers ─────────────────────────────────────────────────────
 
 const colorMap = {
@@ -681,6 +858,7 @@ export default function AdminCommandCenter() {
   const navTabs = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "tenants", label: "Tenants", icon: Building2 },
+    { id: "subscriptions", label: "Subscriptions", icon: CreditCard },
     { id: "devices", label: "Devices", icon: MonitorSmartphone },
     { id: "storage", label: "Storage", icon: HardDrive },
     { id: "backups", label: "Backups", icon: Archive },
@@ -749,6 +927,7 @@ export default function AdminCommandCenter() {
           <div className="p-4 sm:p-6">
             {tab === "overview" && <OverviewTab token={token} />}
             {tab === "tenants" && <TenantsTab token={token} />}
+            {tab === "subscriptions" && <SubscriptionsTab token={token} />}
             {tab === "devices" && <DevicesTab token={token} />}
             {tab === "storage" && <StorageTab token={token} />}
             {tab === "backups" && <BackupsTab token={token} />}
