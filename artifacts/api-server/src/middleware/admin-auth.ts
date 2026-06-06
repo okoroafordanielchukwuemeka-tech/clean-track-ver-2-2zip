@@ -12,10 +12,18 @@ export interface AdminRequest extends Request {
   admin?: AdminAuthPayload;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "clean-track-dev-secret-change-in-production";
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error(
+      "FATAL: JWT_SECRET environment variable is not set. Server cannot authenticate admin requests."
+    );
+  }
+  return secret;
+}
 
 export function signAdminToken(payload: AdminAuthPayload, expiresIn: string = "8h"): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);
+  return jwt.sign(payload, getJwtSecret(), { expiresIn } as jwt.SignOptions);
 }
 
 export function requireAdmin(req: AdminRequest, res: Response, next: NextFunction) {
@@ -25,7 +33,7 @@ export function requireAdmin(req: AdminRequest, res: Response, next: NextFunctio
   }
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AdminAuthPayload;
+    const payload = jwt.verify(token, getJwtSecret()) as AdminAuthPayload;
     if (payload.type !== "admin") {
       return res.status(403).json({ error: "Admin access required" });
     }

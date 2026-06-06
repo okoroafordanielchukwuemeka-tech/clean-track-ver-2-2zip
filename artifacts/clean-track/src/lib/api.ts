@@ -379,6 +379,9 @@ export const api = {
     getStatus: () => request<SubscriptionStatus>("GET", "/subscription/status"),
     getUsage: () => request<SubscriptionUsage>("GET", "/subscription/usage"),
   },
+  health: {
+    production: () => request<unknown>("GET", "/health/production"),
+  },
 };
 
 export interface AuthUser {

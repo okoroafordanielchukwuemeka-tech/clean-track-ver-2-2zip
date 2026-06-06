@@ -25,6 +25,7 @@ import { adminRouter } from "./admin/index.js";
 import { communicationRouter } from "./communication.js";
 import { webhooksRouter } from "./webhooks.js";
 import { subscriptionRouter } from "./subscription.js";
+import { productionHealthRouter } from "./production-health.js";
 
 export const router = Router();
 
@@ -56,6 +57,7 @@ router.use("/branches", requireAuth, branchesRouter);
 router.use("/operations", requireOwner, operationsRouter);
 router.use("/telemetry", requireAuth, telemetryRouter);
 router.use("/recovery", requireOwner, recoveryRouter);
+router.use("/health", productionHealthRouter);
 router.use("/alerts", requireOwner, alertsRouter);
 router.use("/communication", requireOwner, communicationRouter);
 router.use("/subscription", subscriptionRouter);

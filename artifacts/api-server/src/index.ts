@@ -1,15 +1,30 @@
+import { validateEnvironment } from "./lib/env-validation.js";
+
+// ── Phase D: Validate environment FIRST — crash before binding to any port ──
+validateEnvironment();
+
 import app from "./app.js";
 import { db } from "@workspace/db";
 import { idempotencyKeys } from "@workspace/db/schema";
 import { lt } from "drizzle-orm";
 import { runAlertChecks } from "./lib/alert-engine.js";
+import { startBackupScheduler } from "./lib/backup-scheduler.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
+
+if (!process.env.ALLOWED_ORIGINS) {
+  console.warn(
+    "[security] ⚠ ALLOWED_ORIGINS is not set — CORS accepts all origins. " +
+    "Set ALLOWED_ORIGINS in production to restrict access."
+  );
+}
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`API server running on port ${PORT}`);
   scheduleIdempotencyCleanup();
   scheduleAlertChecks();
+  // Phase B: start daily backup scheduler
+  startBackupScheduler();
 });
 
 function scheduleIdempotencyCleanup() {
@@ -32,9 +47,8 @@ function scheduleIdempotencyCleanup() {
 }
 
 function scheduleAlertChecks() {
-  const INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
+  const INTERVAL_MS = 5 * 60 * 1000;
 
-  // Run once immediately on startup (non-blocking)
   runAlertChecks().catch((err) =>
     console.error("[alert-engine] startup check failed:", err)
   );

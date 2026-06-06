@@ -18,6 +18,7 @@ import {
   GitBranch,
   Activity,
   MessageSquare,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -70,6 +71,7 @@ export function Layout() {
     { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
     { to: "/operations", label: "Operations", icon: Activity },
     { to: "/communications", label: "Communications", icon: MessageSquare },
+    { to: "/platform-health", label: "Platform Health", icon: ShieldCheck },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 

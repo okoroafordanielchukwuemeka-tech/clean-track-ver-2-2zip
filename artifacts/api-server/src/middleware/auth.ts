@@ -28,10 +28,20 @@ export interface AuthRequest extends Request {
   auth?: AuthPayload;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || "clean-track-dev-secret-change-in-production";
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    // This should never be reached in production — env-validation.ts crashes
+    // the process before any request is served. This guard is a last resort.
+    throw new Error(
+      "FATAL: JWT_SECRET environment variable is not set. Server cannot authenticate requests."
+    );
+  }
+  return secret;
+}
 
 export function signToken(payload: AuthPayload, expiresIn: string = "7d"): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);
+  return jwt.sign(payload, getJwtSecret(), { expiresIn } as jwt.SignOptions);
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -41,7 +51,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    const payload = jwt.verify(token, getJwtSecret()) as AuthPayload;
     req.auth = payload;
     next();
   } catch {
