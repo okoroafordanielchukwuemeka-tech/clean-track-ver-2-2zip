@@ -12,7 +12,7 @@ import {
   laundries,
   branches,
 } from "@workspace/db/schema";
-import { and, eq, desc, count, sql } from "drizzle-orm";
+import { and, eq, desc, count, sql, or } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { providerRegistry } from "../lib/providers/registry.js";
@@ -368,38 +368,31 @@ communicationRouter.get(
     try {
       const { laundryId } = req.auth!;
 
-      const statusCounts = await db
-        .select({
-          status: notificationMessages.status,
-          count: count(),
-        })
-        .from(notificationMessages)
-        .where(eq(notificationMessages.laundryId, laundryId))
-        .groupBy(notificationMessages.status);
-
-      const channelCounts = await db
-        .select({
-          channel: notificationMessages.channel,
-          count: count(),
-        })
-        .from(notificationMessages)
-        .where(eq(notificationMessages.laundryId, laundryId))
-        .groupBy(notificationMessages.channel);
-
-      const templateCount = await db
-        .select({ count: count() })
-        .from(notificationTemplates)
-        .where(eq(notificationTemplates.laundryId, laundryId));
-
-      const activeTemplateCount = await db
-        .select({ count: count() })
-        .from(notificationTemplates)
-        .where(
-          and(
-            eq(notificationTemplates.laundryId, laundryId),
-            eq(notificationTemplates.isActive, true)
-          )
-        );
+      const [statusCounts, channelCounts, templateCount, activeTemplateCount] = await Promise.all([
+        db
+          .select({ status: notificationMessages.status, count: count() })
+          .from(notificationMessages)
+          .where(eq(notificationMessages.laundryId, laundryId))
+          .groupBy(notificationMessages.status),
+        db
+          .select({ channel: notificationMessages.channel, count: count() })
+          .from(notificationMessages)
+          .where(eq(notificationMessages.laundryId, laundryId))
+          .groupBy(notificationMessages.channel),
+        db
+          .select({ count: count() })
+          .from(notificationTemplates)
+          .where(eq(notificationTemplates.laundryId, laundryId)),
+        db
+          .select({ count: count() })
+          .from(notificationTemplates)
+          .where(
+            and(
+              eq(notificationTemplates.laundryId, laundryId),
+              eq(notificationTemplates.isActive, true)
+            )
+          ),
+      ]);
 
       const total = statusCounts.reduce((s, r) => s + r.count, 0);
 
@@ -744,11 +737,26 @@ communicationRouter.post(
         return res.json({ success: false, error: "No active provider for this channel" });
       }
 
-      // Increment retry count and reset to queued
-      await db
+      // Atomic optimistic-lock claim: only update if status hasn't changed since we read it.
+      // Prevents double-send when two concurrent retry requests race on the same message.
+      const [claimed] = await db
         .update(notificationMessages)
-        .set({ status: "queued", retryCount: (msg.retryCount ?? 0) + 1, errorMessage: null })
-        .where(eq(notificationMessages.id, id));
+        .set({ status: "queued", retryCount: sql`${notificationMessages.retryCount} + 1`, errorMessage: null })
+        .where(
+          and(
+            eq(notificationMessages.id, id),
+            eq(notificationMessages.laundryId, laundryId),
+            or(
+              eq(notificationMessages.status, "failed"),
+              eq(notificationMessages.status, "queued")
+            )
+          )
+        )
+        .returning({ id: notificationMessages.id });
+
+      if (!claimed) {
+        return res.status(409).json({ error: "Message was already claimed by a concurrent retry — try again" });
+      }
 
       try {
         const result = await provider.send({

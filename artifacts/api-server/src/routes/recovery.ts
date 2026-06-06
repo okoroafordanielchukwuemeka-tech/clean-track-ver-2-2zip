@@ -114,8 +114,8 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
       {
         id: "schema_integrity",
         label: "Schema integrity",
-        status: tableCount >= 21 ? "pass" : "warn",
-        detail: tableCount >= 21 ? `${tableCount} tables (expected 22)` : `Only ${tableCount} tables found — schema may be incomplete`,
+        status: tableCount >= 24 ? "pass" : "warn",
+        detail: tableCount >= 24 ? `${tableCount} tables (expected ≥25)` : `Only ${tableCount} tables found — schema may be incomplete`,
         critical: true,
       },
       {
@@ -408,18 +408,23 @@ recoveryRouter.get("/summary", requireOwner, async (req: AuthRequest, res) => {
     const laundryId = req.auth!.laundryId;
 
     const [deletedWorkers, deletedCustomers, deletedBranches, deletedPayments] = await Promise.all([
-      db.select().from(workers).where(and(eq(workers.laundryId, laundryId), isNotNull(workers.deletedAt))),
-      db.select().from(customers).where(and(eq(customers.laundryId, laundryId), isNotNull(customers.deletedAt))),
-      db.select().from(branches).where(and(eq(branches.laundryId, laundryId), isNotNull(branches.deletedAt))),
-      db.select().from(paymentRecords).where(and(eq(paymentRecords.laundryId, laundryId), isNotNull(paymentRecords.deletedAt))),
+      db.select({ c: count() }).from(workers).where(and(eq(workers.laundryId, laundryId), isNotNull(workers.deletedAt))),
+      db.select({ c: count() }).from(customers).where(and(eq(customers.laundryId, laundryId), isNotNull(customers.deletedAt))),
+      db.select({ c: count() }).from(branches).where(and(eq(branches.laundryId, laundryId), isNotNull(branches.deletedAt))),
+      db.select({ c: count() }).from(paymentRecords).where(and(eq(paymentRecords.laundryId, laundryId), isNotNull(paymentRecords.deletedAt))),
     ]);
 
+    const wc = Number(deletedWorkers[0].c);
+    const cc = Number(deletedCustomers[0].c);
+    const bc = Number(deletedBranches[0].c);
+    const pc = Number(deletedPayments[0].c);
+
     res.json({
-      workers: deletedWorkers.length,
-      customers: deletedCustomers.length,
-      branches: deletedBranches.length,
-      payments: deletedPayments.length,
-      total: deletedWorkers.length + deletedCustomers.length + deletedBranches.length + deletedPayments.length,
+      workers: wc,
+      customers: cc,
+      branches: bc,
+      payments: pc,
+      total: wc + cc + bc + pc,
     });
   } catch {
     res.status(500).json({ error: "Failed to get recovery summary" });

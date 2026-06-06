@@ -8,7 +8,7 @@
 
 import { db } from "@workspace/db";
 import { providerConfigs } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { ChannelProvider } from "./channel-provider.js";
 import type { NotificationChannel } from "@workspace/db/schema";
 import type { WhatsAppProviderConfig } from "@workspace/db/schema";
@@ -86,22 +86,19 @@ class ProviderRegistry {
     phoneNumberId: string
   ): Promise<{ laundryId: number; config: Record<string, unknown> } | null> {
     const rows = await db
-      .select()
+      .select({ laundryId: providerConfigs.laundryId, config: providerConfigs.config })
       .from(providerConfigs)
       .where(
         and(
           eq(providerConfigs.provider, "whatsapp"),
-          eq(providerConfigs.isActive, true)
+          eq(providerConfigs.isActive, true),
+          sql`${providerConfigs.config}->>'phoneNumberId' = ${phoneNumberId}`
         )
-      );
+      )
+      .limit(1);
 
-    for (const row of rows) {
-      const cfg = row.config as Record<string, unknown>;
-      if (cfg.phoneNumberId === phoneNumberId) {
-        return { laundryId: row.laundryId, config: cfg };
-      }
-    }
-    return null;
+    if (!rows.length) return null;
+    return { laundryId: rows[0].laundryId, config: rows[0].config as Record<string, unknown> };
   }
 
   /** Call after saving or deleting a provider config. */

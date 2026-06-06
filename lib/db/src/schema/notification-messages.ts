@@ -60,6 +60,7 @@ export const notificationMessages = pgTable(
     index("notif_messages_channel_idx").on(t.channel),
     index("notif_messages_recipient_idx").on(t.recipientPhone),
     index("notif_messages_queued_at_idx").on(t.queuedAt),
+    index("notif_messages_provider_msg_id_idx").on(t.providerMessageId),
   ]
 );
 

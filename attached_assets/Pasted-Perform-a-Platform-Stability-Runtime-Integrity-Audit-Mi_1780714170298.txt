@@ -1,0 +1,129 @@
+Perform a Platform Stability & Runtime Integrity Audit.
+
+Mission:
+
+CleanTrack has recently added:
+
+* Communications Center
+* WhatsApp Provider Integration
+* Webhooks
+* Alert Engine
+* Admin Command Center
+* Backup Center
+* Recovery Center
+* Sync Telemetry
+
+Before adding new features, verify platform stability.
+
+DO NOT IMPLEMENT NEW FEATURES.
+
+==================================================
+PHASE A — SERVER AUDIT
+======================
+
+Inspect:
+
+* app startup
+* route registration
+* middleware chain
+* schedulers
+* cron jobs
+* alert engine
+* telemetry engine
+* communication engine
+* webhook handlers
+
+Find:
+
+* duplicate route registration
+* duplicate schedulers
+* memory leaks
+* circular dependencies
+* startup failures
+* silent failures
+* unhandled promises
+
+==================================================
+PHASE B — ERROR AUDIT
+=====================
+
+Identify:
+
+* runtime errors
+* TypeScript errors
+* module resolution problems
+* import failures
+* database query failures
+* schema mismatches
+
+Classify:
+
+Critical
+High
+Medium
+Low
+
+==================================================
+PHASE C — COMMUNICATION PERMISSIONS AUDIT
+=========================================
+
+Review Communications Center.
+
+Determine:
+
+Which actions belong to:
+
+1. Worker
+2. Branch Manager
+3. Owner
+4. Platform Admin
+
+Design least-privilege permissions.
+
+==================================================
+PHASE D — PERFORMANCE AUDIT
+===========================
+
+Review:
+
+* notification dispatcher
+* provider registry
+* alert engine
+* sync telemetry
+* operations center
+
+Identify:
+
+* expensive queries
+* missing indexes
+* N+1 queries
+* unnecessary polling
+* cache opportunities
+
+==================================================
+PHASE E — HARDENING
+===================
+
+Fix only:
+
+* critical issues
+* high severity issues
+
+Do NOT add features.
+
+==================================================
+PHASE F — VALIDATION
+====================
+
+Return:
+
+1. Stability Report
+2. Runtime Error Report
+3. Permission Matrix
+4. Performance Findings
+5. Fixes Applied
+6. Remaining Risks
+
+Goal:
+
+Ensure CleanTrack is stable, secure, and production-ready before adding more functionality.

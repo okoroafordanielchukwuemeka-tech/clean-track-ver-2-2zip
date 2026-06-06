@@ -292,7 +292,14 @@ export async function runAlertChecksForLaundry(
   return { created };
 }
 
+let alertCheckRunning = false;
+
 export async function runAlertChecks(): Promise<{ created: number }> {
+  if (alertCheckRunning) {
+    console.log("[alert-engine] Skipping check — previous run still in progress");
+    return { created: 0 };
+  }
+  alertCheckRunning = true;
   try {
     const allLaundries = await db
       .select({ id: laundries.id })
@@ -311,5 +318,7 @@ export async function runAlertChecks(): Promise<{ created: number }> {
   } catch (err) {
     console.error("[alert-engine] runAlertChecks failed:", err);
     return { created: 0 };
+  } finally {
+    alertCheckRunning = false;
   }
 }
