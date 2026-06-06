@@ -1,0 +1,187 @@
+PHASE: WORKER WHATSAPP WORKFLOW + PERMISSION AUDIT
+
+Before writing any code, perform a complete audit of:
+
+* WhatsApp communication system
+* Notification templates
+* Communication permissions
+* Worker permissions
+* Branch permissions
+* Owner permissions
+* Existing order workflow
+* Existing customer workflow
+
+GOAL:
+
+Workers must be able to communicate with customers during daily operations without having access to billing, provider settings, templates, credentials, or system administration.
+
+Focus only on operational messaging.
+
+Do not build marketing systems.
+
+Do not build loyalty systems.
+
+Do not build referral systems.
+
+Do not build AI systems.
+
+Do not build future inbox enhancements beyond what is required for launch.
+
+---
+
+PHASE A — AUDIT
+
+Report:
+
+1. Current WhatsApp architecture
+2. Current communication permissions
+3. Current worker capabilities
+4. Current owner capabilities
+5. Current template system
+6. Current message history system
+7. Current notification triggers
+8. Current communication routes
+
+Identify all permission gaps.
+
+---
+
+PHASE B — WORKER COMMUNICATION ROLE
+
+Workers should have access only to:
+
+1. Send Ready For Pickup message
+2. Send Pickup Reminder
+3. View customer communication history
+4. View delivery status
+5. Retry failed operational messages
+
+Workers must NOT:
+
+* edit templates
+* delete templates
+* configure WhatsApp
+* validate WhatsApp credentials
+* send promotional broadcasts
+* access billing
+* access provider settings
+* access admin tools
+
+Implement strict permission enforcement.
+
+---
+
+PHASE C — ORDER DETAIL ACTIONS
+
+From Order Details page add:
+
+READY FOR PICKUP
+
+REMIND CUSTOMER
+
+MESSAGE HISTORY
+
+DELIVERY STATUS
+
+Workflow:
+
+Worker opens order
+→ Click Ready For Pickup
+→ Template sent
+
+Worker opens order
+→ Click Reminder
+→ Reminder sent
+
+Provide success/failure feedback.
+
+---
+
+PHASE D — MESSAGE HISTORY
+
+For each customer:
+
+Display:
+
+* Sent messages
+* Delivery status
+* Read status
+* Failed status
+* Sent date/time
+* Related order
+
+Allow workers and owners to view.
+
+Do not allow editing.
+
+---
+
+PHASE E — DELIVERY STATUS
+
+Display:
+
+Queued
+
+Sent
+
+Delivered
+
+Read
+
+Failed
+
+Show status on:
+
+* Order page
+* Customer page
+* Communication history
+
+---
+
+PHASE F — PERMISSION VALIDATION
+
+Verify:
+
+Worker cannot access:
+
+* provider configuration
+* template management
+* billing
+* admin command center
+
+Verify API protection.
+
+Attempt direct API access using worker token.
+
+Expected:
+
+403 or 404
+
+No leakage.
+
+---
+
+PHASE G — LAUNCH READINESS REVIEW
+
+After implementation provide:
+
+1. Permission Audit Report
+2. Worker Workflow Report
+3. API Protection Report
+4. Message History Report
+5. Delivery Tracking Report
+6. Failed Tests
+7. Fixed Issues
+8. Remaining Launch Risks
+
+IMPORTANT:
+
+Do not build new marketing features.
+
+Do not build referral systems.
+
+Do not build loyalty systems.
+
+Do not build analytics enhancements.
+
+Only complete the worker messaging workflow required for production launch.

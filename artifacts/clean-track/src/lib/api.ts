@@ -135,6 +135,12 @@ export const api = {
     priceAdjustments: (id: number) => request<PriceAdjustment[]>("GET", `/orders/${id}/price-adjustments`),
     addPriceAdjustment: (id: number, data: PriceAdjustmentInput) => request<PriceAdjustment>("POST", `/orders/${id}/price-adjustments`, data),
     auditLog: (id: number) => request<AuditLogEntry[]>("GET", `/orders/${id}/audit-log`),
+    sendNotification: (id: number, type: "ready" | "reminder") =>
+      request<{ queued: boolean; message: string }>("POST", `/orders/${id}/send-notification`, { type }),
+    getMessages: (id: number) =>
+      request<{ messages: OrderMessage[]; total: number }>("GET", `/orders/${id}/messages`),
+    retryMessage: (id: number, msgId: number) =>
+      request<{ success: boolean; status: string; error?: string }>("POST", `/orders/${id}/messages/${msgId}/retry`),
   },
   discountApprovals: {
     list: (status?: "pending" | "approved" | "rejected") => {
@@ -1347,6 +1353,26 @@ export interface AuditLogEntry {
   orderId?: number | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+export type MessageDeliveryStatus = "queued" | "sent" | "delivered" | "read" | "failed";
+
+export interface OrderMessage {
+  id: number;
+  channel: string;
+  recipientPhone: string;
+  recipientName: string | null;
+  renderedBody: string;
+  status: MessageDeliveryStatus;
+  providerMessageId: string | null;
+  retryCount: number;
+  errorMessage: string | null;
+  queuedAt: string;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+  failedAt: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface DiscountApproval {

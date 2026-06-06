@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry } from "@/lib/api";
+import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry, type OrderMessage } from "@/lib/api";
 import { enqueueOrderStatusUpdate, enqueuePayment, enqueuePickup, type OfflinePaymentPayload, type OfflinePickupPayload } from "@/lib/queue-service";
 import { syncEngine } from "@/lib/sync-engine";
 import { getIsOnline } from "@/lib/network-state";
@@ -19,7 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReceiptView } from "@/components/receipt-view";
-import { ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus, TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock, Receipt, Printer, Eye } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus, TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock, Receipt, Printer, Eye, MessageSquare, Send, RotateCcw, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
@@ -131,6 +131,7 @@ export default function OrderDetail() {
     type: "discount", amount: 0, reason: "",
   });
   const [updateForm, setUpdateForm] = useState<Record<string, any>>({});
+  const [showMessages, setShowMessages] = useState(false);
 
   const orderId = parseInt(id!);
 
@@ -155,6 +156,34 @@ export default function OrderDetail() {
     queryKey: ["orders", orderId, "audit-log"],
     queryFn: () => api.orders.auditLog(orderId),
     enabled: !!orderId,
+  });
+
+  const { data: messagesData, isLoading: messagesLoading, refetch: refetchMessages } = useQuery({
+    queryKey: ["orders", orderId, "messages"],
+    queryFn: () => api.orders.getMessages(orderId),
+    enabled: !!orderId && showMessages,
+    refetchInterval: showMessages ? 15000 : false,
+  });
+  const messages: OrderMessage[] = messagesData?.messages ?? [];
+
+  const sendNotificationMutation = useMutation({
+    mutationFn: (type: "ready" | "reminder") => api.orders.sendNotification(orderId, type),
+    onSuccess: (_, type) => {
+      toast.success(type === "ready" ? "Ready for pickup notification sent!" : "Pickup reminder sent!");
+      setShowMessages(true);
+      setTimeout(() => refetchMessages(), 1500);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const retryMessageMutation = useMutation({
+    mutationFn: (msgId: number) => api.orders.retryMessage(orderId, msgId),
+    onSuccess: (res) => {
+      if (res.success) toast.success("Message retry queued");
+      else toast.error(res.error ?? "Retry failed");
+      refetchMessages();
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const { data: receiptData, isLoading: receiptLoading } = useQuery({
@@ -667,6 +696,138 @@ export default function OrderDetail() {
                 <p className="text-xs text-muted-foreground">Trousers Picked Up</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Communication Panel ─────────────────────────────────────────── */}
+      {(hasPermission("canProcessOrders") || hasPermission("canViewOrders")) && order.phone && (
+        <Card className="border-purple-200 dark:border-purple-800">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-purple-600" />
+                WhatsApp Notifications
+              </CardTitle>
+              <button
+                className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
+                onClick={() => {
+                  setShowMessages((v) => {
+                    if (!v) refetchMessages();
+                    return !v;
+                  });
+                }}
+              >
+                {showMessages ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showMessages ? "Hide" : "Show"} history
+                {messages.length > 0 && !showMessages && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-xs">
+                    {messages.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-4">
+            {/* Action buttons */}
+            {hasPermission("canProcessOrders") && (
+              <div className="flex flex-wrap gap-2">
+                {(order.status === "ready" || order.status === "partial_pickup") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                    disabled={sendNotificationMutation.isPending}
+                    onClick={() => sendNotificationMutation.mutate("ready")}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {sendNotificationMutation.isPending && sendNotificationMutation.variables === "ready"
+                      ? "Sending…"
+                      : "Ready for Pickup"}
+                  </Button>
+                )}
+                {order.status !== "completed" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={sendNotificationMutation.isPending}
+                    onClick={() => sendNotificationMutation.mutate("reminder")}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {sendNotificationMutation.isPending && sendNotificationMutation.variables === "reminder"
+                      ? "Sending…"
+                      : "Remind Customer"}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Message history */}
+            {showMessages && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Message History</p>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    onClick={() => refetchMessages()}
+                  >
+                    <RefreshCw className={`h-3 w-3 ${messagesLoading ? "animate-spin" : ""}`} />
+                    Refresh
+                  </button>
+                </div>
+                {messagesLoading ? (
+                  <p className="text-sm text-muted-foreground py-2">Loading messages…</p>
+                ) : messages.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No messages sent yet for this order.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {messages.map((msg) => {
+                      const statusConfig: Record<string, { label: string; className: string }> = {
+                        queued:    { label: "Queued",    className: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" },
+                        sent:      { label: "Sent",      className: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+                        delivered: { label: "Delivered", className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" },
+                        read:      { label: "Read ✓✓",  className: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
+                        failed:    { label: "Failed",    className: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300" },
+                      };
+                      const sc = statusConfig[msg.status] ?? statusConfig.queued;
+                      const ts = msg.deliveredAt ?? msg.sentAt ?? msg.queuedAt;
+                      return (
+                        <div key={msg.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border text-sm">
+                          <MessageSquare className="h-4 w-4 text-purple-500 mt-0.5 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${sc.className}`}>
+                                {sc.label}
+                              </span>
+                              <span className="text-xs text-muted-foreground capitalize">{msg.channel}</span>
+                              <span className="text-xs text-muted-foreground">→ {msg.recipientPhone}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                {new Date(ts).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-2 font-mono">{msg.renderedBody}</p>
+                            {msg.errorMessage && (
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">Error: {msg.errorMessage}</p>
+                            )}
+                          </div>
+                          {msg.status === "failed" && hasPermission("canProcessOrders") && (
+                            <button
+                              className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              title="Retry"
+                              onClick={() => retryMessageMutation.mutate(msg.id)}
+                              disabled={retryMessageMutation.isPending}
+                            >
+                              <RotateCcw className={`h-3.5 w-3.5 ${retryMessageMutation.isPending ? "animate-spin" : ""}`} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

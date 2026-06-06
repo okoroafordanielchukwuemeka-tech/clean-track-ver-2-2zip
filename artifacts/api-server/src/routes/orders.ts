@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, notificationMessages, notificationEvents } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
@@ -9,6 +9,7 @@ import { checkPermission } from "../middleware/permissions.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
+import { dispatchNotification, buildOrderVariables } from "../lib/notification-dispatcher.js";
 
 export const ordersRouter = Router();
 
@@ -1150,3 +1151,212 @@ ordersRouter.post("/:id/price-adjustments", checkPermission("process:orders"), a
     res.status(500).json({ error: "Failed to process price adjustment" });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORKER OPERATIONAL MESSAGING — no access to templates/providers/billing
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /orders/:id/send-notification  — trigger ready|reminder notification
+// Accessible by workers with canProcessOrders permission
+ordersRouter.post(
+  "/:id/send-notification",
+  checkPermission("process:orders"),
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      const orderId = parseInt(req.params.id);
+      const { type } = req.body as { type?: string };
+
+      if (!type || !["ready", "reminder"].includes(type)) {
+        return res.status(400).json({ error: "type must be 'ready' or 'reminder'" });
+      }
+
+      const [order] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
+
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      if (!order.phone) return res.status(400).json({ error: "Order has no customer phone number" });
+
+      // Fetch branch + laundry for variable interpolation
+      const [laundry] = await db.select().from(laundries).where(eq(laundries.id, laundryId));
+      const branchName = order.branchId
+        ? ((await db.select({ name: branches.name }).from(branches).where(eq(branches.id, order.branchId)))[0]?.name ?? "Main Branch")
+        : "Main Branch";
+
+      const totalDue = Number(order.price ?? 0) + Number(order.extraCharge ?? 0) - Number(order.discount ?? 0);
+      const amountPaid = Number(order.amountPaid ?? 0);
+      const balance = Math.max(0, totalDue - amountPaid);
+
+      const vars = buildOrderVariables({
+        customerName: order.customerName,
+        orderNumber: order.orderId,
+        branchName,
+        businessName: laundry?.businessName ?? "CleanTrack",
+        serviceType: order.serviceType,
+        totalDue: `₦${totalDue.toLocaleString()}`,
+        amountPaid: `₦${amountPaid.toLocaleString()}`,
+        balance: `₦${balance.toLocaleString()}`,
+      });
+
+      dispatchNotification({
+        laundryId,
+        branchId: order.branchId ?? null,
+        eventType: type === "ready" ? "order_ready" : "overdue",
+        orderId: order.id,
+        customerId: order.customerId ?? null,
+        customerPhone: order.phone,
+        customerName: order.customerName,
+        variables: vars,
+      }).catch((err) =>
+        console.error("[orders] dispatchNotification failed:", err)
+      );
+
+      res.json({
+        queued: true,
+        message: type === "ready"
+          ? "Ready for pickup notification queued"
+          : "Pickup reminder queued",
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to send notification" });
+    }
+  }
+);
+
+// GET /orders/:id/messages — message history for this order (workers + owners)
+ordersRouter.get(
+  "/:id/messages",
+  checkPermission("view:orders"),
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      const orderId = parseInt(req.params.id);
+
+      const [order] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
+
+      if (!order) return res.status(404).json({ error: "Order not found" });
+
+      const messages = await db
+        .select({
+          id: notificationMessages.id,
+          channel: notificationMessages.channel,
+          recipientPhone: notificationMessages.recipientPhone,
+          recipientName: notificationMessages.recipientName,
+          renderedBody: notificationMessages.renderedBody,
+          status: notificationMessages.status,
+          providerMessageId: notificationMessages.providerMessageId,
+          retryCount: notificationMessages.retryCount,
+          errorMessage: notificationMessages.errorMessage,
+          queuedAt: notificationMessages.queuedAt,
+          sentAt: notificationMessages.sentAt,
+          deliveredAt: notificationMessages.deliveredAt,
+          readAt: notificationMessages.readAt,
+          failedAt: notificationMessages.failedAt,
+          metadata: notificationMessages.metadata,
+        })
+        .from(notificationMessages)
+        .innerJoin(
+          notificationEvents,
+          eq(notificationMessages.eventId, notificationEvents.id)
+        )
+        .where(
+          and(
+            eq(notificationMessages.laundryId, laundryId),
+            eq(notificationEvents.orderId, orderId)
+          )
+        )
+        .orderBy(desc(notificationMessages.queuedAt))
+        .limit(50);
+
+      res.json({ messages, total: messages.length });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch message history" });
+    }
+  }
+);
+
+// POST /orders/:id/messages/:msgId/retry — retry a failed message
+ordersRouter.post(
+  "/:id/messages/:msgId/retry",
+  checkPermission("process:orders"),
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      const orderId = parseInt(req.params.id);
+      const msgId = parseInt(req.params.msgId);
+
+      const [order] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)));
+
+      if (!order) return res.status(404).json({ error: "Order not found" });
+
+      const [msg] = await db
+        .select()
+        .from(notificationMessages)
+        .where(
+          and(
+            eq(notificationMessages.id, msgId),
+            eq(notificationMessages.laundryId, laundryId)
+          )
+        );
+
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+      if (msg.status !== "failed") {
+        return res.status(400).json({ error: "Only failed messages can be retried" });
+      }
+
+      // Re-queue the message
+      await db
+        .update(notificationMessages)
+        .set({
+          status: "queued",
+          retryCount: msg.retryCount + 1,
+          errorMessage: null,
+          failedAt: null,
+        })
+        .where(eq(notificationMessages.id, msgId));
+
+      // Fire the send via provider registry
+      const { providerRegistry } = await import("../lib/providers/registry.js");
+      const provider = await providerRegistry.getProvider(
+        laundryId,
+        msg.channel as any
+      );
+
+      if (provider) {
+        try {
+          const result = await provider.send({
+            phone: msg.recipientPhone,
+            body: msg.renderedBody,
+          });
+          await db
+            .update(notificationMessages)
+            .set({ status: "sent", providerMessageId: result.providerMessageId ?? null, sentAt: new Date() })
+            .where(eq(notificationMessages.id, msgId));
+          return res.json({ success: true, status: "sent" });
+        } catch (sendErr: unknown) {
+          const errorMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+          await db
+            .update(notificationMessages)
+            .set({ status: "failed", errorMessage: errorMsg, failedAt: new Date() })
+            .where(eq(notificationMessages.id, msgId));
+          return res.json({ success: false, error: errorMsg, status: "failed" });
+        }
+      }
+
+      res.json({ success: true, status: "queued", note: "No provider configured — message queued" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to retry message" });
+    }
+  }
+);
