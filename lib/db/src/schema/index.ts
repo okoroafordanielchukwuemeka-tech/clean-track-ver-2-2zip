@@ -26,3 +26,4 @@ export * from "./notification-templates.js";
 export * from "./notification-events.js";
 export * from "./notification-messages.js";
 export * from "./conversations.js";
+export * from "./provider-configs.js";

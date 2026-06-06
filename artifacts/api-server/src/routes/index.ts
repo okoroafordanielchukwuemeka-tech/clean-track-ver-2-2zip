@@ -23,11 +23,13 @@ import { alertsRouter } from "./alerts.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { adminRouter } from "./admin/index.js";
 import { communicationRouter } from "./communication.js";
+import { webhooksRouter } from "./webhooks.js";
 
 export const router = Router();
 
 router.use(healthRouter);
 router.use("/auth", authRouter);
+router.use("/webhooks", webhooksRouter);
 
 // Worker + owner routes (workers can run daily operations)
 router.use("/orders", requireAuth, ordersRouter);

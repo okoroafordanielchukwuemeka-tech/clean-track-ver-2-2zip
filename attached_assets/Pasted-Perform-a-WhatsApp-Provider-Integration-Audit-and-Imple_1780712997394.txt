@@ -1,0 +1,145 @@
+Perform a WhatsApp Provider Integration Audit and Implementation.
+
+Mission:
+
+CleanTrack already has:
+
+* notification_templates
+* notification_events
+* notification_messages
+* notification_dispatcher
+* Communications Center
+
+Audit the current architecture and implement the first production-ready WhatsApp provider integration layer.
+
+==================================================
+PHASE A — AUDIT
+===============
+
+Review:
+
+* notification_dispatcher.ts
+* notification_events
+* notification_messages
+* communication routes
+* template system
+
+Determine:
+
+1. Current message flow
+2. Missing provider components
+3. Missing delivery lifecycle tracking
+4. Missing webhook support
+5. Missing configuration management
+
+==================================================
+PHASE B — PROVIDER ARCHITECTURE
+===============================
+
+Design a provider abstraction layer.
+
+Required interfaces:
+
+ChannelProvider
+
+Methods:
+
+send()
+handleWebhook()
+validateConfiguration()
+
+Implement provider registry.
+
+Requirements:
+
+* WhatsApp provider
+* Future SMS provider support
+* Future Email provider support
+
+Provider must be pluggable.
+
+==================================================
+PHASE C — WHATSAPP CLOUD API
+============================
+
+Implement Meta WhatsApp Cloud API provider.
+
+Configuration:
+
+* phone_number_id
+* access_token
+* business_account_id
+* webhook_verify_token
+
+Store configuration securely.
+
+Do not hardcode secrets.
+
+==================================================
+PHASE D — DELIVERY LIFECYCLE
+============================
+
+Implement:
+
+queued
+sent
+delivered
+read
+failed
+
+Update notification_messages automatically.
+
+==================================================
+PHASE E — WEBHOOKS
+==================
+
+Create webhook endpoints.
+
+Requirements:
+
+Verify webhook challenge.
+
+Handle:
+
+* sent
+* delivered
+* read
+* failed
+
+Update notification_messages records.
+
+==================================================
+PHASE F — COMMUNICATION CENTER
+==============================
+
+Add:
+
+* Send Test Message
+* Delivery Status Filters
+* Failed Message Filters
+* Retry Failed Message
+
+Do NOT build inbox.
+
+Do NOT build campaigns.
+
+Do NOT build marketing.
+
+Focus only on reliable WhatsApp delivery.
+
+==================================================
+VALIDATION
+==========
+
+Return:
+
+1. Architecture Report
+2. WhatsApp Flow Diagram
+3. Security Review
+4. Implementation Report
+5. Validation Results
+6. Remaining Gaps
+
+Goal:
+
+CleanTrack sends real WhatsApp messages reliably and tracks delivery end-to-end.

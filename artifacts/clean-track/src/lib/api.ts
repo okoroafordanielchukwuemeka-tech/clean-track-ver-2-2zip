@@ -253,6 +253,16 @@ export const api = {
     createTemplate: (data: NotifTemplateInput) => request<NotifTemplate>("POST", "/communication/templates", data),
     updateTemplate: (id: number, data: Partial<NotifTemplateInput>) => request<NotifTemplate>("PATCH", `/communication/templates/${id}`, data),
     deleteTemplate: (id: number) => request<void>("DELETE", `/communication/templates/${id}`),
+    getWhatsAppConfig: () => request<WaProviderConfig>("GET", "/communication/providers/whatsapp"),
+    saveWhatsAppConfig: (data: WaConfigInput) =>
+      request<{ saved: boolean }>("PUT", "/communication/providers/whatsapp", data),
+    validateWhatsAppConfig: () =>
+      request<WaValidateResult>("POST", "/communication/providers/whatsapp/validate"),
+    deleteWhatsAppConfig: () => request<void>("DELETE", "/communication/providers/whatsapp"),
+    sendTestMessage: (data: { phone: string; body: string }) =>
+      request<TestMessageResult>("POST", "/communication/test-message", data),
+    retryMessage: (id: number) =>
+      request<{ success: boolean; error?: string }>("POST", `/communication/messages/${id}/retry`),
     listMessages: (params?: { status?: string; channel?: string; limit?: number; offset?: number }) => {
       const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))).toString() : "";
       return request<{ messages: NotifMessage[]; total: number }>("GET", `/communication/messages${qs}`);
@@ -986,6 +996,46 @@ export interface NotifStats {
   byStatus: Record<string, number>;
   byChannel: Record<string, number>;
   templates: { total: number; active: number };
+}
+
+export interface WaProviderConfig {
+  isConfigured: boolean;
+  isActive?: boolean;
+  isVerified?: boolean;
+  lastTestedAt?: string | null;
+  lastTestResult?: string | null;
+  phoneNumberId?: string;
+  accessTokenSaved?: boolean;
+  accessTokenMasked?: string;
+  businessAccountId?: string;
+  webhookVerifyToken?: string;
+  apiVersion?: string;
+  displayPhoneNumber?: string;
+  verifiedName?: string;
+  qualityRating?: string;
+}
+
+export interface WaConfigInput {
+  phoneNumberId: string;
+  accessToken: string;
+  businessAccountId: string;
+  webhookVerifyToken: string;
+  apiVersion?: string;
+}
+
+export interface WaValidateResult {
+  valid: boolean;
+  error?: string;
+  displayPhoneNumber?: string;
+  verifiedName?: string;
+  qualityRating?: string;
+}
+
+export interface TestMessageResult {
+  success: boolean;
+  providerMessageId?: string;
+  error?: string;
+  messageId?: number;
 }
 
 export interface MessageTemplate {

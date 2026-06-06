@@ -8,12 +8,16 @@ import {
   DEFAULT_NOTIFICATION_TEMPLATES,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_EVENT_TRIGGERS,
+  providerConfigs,
   laundries,
   branches,
 } from "@workspace/db/schema";
 import { and, eq, desc, count, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { providerRegistry } from "../lib/providers/registry.js";
+import { WhatsAppCloudProvider, normalizePhoneE164 } from "../lib/providers/whatsapp-cloud.js";
+import { interpolate } from "../lib/notification-dispatcher.js";
 
 export const communicationRouter = Router();
 
@@ -408,6 +412,372 @@ communicationRouter.get(
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROVIDER CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const waConfigSchema = z.object({
+  phoneNumberId: z.string().min(1),
+  accessToken: z.string().min(1),
+  businessAccountId: z.string().min(1),
+  webhookVerifyToken: z.string().min(8),
+  apiVersion: z.string().optional(),
+});
+
+// ─── GET /providers/whatsapp — get config (masked) ───────────────────────────
+
+communicationRouter.get(
+  "/providers/whatsapp",
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+
+      const [row] = await db
+        .select()
+        .from(providerConfigs)
+        .where(
+          and(
+            eq(providerConfigs.laundryId, laundryId),
+            eq(providerConfigs.provider, "whatsapp")
+          )
+        );
+
+      if (!row) {
+        return res.json({ isConfigured: false });
+      }
+
+      const cfg = row.config as Record<string, unknown>;
+
+      // Mask the access token — show only last 4 chars
+      const rawToken = (cfg.accessToken as string) ?? "";
+      const maskedToken = rawToken.length > 4
+        ? "•".repeat(rawToken.length - 4) + rawToken.slice(-4)
+        : "•".repeat(rawToken.length);
+
+      res.json({
+        isConfigured: true,
+        isActive: row.isActive,
+        isVerified: row.isVerified,
+        lastTestedAt: row.lastTestedAt,
+        lastTestResult: row.lastTestResult,
+        phoneNumberId: cfg.phoneNumberId ?? "",
+        accessTokenSaved: rawToken.length > 0,
+        accessTokenMasked: maskedToken,
+        businessAccountId: cfg.businessAccountId ?? "",
+        webhookVerifyToken: cfg.webhookVerifyToken ?? "",
+        apiVersion: cfg.apiVersion ?? "v21.0",
+        displayPhoneNumber: cfg.displayPhoneNumber,
+        verifiedName: cfg.verifiedName,
+        qualityRating: cfg.qualityRating,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch provider config" });
+    }
+  }
+);
+
+// ─── PUT /providers/whatsapp — save config ────────────────────────────────────
+
+communicationRouter.put(
+  "/providers/whatsapp",
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      const parsed = waConfigSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors });
+      }
+
+      const { phoneNumberId, accessToken, businessAccountId, webhookVerifyToken, apiVersion } =
+        parsed.data;
+
+      // If access token is all bullets (user didn't change it), keep the old one
+      const [existing] = await db
+        .select()
+        .from(providerConfigs)
+        .where(
+          and(
+            eq(providerConfigs.laundryId, laundryId),
+            eq(providerConfigs.provider, "whatsapp")
+          )
+        );
+
+      const isMaskedToken = /^•+$/.test(accessToken) || accessToken === "saved";
+      const finalToken =
+        isMaskedToken && existing
+          ? ((existing.config as Record<string, unknown>).accessToken as string)
+          : accessToken;
+
+      const newConfig: Record<string, unknown> = {
+        phoneNumberId,
+        accessToken: finalToken,
+        businessAccountId,
+        webhookVerifyToken,
+        apiVersion: apiVersion ?? "v21.0",
+      };
+
+      // Preserve verification metadata
+      if (existing) {
+        const oldCfg = existing.config as Record<string, unknown>;
+        if (oldCfg.displayPhoneNumber) newConfig.displayPhoneNumber = oldCfg.displayPhoneNumber;
+        if (oldCfg.verifiedName) newConfig.verifiedName = oldCfg.verifiedName;
+        if (oldCfg.qualityRating) newConfig.qualityRating = oldCfg.qualityRating;
+      }
+
+      if (existing) {
+        await db
+          .update(providerConfigs)
+          .set({ config: newConfig, isVerified: false, updatedAt: new Date() })
+          .where(eq(providerConfigs.id, existing.id));
+      } else {
+        await db.insert(providerConfigs).values({
+          laundryId,
+          provider: "whatsapp",
+          config: newConfig,
+          isActive: true,
+          isVerified: false,
+        });
+      }
+
+      providerRegistry.invalidate(laundryId, "whatsapp");
+      res.json({ saved: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to save provider config" });
+    }
+  }
+);
+
+// ─── POST /providers/whatsapp/validate — verify credentials via Meta API ─────
+
+communicationRouter.post(
+  "/providers/whatsapp/validate",
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+
+      const [row] = await db
+        .select()
+        .from(providerConfigs)
+        .where(
+          and(
+            eq(providerConfigs.laundryId, laundryId),
+            eq(providerConfigs.provider, "whatsapp")
+          )
+        );
+
+      if (!row) {
+        return res.status(400).json({ valid: false, error: "No WhatsApp config saved" });
+      }
+
+      const cfg = row.config as Parameters<typeof WhatsAppCloudProvider.prototype.validateConfiguration>[0] extends void
+        ? never
+        : Record<string, unknown>;
+
+      const provider = new WhatsAppCloudProvider(cfg as any);
+      const result = await provider.validateConfiguration();
+
+      const now = new Date();
+      const testResult = result.valid
+        ? `Connected — ${(result.metadata as any)?.verifiedName ?? "OK"}`
+        : `Failed — ${result.error}`;
+
+      const configUpdate: Record<string, unknown> = {
+        ...(row.config as Record<string, unknown>),
+      };
+      if (result.valid && result.metadata) {
+        const m = result.metadata as any;
+        configUpdate.displayPhoneNumber = m.displayPhoneNumber;
+        configUpdate.verifiedName = m.verifiedName;
+        configUpdate.qualityRating = m.qualityRating;
+      }
+
+      await db
+        .update(providerConfigs)
+        .set({
+          isVerified: result.valid,
+          isActive: result.valid,
+          lastTestedAt: now,
+          lastTestResult: testResult,
+          config: configUpdate,
+          updatedAt: now,
+        })
+        .where(eq(providerConfigs.id, row.id));
+
+      providerRegistry.invalidate(laundryId, "whatsapp");
+      res.json({ ...result, ...(result.metadata ?? {}) });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ valid: false, error: "Validation request failed" });
+    }
+  }
+);
+
+// ─── DELETE /providers/whatsapp — remove config ───────────────────────────────
+
+communicationRouter.delete(
+  "/providers/whatsapp",
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      await db
+        .delete(providerConfigs)
+        .where(
+          and(
+            eq(providerConfigs.laundryId, laundryId),
+            eq(providerConfigs.provider, "whatsapp")
+          )
+        );
+      providerRegistry.invalidate(laundryId, "whatsapp");
+      res.status(204).send();
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to delete provider config" });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TEST MESSAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+communicationRouter.post(
+  "/test-message",
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      const { phone, body: rawBody } = req.body as { phone: string; body: string };
+
+      if (!phone || !rawBody) {
+        return res.status(400).json({ error: "phone and body are required" });
+      }
+
+      const provider = await providerRegistry.getProvider(laundryId, "whatsapp");
+      if (!provider) {
+        return res
+          .status(400)
+          .json({ success: false, error: "No active WhatsApp provider configured" });
+      }
+
+      // Insert a test message log entry
+      const [msg] = await db
+        .insert(notificationMessages)
+        .values({
+          laundryId,
+          eventId: null,
+          templateId: null,
+          channel: "whatsapp",
+          recipientPhone: normalizePhoneE164(phone),
+          recipientName: "Test",
+          renderedBody: rawBody,
+          status: "queued",
+          metadata: { isTest: true },
+        })
+        .returning();
+
+      try {
+        const result = await provider.send({ phone, body: rawBody });
+        await db
+          .update(notificationMessages)
+          .set({ status: "sent", providerMessageId: result.providerMessageId ?? null, sentAt: new Date() })
+          .where(eq(notificationMessages.id, msg.id));
+
+        res.json({ success: true, providerMessageId: result.providerMessageId, messageId: msg.id });
+      } catch (sendErr: unknown) {
+        const errorMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+        await db
+          .update(notificationMessages)
+          .set({ status: "failed", errorMessage: errorMsg, failedAt: new Date() })
+          .where(eq(notificationMessages.id, msg.id));
+
+        res.json({ success: false, error: errorMsg, messageId: msg.id });
+      }
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ success: false, error: "Test message failed" });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RETRY FAILED MESSAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+communicationRouter.post(
+  "/messages/:id/retry",
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const { laundryId } = req.auth!;
+      const id = parseInt(req.params.id);
+
+      const [msg] = await db
+        .select()
+        .from(notificationMessages)
+        .where(
+          and(
+            eq(notificationMessages.id, id),
+            eq(notificationMessages.laundryId, laundryId)
+          )
+        );
+
+      if (!msg) return res.status(404).json({ error: "Message not found" });
+      if (msg.status !== "failed" && msg.status !== "queued") {
+        return res.status(400).json({ error: `Cannot retry a message with status: ${msg.status}` });
+      }
+
+      const provider = await providerRegistry.getProvider(
+        laundryId,
+        msg.channel as any
+      );
+      if (!provider) {
+        return res.json({ success: false, error: "No active provider for this channel" });
+      }
+
+      // Increment retry count and reset to queued
+      await db
+        .update(notificationMessages)
+        .set({ status: "queued", retryCount: (msg.retryCount ?? 0) + 1, errorMessage: null })
+        .where(eq(notificationMessages.id, id));
+
+      try {
+        const result = await provider.send({
+          phone: msg.recipientPhone,
+          body: msg.renderedBody,
+        });
+        await db
+          .update(notificationMessages)
+          .set({
+            status: "sent",
+            providerMessageId: result.providerMessageId ?? null,
+            sentAt: new Date(),
+            failedAt: null,
+          })
+          .where(eq(notificationMessages.id, id));
+
+        res.json({ success: true, providerMessageId: result.providerMessageId });
+      } catch (sendErr: unknown) {
+        const errorMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+        await db
+          .update(notificationMessages)
+          .set({ status: "failed", errorMessage: errorMsg, failedAt: new Date() })
+          .where(eq(notificationMessages.id, id));
+
+        res.json({ success: false, error: errorMsg });
+      }
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Retry failed" });
     }
   }
 );
