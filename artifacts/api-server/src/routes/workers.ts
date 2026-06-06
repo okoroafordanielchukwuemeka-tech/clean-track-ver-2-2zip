@@ -6,7 +6,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { workerPermissionsRouter } from "./worker-permissions.js";
-import { requireOperational } from "../middleware/subscription.js";
+import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction } from "../lib/audit.js";
 
 export const workersRouter = Router();
@@ -77,7 +77,7 @@ workersRouter.get("/:id", async (req: AuthRequest, res) => {
   }
 });
 
-workersRouter.post("/", requireOwner, requireOperational, async (req: AuthRequest, res) => {
+workersRouter.post("/", requireOwner, requireOperational, requirePlanLimit("workers"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = workerInputSchema.parse(req.body);

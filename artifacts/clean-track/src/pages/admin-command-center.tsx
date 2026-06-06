@@ -193,8 +193,57 @@ function OverviewTab({ token }: { token: string }) {
 
 // ─── Tenant Health ─────────────────────────────────────────────────────────
 
+type TenantSort = "default" | "utilization" | "critical" | "plan";
+
+function UsageBarMini({ pct, warnLevel }: { pct: number; warnLevel?: string }) {
+  const barColor =
+    warnLevel === "critical_100" ? "bg-red-500" :
+    pct >= 85 ? "bg-amber-400" :
+    pct >= 70 ? "bg-amber-300" :
+    "bg-emerald-500";
+  return (
+    <div className="h-1 bg-slate-800 rounded-full overflow-hidden w-16">
+      <div className={cn("h-full rounded-full", barColor)} style={{ width: `${Math.min(100, pct)}%` }} />
+    </div>
+  );
+}
+
+function TenantUsageRow({ usage }: { usage: any }) {
+  if (!usage) return null;
+  const { percentages } = usage;
+  const highest = Math.max(percentages.orders, percentages.workers, percentages.branches, percentages.storage);
+  const highestColor = highest >= 100 ? "text-red-400" : highest >= 85 ? "text-amber-400" : highest >= 70 ? "text-amber-300" : "text-slate-500";
+  return (
+    <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-800/60">
+      <span className="text-xs text-slate-500 shrink-0">Usage:</span>
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex flex-col gap-0.5 items-start">
+          <span className="text-xs text-slate-500">Ord</span>
+          <UsageBarMini pct={percentages.orders} />
+        </div>
+        <div className="flex flex-col gap-0.5 items-start">
+          <span className="text-xs text-slate-500">Wrk</span>
+          <UsageBarMini pct={percentages.workers} />
+        </div>
+        <div className="flex flex-col gap-0.5 items-start">
+          <span className="text-xs text-slate-500">Br</span>
+          <UsageBarMini pct={percentages.branches} />
+        </div>
+        <div className="flex flex-col gap-0.5 items-start">
+          <span className="text-xs text-slate-500">Str</span>
+          <UsageBarMini pct={percentages.storage} />
+        </div>
+      </div>
+      <span className={cn("text-xs font-medium shrink-0", highestColor)}>
+        {highest > 0 ? `${Math.max(percentages.orders, percentages.workers, percentages.branches, percentages.storage)}% peak` : "< 70%"}
+      </span>
+    </div>
+  );
+}
+
 function TenantsTab({ token }: { token: string }) {
   const [selected, setSelected] = useState<any | null>(null);
+  const [sort, setSort] = useState<TenantSort>("default");
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["admin", "tenants"],
     queryFn: () => adminFetch("/admin/tenants", token),
@@ -204,7 +253,26 @@ function TenantsTab({ token }: { token: string }) {
   if (isLoading) return <LoadingSpinner />;
   if (!data) return <ErrorState />;
 
-  const tenants = (data as any).tenants ?? [];
+  const rawTenants = (data as any).tenants ?? [];
+
+  const sortedTenants = [...rawTenants].sort((a: any, b: any) => {
+    if (sort === "utilization") {
+      return (b.usage?.highestPct ?? 0) - (a.usage?.highestPct ?? 0);
+    }
+    if (sort === "critical") {
+      const aScore = (b.stats?.criticalAlerts ?? 0) * 10 + (b.stats?.openAlerts ?? 0) + (b.usage?.highestPct ?? 0) / 100;
+      const bScore = (a.stats?.criticalAlerts ?? 0) * 10 + (a.stats?.openAlerts ?? 0) + (a.usage?.highestPct ?? 0) / 100;
+      return aScore - bScore;
+    }
+    if (sort === "plan") {
+      const planOrder: Record<string, number> = { business: 0, pro: 1, starter: 2, free: 3 };
+      return (planOrder[a.subscriptionTier] ?? 4) - (planOrder[b.subscriptionTier] ?? 4);
+    }
+    return 0;
+  });
+
+  const atLimitCount = rawTenants.filter((t: any) => (t.usage?.highestPct ?? 0) >= 100).length;
+  const nearLimitCount = rawTenants.filter((t: any) => { const p = t.usage?.highestPct ?? 0; return p >= 85 && p < 100; }).length;
 
   if (selected) {
     const t = selected;
@@ -223,7 +291,7 @@ function TenantsTab({ token }: { token: string }) {
             <Badge className={t.isActive ? "bg-emerald-900/50 text-emerald-300 border-emerald-700" : "bg-red-900/50 text-red-300 border-red-700"}>
               {t.isActive ? "Active" : "Inactive"}
             </Badge>
-            <Badge className="bg-slate-800 text-slate-300 border-slate-700">{t.subscriptionTier}</Badge>
+            <Badge className="bg-slate-800 text-slate-300 border-slate-700">{t.planDisplayName ?? t.subscriptionTier}</Badge>
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -236,6 +304,41 @@ function TenantsTab({ token }: { token: string }) {
           <MiniStat label="Open Alerts" value={t.stats.openAlerts} highlight={t.stats.openAlerts > 0} />
           <MiniStat label="Critical" value={t.stats.criticalAlerts} highlight={t.stats.criticalAlerts > 0} />
         </div>
+
+        {t.usage && (
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader className="px-5 pt-4 pb-2">
+              <CardTitle className="text-slate-200 text-sm font-semibold">Plan Usage</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-4 space-y-3">
+              {([
+                { label: "Monthly Orders", used: t.stats.monthlyOrders, limit: t.usage.limits.maxOrdersPerMonth, pct: t.usage.percentages.orders },
+                { label: "Active Workers", used: t.stats.workers, limit: t.usage.limits.maxWorkers, pct: t.usage.percentages.workers },
+                { label: "Branches", used: t.stats.branches, limit: t.usage.limits.maxBranches, pct: t.usage.percentages.branches },
+                { label: "Storage (est.)", used: `${t.stats.storageUsedMb} MB`, limit: t.usage.limits.maxStorageMb, pct: t.usage.percentages.storage },
+              ] as Array<{ label: string; used: any; limit: number; pct: number }>).map(row => {
+                const unlimited = !isFinite(row.limit);
+                const barColor = row.pct >= 100 ? "bg-red-500" : row.pct >= 85 ? "bg-amber-400" : "bg-emerald-500";
+                return (
+                  <div key={row.label} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">{row.label}</span>
+                      <span className={cn("font-medium", row.pct >= 100 ? "text-red-400" : row.pct >= 85 ? "text-amber-400" : "text-slate-300")}>
+                        {unlimited ? `${row.used} / ∞` : `${row.used} / ${row.limit} (${row.pct}%)`}
+                      </span>
+                    </div>
+                    {!unlimited && (
+                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className={cn("h-full rounded-full", barColor)} style={{ width: `${Math.min(100, row.pct)}%` }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="bg-slate-900 border-slate-800">
           <CardContent className="px-5 py-4 space-y-2">
             <div className="flex justify-between text-sm items-center">
@@ -270,12 +373,6 @@ function TenantsTab({ token }: { token: string }) {
               <span className="text-slate-400">Registered</span>
               <span className="text-white">{new Date(t.createdAt).toLocaleDateString()}</span>
             </div>
-            {t.businessProfile?.whatsapp && (
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">WhatsApp</span>
-                <span className="text-emerald-400">{t.businessProfile.whatsapp}</span>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -284,22 +381,60 @@ function TenantsTab({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">Tenant Health <span className="text-slate-500 font-normal text-sm ml-1">({tenants.length})</span></h2>
-        <Button variant="outline" size="sm" onClick={() => refetch()}
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
-          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
-        </Button>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-white">
+          Tenant Health <span className="text-slate-500 font-normal text-sm ml-1">({rawTenants.length})</span>
+        </h2>
+        <div className="flex items-center gap-2">
+          <select
+            value={sort}
+            onChange={e => setSort(e.target.value as TenantSort)}
+            className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-violet-600"
+          >
+            <option value="default">Sort: Recent</option>
+            <option value="utilization">Sort: Highest Usage</option>
+            <option value="critical">Sort: Most Alerts</option>
+            <option value="plan">Sort: Plan Tier</option>
+          </select>
+          <Button variant="outline" size="sm" onClick={() => refetch()}
+            className="border-slate-700 text-slate-300 hover:bg-slate-800">
+            <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {(atLimitCount > 0 || nearLimitCount > 0) && (
+        <div className="flex gap-3 flex-wrap">
+          {atLimitCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs bg-red-950/20 border border-red-800/30 rounded-lg px-3 py-1.5 text-red-300">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {atLimitCount} tenant{atLimitCount > 1 ? "s" : ""} at plan limit — new resource creation blocked
+            </div>
+          )}
+          {nearLimitCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs bg-amber-950/20 border border-amber-800/30 rounded-lg px-3 py-1.5 text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {nearLimitCount} tenant{nearLimitCount > 1 ? "s" : ""} approaching limits (≥85%)
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2">
-        {tenants.map((t: any) => (
+        {sortedTenants.map((t: any) => (
           <button key={t.id} onClick={() => setSelected(t)}
-            className="w-full text-left bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 hover:border-slate-600 hover:bg-slate-800/70 transition-all">
+            className={cn("w-full text-left bg-slate-900 border rounded-lg px-4 py-3 hover:border-slate-600 hover:bg-slate-800/70 transition-all",
+              (t.usage?.highestPct ?? 0) >= 100 ? "border-red-800/50" :
+              (t.usage?.highestPct ?? 0) >= 85 ? "border-amber-800/40" :
+              "border-slate-800"
+            )}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={cn("w-2 h-2 rounded-full shrink-0",
-                  t.stats.criticalAlerts > 0 ? "bg-red-500" :
-                  t.stats.openAlerts > 0 ? "bg-amber-400" :
+                  t.stats?.criticalAlerts > 0 ? "bg-red-500" :
+                  (t.usage?.highestPct ?? 0) >= 100 ? "bg-red-500" :
+                  t.stats?.openAlerts > 0 ? "bg-amber-400" :
+                  (t.usage?.highestPct ?? 0) >= 85 ? "bg-amber-400" :
                   t.isActive ? "bg-emerald-500" : "bg-slate-500"
                 )} />
                 <div className="min-w-0">
@@ -307,11 +442,10 @@ function TenantsTab({ token }: { token: string }) {
                   <div className="text-slate-400 text-xs truncate">{t.ownerEmail}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-4 shrink-0">
-                <div className="hidden sm:flex gap-4 text-xs text-slate-400">
-                  <span>{t.stats.orders7d} orders/7d</span>
-                  <span>{t.stats.devices} devices</span>
-                  {t.stats.openAlerts > 0 && (
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="hidden sm:flex gap-3 text-xs text-slate-400">
+                  <span>{t.stats?.orders7d ?? 0} orders/7d</span>
+                  {t.stats?.openAlerts > 0 && (
                     <span className={t.stats.criticalAlerts > 0 ? "text-red-400" : "text-amber-400"}>
                       {t.stats.openAlerts} alerts
                     </span>
@@ -321,6 +455,7 @@ function TenantsTab({ token }: { token: string }) {
                 <ChevronRight className="w-4 h-4 text-slate-600" />
               </div>
             </div>
+            {t.usage && <TenantUsageRow usage={t.usage} />}
           </button>
         ))}
       </div>

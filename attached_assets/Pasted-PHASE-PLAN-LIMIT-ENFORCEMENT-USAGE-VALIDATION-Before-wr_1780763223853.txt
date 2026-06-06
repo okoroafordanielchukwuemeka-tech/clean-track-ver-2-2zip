@@ -1,0 +1,324 @@
+PHASE: PLAN LIMIT ENFORCEMENT & USAGE VALIDATION
+
+Before writing any code, perform a complete audit of the newly implemented subscription, trial, entitlement, billing, alert, admin, and owner systems.
+
+IMPORTANT:
+
+Do NOT implement payment gateways.
+
+Do NOT implement Stripe.
+
+Do NOT implement Paystack.
+
+Do NOT implement Flutterwave.
+
+Do NOT implement invoices.
+
+Do NOT implement checkout.
+
+Focus ONLY on making plan enforcement fully operational.
+
+---
+
+PHASE A — AUDIT
+
+Audit and report:
+
+1. subscriptionStatus system
+2. trial system
+3. entitlement system
+4. usage counters
+5. owner billing page
+6. admin subscription page
+7. alert integration
+8. order creation flow
+9. worker creation flow
+10. branch creation flow
+11. storage calculation engine
+
+Identify every route, service, API, mutation, background job, and workflow that can bypass plan enforcement.
+
+Report all bypass risks before implementation.
+
+---
+
+PHASE B — USAGE VALIDATION ENGINE
+
+Verify and maintain accurate counts for:
+
+monthly_order_count
+
+active_worker_count
+
+active_branch_count
+
+storage_used_mb
+
+Requirements:
+
+* multi-tenant safe
+* recalculatable
+* self-healing
+* auditable
+
+Implement reconciliation jobs that can rebuild usage values from database truth.
+
+Examples:
+
+Orders count derived from orders table
+
+Workers count derived from active workers
+
+Branches count derived from active branches
+
+Storage derived from actual table usage estimates
+
+---
+
+PHASE C — HARD PLAN ENFORCEMENT
+
+Implement hard enforcement everywhere.
+
+ORDER LIMITS
+
+Before any order creation:
+
+Check:
+
+monthly_order_count
+
+against
+
+maxMonthlyOrders
+
+If exceeded:
+
+Return:
+
+PLAN_LIMIT_ORDERS_REACHED
+
+HTTP 403
+
+---
+
+WORKER LIMITS
+
+Before worker creation:
+
+Check:
+
+active_worker_count
+
+against
+
+maxWorkers
+
+If exceeded:
+
+Return:
+
+PLAN_LIMIT_WORKERS_REACHED
+
+HTTP 403
+
+---
+
+BRANCH LIMITS
+
+Before branch creation:
+
+Check:
+
+active_branch_count
+
+against
+
+maxBranches
+
+If exceeded:
+
+Return:
+
+PLAN_LIMIT_BRANCHES_REACHED
+
+HTTP 403
+
+---
+
+STORAGE LIMITS
+
+Before uploads or storage-expanding actions:
+
+Check:
+
+storage_used_mb
+
+against
+
+maxStorageMb
+
+If exceeded:
+
+Return:
+
+PLAN_LIMIT_STORAGE_REACHED
+
+HTTP 403
+
+---
+
+PHASE D — WARNING SYSTEM
+
+Implement warning thresholds:
+
+70%
+
+85%
+
+100%
+
+for:
+
+orders
+
+workers
+
+branches
+
+storage
+
+Requirements:
+
+Generate alerts.
+
+Generate owner dashboard warnings.
+
+Generate billing page warnings.
+
+No email integration.
+
+No SMS integration.
+
+No WhatsApp integration.
+
+Only platform warnings.
+
+---
+
+PHASE E — OWNER EXPERIENCE
+
+Enhance billing dashboard.
+
+Display:
+
+Current Plan
+
+Subscription Status
+
+Trial Status
+
+Renewal Date
+
+Orders Used
+
+Orders Remaining
+
+Workers Used
+
+Workers Remaining
+
+Branches Used
+
+Branches Remaining
+
+Storage Used
+
+Storage Remaining
+
+Usage %
+
+Visual indicators:
+
+Green
+
+Amber
+
+Red
+
+Display upgrade recommendation when approaching limits.
+
+---
+
+PHASE F — ADMIN EXPERIENCE
+
+Enhance Admin Command Center.
+
+Display:
+
+Laundry Name
+
+Plan
+
+Subscription Status
+
+Trial Status
+
+Orders Used %
+
+Workers Used %
+
+Branches Used %
+
+Storage Used %
+
+Sort by:
+
+Highest Utilization
+
+Closest To Limit
+
+Suspended
+
+Past Due
+
+Trial Ending Soon
+
+---
+
+PHASE G — VALIDATION
+
+Verify:
+
+1. Enforcement works
+2. Counters remain accurate
+3. Reconciliation jobs work
+4. Owner dashboard updates
+5. Admin dashboard updates
+6. Alerts fire correctly
+7. Multi-tenant isolation remains intact
+
+Provide:
+
+Audit Report
+
+Architecture Report
+
+Database Changes
+
+Backend Changes
+
+Frontend Changes
+
+Validation Results
+
+Remaining Gaps Before Payment Gateway Integration
+
+IMPORTANT:
+
+Do not build payment processing.
+
+Do not build invoices.
+
+Do not build subscriptions checkout.
+
+Only build the production-ready enforcement foundation required before launch.

@@ -4,6 +4,7 @@ import { laundries } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { getPlanFeatures, getPlanLimits, PLAN_DISPLAY_NAMES, getEntitlementReport } from "../lib/entitlements.js";
+import { computeUsageWithLimits } from "../lib/usage-service.js";
 
 export const subscriptionRouter = Router();
 
@@ -54,6 +55,24 @@ subscriptionRouter.get("/status", requireOwner, async (req: AuthRequest, res) =>
     });
   } catch {
     res.status(500).json({ error: "Failed to fetch subscription status" });
+  }
+});
+
+subscriptionRouter.get("/usage", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+
+    const [laundry] = await db
+      .select({ subscriptionTier: laundries.subscriptionTier })
+      .from(laundries)
+      .where(eq(laundries.id, laundryId));
+
+    if (!laundry) return res.status(404).json({ error: "Not found" });
+
+    const usage = await computeUsageWithLimits(laundryId, laundry.subscriptionTier);
+    res.json(usage);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch usage" });
   }
 });
 

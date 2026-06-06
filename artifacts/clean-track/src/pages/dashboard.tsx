@@ -71,70 +71,118 @@ function KpiCard({
   );
 }
 
+function UsageBar({ label, used, limit, pct, warnLevel }: { label: string; used: number; limit: number; pct: number; warnLevel: string }) {
+  const unlimited = !isFinite(limit);
+  const barColor = warnLevel === "critical_100" ? "bg-red-500" : warnLevel === "warning_85" ? "bg-amber-400" : warnLevel === "warning_70" ? "bg-amber-300" : "bg-blue-500";
+  const textColor = warnLevel === "critical_100" ? "text-red-600 dark:text-red-400" : warnLevel === "warning_85" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground";
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={textColor}>{unlimited ? `${used} / ∞` : `${used} / ${limit}${pct > 0 ? ` (${pct}%)` : ""}`}</span>
+      </div>
+      {!unlimited && (
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(100, pct)}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SubscriptionBanner({ sub }: { sub: SubscriptionStatus | null }) {
-  if (!sub || sub.status === "active") return null;
+  const { data: usage } = useQuery({
+    queryKey: ["subscription", "usage"],
+    queryFn: () => api.subscription.getUsage(),
+    enabled: !!sub && (sub.status === "active" || sub.status === "trial"),
+    staleTime: 5 * 60_000,
+  });
 
-  if (sub.status === "trial") {
-    const days = sub.trialDaysRemaining ?? 0;
-    const urgent = days <= 3;
-    return (
-      <div className={`flex items-center gap-3 rounded-lg px-4 py-3 border text-sm ${urgent ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300" : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300"}`}>
-        <FlaskConical className="h-4 w-4 shrink-0" />
-        <div className="flex-1">
-          <span className="font-semibold">Free Trial — </span>
-          {days <= 0
-            ? "Your trial has expired. Upgrade to continue operations."
-            : days === 1
-            ? "1 day remaining in your trial. Upgrade now to avoid interruption."
-            : `${days} days remaining in your trial.`}
-          {sub.trialEndsAt && (
-            <span className="ml-1 opacity-75">
-              Ends {new Date(sub.trialEndsAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}.
+  if (!sub) return null;
+
+  const highestWarning = usage ? (
+    [usage.warnings.orders, usage.warnings.workers, usage.warnings.branches, usage.warnings.storage]
+      .sort((a, b) => {
+        const rank: Record<string, number> = { safe: 0, warning_70: 1, warning_85: 2, critical_100: 3 };
+        return (rank[b] ?? 0) - (rank[a] ?? 0);
+      })[0]
+  ) : "safe";
+
+  const showUsageWarning = usage && highestWarning !== "safe" && (sub.status === "active" || sub.status === "trial");
+
+  if (sub.status === "active" && !showUsageWarning) return null;
+
+  return (
+    <div className="space-y-2">
+      {sub.status === "trial" && (
+        <div className={`flex items-center gap-3 rounded-lg px-4 py-3 border text-sm ${sub.trialDaysRemaining != null && sub.trialDaysRemaining <= 3 ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300" : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300"}`}>
+          <FlaskConical className="h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Free Trial — </span>
+            {(sub.trialDaysRemaining ?? 0) <= 0
+              ? "Your trial has expired. Upgrade to continue operations."
+              : sub.trialDaysRemaining === 1
+              ? "1 day remaining in your trial. Upgrade now to avoid interruption."
+              : `${sub.trialDaysRemaining} days remaining in your trial.`}
+            {sub.trialEndsAt && (
+              <span className="ml-1 opacity-75">
+                Ends {new Date(sub.trialEndsAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}.
+              </span>
+            )}
+          </div>
+          <span className="hidden sm:block text-xs font-medium opacity-75 capitalize">{sub.planDisplayName} plan</span>
+        </div>
+      )}
+
+      {sub.status === "past_due" && (
+        <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-sm">
+          <Hourglass className="h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Payment Past Due — </span>
+            Your subscription payment is overdue. Please update your billing to avoid account suspension.
+          </div>
+        </div>
+      )}
+
+      {sub.status === "suspended" && (
+        <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Account Suspended — </span>
+            New orders, workers, and branches are blocked. Contact support to resume operations.
+          </div>
+        </div>
+      )}
+
+      {sub.status === "cancelled" && (
+        <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 text-sm">
+          <XCircle className="h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Account Cancelled — </span>
+            Your account has been cancelled. Historical data is still accessible.
+          </div>
+        </div>
+      )}
+
+      {showUsageWarning && usage && (
+        <div className={`rounded-lg border px-4 py-3 text-sm ${highestWarning === "critical_100" ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className={`h-4 w-4 shrink-0 ${highestWarning === "critical_100" ? "text-red-500" : "text-amber-500"}`} />
+            <span className={`font-semibold text-xs ${highestWarning === "critical_100" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}>
+              {highestWarning === "critical_100" ? "Plan limit reached" : "Approaching plan limits"} — {sub.planDisplayName}
             </span>
-          )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <UsageBar label="Orders this month" used={usage.monthlyOrderCount} limit={usage.limits.maxOrdersPerMonth} pct={usage.percentages.orders} warnLevel={usage.warnings.orders} />
+            <UsageBar label="Active workers" used={usage.activeWorkerCount} limit={usage.limits.maxWorkers} pct={usage.percentages.workers} warnLevel={usage.warnings.workers} />
+            <UsageBar label="Branches" used={usage.activeBranchCount} limit={usage.limits.maxBranches} pct={usage.percentages.branches} warnLevel={usage.warnings.branches} />
+            <UsageBar label="Storage" used={usage.storageUsedMb} limit={usage.limits.maxStorageMb} pct={usage.percentages.storage} warnLevel={usage.warnings.storage} />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Go to <Link to="/settings" className="underline font-medium">Settings → Billing</Link> for full details.</p>
         </div>
-        <span className="hidden sm:block text-xs font-medium opacity-75 capitalize">{sub.planDisplayName} plan</span>
-      </div>
-    );
-  }
-
-  if (sub.status === "past_due") {
-    return (
-      <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-sm">
-        <Hourglass className="h-4 w-4 shrink-0" />
-        <div className="flex-1">
-          <span className="font-semibold">Payment Past Due — </span>
-          Your subscription payment is overdue. Please update your billing to avoid account suspension.
-        </div>
-      </div>
-    );
-  }
-
-  if (sub.status === "suspended") {
-    return (
-      <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 text-sm">
-        <AlertCircle className="h-4 w-4 shrink-0" />
-        <div className="flex-1">
-          <span className="font-semibold">Account Suspended — </span>
-          New orders, workers, and branches are blocked. Contact support to resume operations.
-        </div>
-      </div>
-    );
-  }
-
-  if (sub.status === "cancelled") {
-    return (
-      <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300 text-sm">
-        <XCircle className="h-4 w-4 shrink-0" />
-        <div className="flex-1">
-          <span className="font-semibold">Account Cancelled — </span>
-          Your account has been cancelled. Historical data is still accessible.
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }
 
 const PERIOD_LABELS: Record<AnalyticsPeriod, string> = {

@@ -5,7 +5,7 @@ import { eq, and, desc, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { logAction } from "../lib/audit.js";
-import { requireOperational } from "../middleware/subscription.js";
+import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 
 export const branchesRouter = Router();
 
@@ -28,7 +28,7 @@ branchesRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
   }
 });
 
-branchesRouter.post("/", requireOwner, requireOperational, async (req: AuthRequest, res) => {
+branchesRouter.post("/", requireOwner, requireOperational, requirePlanLimit("branches"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = branchInputSchema.parse(req.body);
@@ -67,73 +67,45 @@ branchesRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
     const laundryId = req.auth!.laundryId;
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid branch ID" });
-
-    const [existing] = await db.select().from(branches)
-      .where(and(eq(branches.id, id), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
-    if (!existing) return res.status(404).json({ error: "Branch not found" });
-
-    const liveResult = await db.execute(
-      sql`SELECT COUNT(*) AS cnt FROM orders
-          WHERE branch_id = ${id} AND laundry_id = ${laundryId}
-            AND status NOT IN ('completed','cancelled')`
-    );
-    const liveCount = parseInt((liveResult as any).rows?.[0]?.cnt ?? "0", 10);
-
-    if (liveCount > 0) {
-      return res.status(409).json({
-        error: `Cannot delete branch — it has ${liveCount} active order(s). Complete or cancel all orders before deleting this branch.`,
-        activeOrders: liveCount,
-      });
-    }
-
-    const auth = req.auth!;
-    const now = new Date();
-    await db.update(branches).set({
-      deletedAt: now,
-      deletedById: auth.type === "owner" ? (auth.ownerId ?? null) : (auth.workerId ?? null),
-      deletedByType: auth.type,
-      deletedByName: auth.name ?? auth.email ?? "unknown",
-    }).where(eq(branches.id, id));
-
-    logAction({
-      auth,
-      laundryId,
-      action: "branch_deleted",
-      metadata: { branchId: id, branchName: existing.name, address: existing.address },
-    }).catch(() => {});
-
+    const [branch] = await db
+      .update(branches)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(branches.id, id), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)))
+      .returning();
+    if (!branch) return res.status(404).json({ error: "Branch not found" });
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete branch" });
   }
 });
 
-branchesRouter.post("/:id/restore", requireOwner, async (req: AuthRequest, res) => {
+branchesRouter.get("/:id/stats", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid branch ID" });
 
-    const [existing] = await db.select().from(branches)
-      .where(and(eq(branches.id, id), eq(branches.laundryId, laundryId), isNotNull(branches.deletedAt)));
-    if (!existing) return res.status(404).json({ error: "Deleted branch not found" });
+    const [branch] = await db
+      .select()
+      .from(branches)
+      .where(and(eq(branches.id, id), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+    if (!branch) return res.status(404).json({ error: "Branch not found" });
 
-    const [restored] = await db.update(branches).set({
-      deletedAt: null,
-      deletedById: null,
-      deletedByType: null,
-      deletedByName: null,
-    }).where(eq(branches.id, id)).returning();
+    const branchOrders = await db
+      .select()
+      .from(orders)
+      .where(and(eq(orders.laundryId, laundryId), eq(orders.branchId, id)));
 
-    logAction({
-      auth: req.auth!,
-      laundryId,
-      action: "branch_restored",
-      metadata: { branchId: id, branchName: existing.name },
-    }).catch(() => {});
-
-    res.json(restored);
+    res.json({
+      branch,
+      stats: {
+        totalOrders: branchOrders.length,
+        pendingOrders: branchOrders.filter(o => o.status === "pending").length,
+        completedOrders: branchOrders.filter(o => o.status === "completed").length,
+        revenue: branchOrders.reduce((s, o) => s + parseFloat(o.price || "0"), 0),
+      },
+    });
   } catch {
-    res.status(500).json({ error: "Failed to restore branch" });
+    res.status(500).json({ error: "Failed to get branch stats" });
   }
 });

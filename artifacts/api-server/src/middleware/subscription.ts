@@ -4,6 +4,7 @@ import { laundries } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import type { AuthRequest } from "./auth.js";
 import { hasFeature, type PlanFeature } from "../lib/entitlements.js";
+import { checkLimit } from "../lib/usage-service.js";
 
 async function getLaundrySubscription(laundryId: number) {
   const [row] = await db
@@ -67,6 +68,35 @@ export function requireEntitlement(feature: PlanFeature) {
           code: "ENTITLEMENT_DENIED",
           feature,
           message: `This feature (${feature}) is not included in your current plan (${sub.subscriptionTier}). Upgrade to unlock it.`,
+        });
+      }
+
+      next();
+    } catch {
+      next();
+    }
+  };
+}
+
+/**
+ * Hard plan limit enforcement middleware.
+ * Call AFTER requireOperational so suspended/cancelled accounts are caught first.
+ * Returns HTTP 403 with a machine-readable code if the plan limit is exceeded.
+ */
+export function requirePlanLimit(limitType: "orders" | "workers" | "branches") {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const laundryId = req.auth?.laundryId;
+    if (!laundryId) return next();
+
+    try {
+      const sub = await getLaundrySubscription(laundryId);
+      if (!sub) return next();
+
+      const limitError = await checkLimit(laundryId, sub.subscriptionTier, limitType);
+      if (limitError) {
+        return res.status(403).json({
+          error: limitError.message,
+          code: limitError.code,
         });
       }
 

@@ -371,6 +371,7 @@ export const api = {
   },
   subscription: {
     getStatus: () => request<SubscriptionStatus>("GET", "/subscription/status"),
+    getUsage: () => request<SubscriptionUsage>("GET", "/subscription/usage"),
   },
 };
 
@@ -1455,5 +1456,33 @@ export interface SubscriptionStatus {
     maxBranches: number;
     maxWorkers: number;
     maxOrdersPerMonth: number;
+  };
+}
+
+export type UsageWarningLevel = "safe" | "warning_70" | "warning_85" | "critical_100";
+
+export interface SubscriptionUsage {
+  monthlyOrderCount: number;
+  activeWorkerCount: number;
+  activeBranchCount: number;
+  storageUsedMb: number;
+  plan: string;
+  limits: {
+    maxOrdersPerMonth: number;
+    maxWorkers: number;
+    maxBranches: number;
+    maxStorageMb: number;
+  };
+  percentages: {
+    orders: number;
+    workers: number;
+    branches: number;
+    storage: number;
+  };
+  warnings: {
+    orders: UsageWarningLevel;
+    workers: UsageWarningLevel;
+    branches: UsageWarningLevel;
+    storage: UsageWarningLevel;
   };
 }

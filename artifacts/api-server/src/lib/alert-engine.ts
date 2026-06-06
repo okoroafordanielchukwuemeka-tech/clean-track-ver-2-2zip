@@ -9,6 +9,7 @@ import type { AlertCategory, AlertSeverity } from "@workspace/db/schema";
 import { eq, and, ne, desc } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
+import { computeUsageWithLimits } from "./usage-service.js";
 
 interface AlertInput {
   laundryId: number;
@@ -378,6 +379,182 @@ export async function runAlertChecksForLaundry(
     }));
   } else {
     await autoResolve(laundryId, fpSuspended);
+  }
+
+  // ── Plan Usage Warning Rules ─────────────────────────────────────────────
+  // Only run for active/trial accounts (not suspended/cancelled)
+  const activeStatus = laundryData?.subscriptionStatus;
+  if (activeStatus && activeStatus !== "suspended" && activeStatus !== "cancelled") {
+    try {
+      const plan = laundryData?.subscriptionTier ?? "free";
+      const usage = await computeUsageWithLimits(laundryId, plan);
+
+      // Orders usage warnings
+      const fpOrders100 = `usage:orders_100:${laundryId}`;
+      const fpOrders85 = `usage:orders_85:${laundryId}`;
+      const fpOrders70 = `usage:orders_70:${laundryId}`;
+
+      if (usage.percentages.orders >= 100) {
+        bump(await ensureAlert({
+          laundryId, severity: "critical", category: "subscription",
+          title: "Monthly Order Limit Reached",
+          message: `You have used all ${usage.limits.maxOrdersPerMonth} orders allowed this month. New orders are blocked until next month or you upgrade.`,
+          fingerprint: fpOrders100,
+          metadata: { used: usage.monthlyOrderCount, limit: usage.limits.maxOrdersPerMonth, pct: usage.percentages.orders },
+        }));
+        await autoResolve(laundryId, fpOrders85);
+        await autoResolve(laundryId, fpOrders70);
+      } else if (usage.percentages.orders >= 85) {
+        await autoResolve(laundryId, fpOrders100);
+        bump(await ensureAlert({
+          laundryId, severity: "warning", category: "subscription",
+          title: "Order Limit at 85%",
+          message: `You've used ${usage.monthlyOrderCount} of ${usage.limits.maxOrdersPerMonth} orders this month (${usage.percentages.orders}%). Consider upgrading soon.`,
+          fingerprint: fpOrders85,
+          metadata: { used: usage.monthlyOrderCount, limit: usage.limits.maxOrdersPerMonth, pct: usage.percentages.orders },
+        }));
+        await autoResolve(laundryId, fpOrders70);
+      } else if (usage.percentages.orders >= 70) {
+        await autoResolve(laundryId, fpOrders100);
+        await autoResolve(laundryId, fpOrders85);
+        bump(await ensureAlert({
+          laundryId, severity: "info", category: "subscription",
+          title: "Order Limit at 70%",
+          message: `You've used ${usage.monthlyOrderCount} of ${usage.limits.maxOrdersPerMonth} orders this month (${usage.percentages.orders}%).`,
+          fingerprint: fpOrders70,
+          metadata: { used: usage.monthlyOrderCount, limit: usage.limits.maxOrdersPerMonth, pct: usage.percentages.orders },
+        }));
+      } else {
+        await autoResolve(laundryId, fpOrders100);
+        await autoResolve(laundryId, fpOrders85);
+        await autoResolve(laundryId, fpOrders70);
+      }
+
+      // Workers usage warnings
+      const fpWorkers100 = `usage:workers_100:${laundryId}`;
+      const fpWorkers85 = `usage:workers_85:${laundryId}`;
+      const fpWorkers70 = `usage:workers_70:${laundryId}`;
+
+      if (usage.percentages.workers >= 100) {
+        bump(await ensureAlert({
+          laundryId, severity: "critical", category: "subscription",
+          title: "Worker Limit Reached",
+          message: `You have ${usage.activeWorkerCount} active workers — the maximum for your plan (${usage.limits.maxWorkers}). Upgrade to add more.`,
+          fingerprint: fpWorkers100,
+          metadata: { used: usage.activeWorkerCount, limit: usage.limits.maxWorkers, pct: usage.percentages.workers },
+        }));
+        await autoResolve(laundryId, fpWorkers85);
+        await autoResolve(laundryId, fpWorkers70);
+      } else if (usage.percentages.workers >= 85) {
+        await autoResolve(laundryId, fpWorkers100);
+        bump(await ensureAlert({
+          laundryId, severity: "warning", category: "subscription",
+          title: "Worker Limit at 85%",
+          message: `You have ${usage.activeWorkerCount} of ${usage.limits.maxWorkers} allowed workers (${usage.percentages.workers}%). Plan for capacity soon.`,
+          fingerprint: fpWorkers85,
+          metadata: { used: usage.activeWorkerCount, limit: usage.limits.maxWorkers, pct: usage.percentages.workers },
+        }));
+        await autoResolve(laundryId, fpWorkers70);
+      } else if (usage.percentages.workers >= 70) {
+        await autoResolve(laundryId, fpWorkers100);
+        await autoResolve(laundryId, fpWorkers85);
+        bump(await ensureAlert({
+          laundryId, severity: "info", category: "subscription",
+          title: "Worker Capacity at 70%",
+          message: `You have ${usage.activeWorkerCount} of ${usage.limits.maxWorkers} allowed workers (${usage.percentages.workers}%).`,
+          fingerprint: fpWorkers70,
+          metadata: { used: usage.activeWorkerCount, limit: usage.limits.maxWorkers, pct: usage.percentages.workers },
+        }));
+      } else {
+        await autoResolve(laundryId, fpWorkers100);
+        await autoResolve(laundryId, fpWorkers85);
+        await autoResolve(laundryId, fpWorkers70);
+      }
+
+      // Branches usage warnings
+      const fpBranches100 = `usage:branches_100:${laundryId}`;
+      const fpBranches85 = `usage:branches_85:${laundryId}`;
+      const fpBranches70 = `usage:branches_70:${laundryId}`;
+
+      if (usage.percentages.branches >= 100) {
+        bump(await ensureAlert({
+          laundryId, severity: "critical", category: "subscription",
+          title: "Branch Limit Reached",
+          message: `You have ${usage.activeBranchCount} branches — the maximum for your plan (${usage.limits.maxBranches}). Upgrade to add more.`,
+          fingerprint: fpBranches100,
+          metadata: { used: usage.activeBranchCount, limit: usage.limits.maxBranches, pct: usage.percentages.branches },
+        }));
+        await autoResolve(laundryId, fpBranches85);
+        await autoResolve(laundryId, fpBranches70);
+      } else if (usage.percentages.branches >= 85) {
+        await autoResolve(laundryId, fpBranches100);
+        bump(await ensureAlert({
+          laundryId, severity: "warning", category: "subscription",
+          title: "Branch Limit at 85%",
+          message: `You have ${usage.activeBranchCount} of ${usage.limits.maxBranches} allowed branches (${usage.percentages.branches}%).`,
+          fingerprint: fpBranches85,
+          metadata: { used: usage.activeBranchCount, limit: usage.limits.maxBranches, pct: usage.percentages.branches },
+        }));
+        await autoResolve(laundryId, fpBranches70);
+      } else if (usage.percentages.branches >= 70) {
+        await autoResolve(laundryId, fpBranches100);
+        await autoResolve(laundryId, fpBranches85);
+        bump(await ensureAlert({
+          laundryId, severity: "info", category: "subscription",
+          title: "Branch Capacity at 70%",
+          message: `You have ${usage.activeBranchCount} of ${usage.limits.maxBranches} allowed branches (${usage.percentages.branches}%).`,
+          fingerprint: fpBranches70,
+          metadata: { used: usage.activeBranchCount, limit: usage.limits.maxBranches, pct: usage.percentages.branches },
+        }));
+      } else {
+        await autoResolve(laundryId, fpBranches100);
+        await autoResolve(laundryId, fpBranches85);
+        await autoResolve(laundryId, fpBranches70);
+      }
+
+      // Storage usage warnings
+      const fpStorage100 = `usage:storage_100:${laundryId}`;
+      const fpStorage85 = `usage:storage_85:${laundryId}`;
+      const fpStorage70 = `usage:storage_70:${laundryId}`;
+
+      if (usage.percentages.storage >= 100) {
+        bump(await ensureAlert({
+          laundryId, severity: "critical", category: "subscription",
+          title: "Storage Limit Reached",
+          message: `Estimated storage (${usage.storageUsedMb} MB) has reached your plan limit (${usage.limits.maxStorageMb} MB). Upgrade to continue.`,
+          fingerprint: fpStorage100,
+          metadata: { usedMb: usage.storageUsedMb, limitMb: usage.limits.maxStorageMb, pct: usage.percentages.storage },
+        }));
+        await autoResolve(laundryId, fpStorage85);
+        await autoResolve(laundryId, fpStorage70);
+      } else if (usage.percentages.storage >= 85) {
+        await autoResolve(laundryId, fpStorage100);
+        bump(await ensureAlert({
+          laundryId, severity: "warning", category: "subscription",
+          title: "Storage at 85%",
+          message: `Estimated storage usage is ${usage.storageUsedMb} MB of ${usage.limits.maxStorageMb} MB (${usage.percentages.storage}%).`,
+          fingerprint: fpStorage85,
+          metadata: { usedMb: usage.storageUsedMb, limitMb: usage.limits.maxStorageMb, pct: usage.percentages.storage },
+        }));
+        await autoResolve(laundryId, fpStorage70);
+      } else if (usage.percentages.storage >= 70) {
+        await autoResolve(laundryId, fpStorage100);
+        await autoResolve(laundryId, fpStorage85);
+        bump(await ensureAlert({
+          laundryId, severity: "info", category: "subscription",
+          title: "Storage at 70%",
+          message: `Estimated storage usage is ${usage.storageUsedMb} MB of ${usage.limits.maxStorageMb} MB (${usage.percentages.storage}%).`,
+          fingerprint: fpStorage70,
+          metadata: { usedMb: usage.storageUsedMb, limitMb: usage.limits.maxStorageMb, pct: usage.percentages.storage },
+        }));
+      } else {
+        await autoResolve(laundryId, fpStorage100);
+        await autoResolve(laundryId, fpStorage85);
+        await autoResolve(laundryId, fpStorage70);
+      }
+    } catch (err) {
+      console.error(`[alert-engine] Usage check failed for laundry ${laundryId}:`, err);
+    }
   }
 
   return { created };

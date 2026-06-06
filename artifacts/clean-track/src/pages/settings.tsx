@@ -13,6 +13,8 @@ import {
   type DiscountSettings,
   type WorkerPermission,
   type MessageTemplate,
+  type SubscriptionUsage,
+  type SubscriptionStatus,
 } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +40,7 @@ import { toast } from "sonner";
 import {
   Building2, Palette, Clock, Shield, Bell, MessageSquare, Tag,
   LayoutDashboard, Save, ImageIcon, Plus, Trash2, AlertCircle,
-  RefreshCw, ChevronRight, Percent,
+  RefreshCw, ChevronRight, Percent, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +54,7 @@ const SECTIONS = [
   { id: "templates", label: "Message Templates", icon: MessageSquare },
   { id: "categories", label: "Expense Categories", icon: Tag },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "billing", label: "Billing & Usage", icon: CreditCard },
 ];
 
 function SectionHeader({ title, description }: { title: string; description: string }) {
@@ -1144,6 +1147,246 @@ function DashboardPreferencesSection() {
   );
 }
 
+// ── Billing & Usage Section ──────────────────────────────────────────────────
+
+function UsageBar({ label, used, limit, pct, warnLevel, suffix = "" }: {
+  label: string; used: number | string; limit: number; pct: number; warnLevel: string; suffix?: string;
+}) {
+  const unlimited = !isFinite(limit);
+  const barColor =
+    warnLevel === "critical_100" ? "bg-red-500" :
+    warnLevel === "warning_85" ? "bg-amber-500" :
+    warnLevel === "warning_70" ? "bg-amber-400" :
+    "bg-primary";
+  const textColor =
+    warnLevel === "critical_100" ? "text-red-600 dark:text-red-400 font-semibold" :
+    warnLevel === "warning_85" ? "text-amber-600 dark:text-amber-400" :
+    "text-muted-foreground";
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between text-sm">
+        <span className="text-foreground font-medium">{label}</span>
+        <span className={textColor}>
+          {unlimited ? `${used}${suffix} / Unlimited` : `${used}${suffix} / ${limit}${suffix}${!unlimited && pct > 0 ? ` (${pct}%)` : ""}`}
+        </span>
+      </div>
+      {!unlimited && (
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className={cn("h-full rounded-full transition-all duration-300", barColor)} style={{ width: `${Math.min(100, pct)}%` }} />
+        </div>
+      )}
+      {unlimited && <div className="h-2 bg-muted rounded-full" />}
+    </div>
+  );
+}
+
+function WarnBadge({ level }: { level: string }) {
+  if (level === "safe") return null;
+  const cfg: Record<string, { cls: string; label: string }> = {
+    warning_70: { cls: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700", label: "70% used" },
+    warning_85: { cls: "bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700", label: "85% used" },
+    critical_100: { cls: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700", label: "Limit reached" },
+  };
+  const c = cfg[level] ?? cfg.warning_70;
+  return <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-xs border font-medium", c.cls)}>{c.label}</span>;
+}
+
+function BillingSection() {
+  const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: () => api.subscription.getStatus(),
+    staleTime: 30_000,
+  });
+
+  const { data: usage, isLoading: usageLoading, refetch: refetchUsage } = useQuery({
+    queryKey: ["subscription", "usage"],
+    queryFn: () => api.subscription.getUsage(),
+    staleTime: 30_000,
+  });
+
+  const isLoading = statusLoading || usageLoading;
+
+  function handleRefresh() {
+    refetchStatus();
+    refetchUsage();
+  }
+
+  const planColors: Record<string, string> = {
+    free: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600",
+    starter: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700",
+    pro: "bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-700",
+    business: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700",
+  };
+
+  const statusColors: Record<string, string> = {
+    trial: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700",
+    active: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700",
+    past_due: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700",
+    suspended: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700",
+    cancelled: "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-600",
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader title="Billing & Usage" description="View your plan details and resource usage for this month." />
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          {status && (
+            <>
+              <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold capitalize", planColors[status.plan] ?? planColors.free)}>
+                {status.planDisplayName}
+              </span>
+              <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium capitalize", statusColors[status.status] ?? statusColors.active)}>
+                {status.status.replace("_", " ")}
+              </span>
+            </>
+          )}
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
+          <RefreshCw className={cn("h-4 w-4 mr-1.5", isLoading && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+
+      {status?.status === "trial" && status.trialEndsAt && (
+        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
+          <span className="font-semibold">Trial Period — </span>
+          {(status.trialDaysRemaining ?? 0) <= 0
+            ? "Your trial has expired. Contact support to upgrade."
+            : `${status.trialDaysRemaining} day${status.trialDaysRemaining === 1 ? "" : "s"} remaining.`}
+          {" "}Ends {new Date(status.trialEndsAt).toLocaleDateString("en-NG", { month: "long", day: "numeric", year: "numeric" })}.
+        </div>
+      )}
+
+      {status?.status === "suspended" && (
+        <div className="rounded-lg border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+          <AlertCircle className="h-4 w-4 inline mr-1.5" />
+          <span className="font-semibold">Account Suspended — </span>
+          New orders, workers, and branches are blocked. Contact support to resume.
+        </div>
+      )}
+
+      {isLoading && !usage && (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {usage && (
+        <div className="space-y-6">
+          <div className="rounded-lg border divide-y">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">Monthly Orders</h3>
+                <WarnBadge level={usage.warnings.orders} />
+              </div>
+              <UsageBar
+                label={`This month (resets on the 1st)`}
+                used={usage.monthlyOrderCount}
+                limit={usage.limits.maxOrdersPerMonth}
+                pct={usage.percentages.orders}
+                warnLevel={usage.warnings.orders}
+              />
+              {usage.warnings.orders === "critical_100" && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                  Limit reached — new orders are blocked until next month or you upgrade.
+                </p>
+              )}
+            </div>
+
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">Active Workers</h3>
+                <WarnBadge level={usage.warnings.workers} />
+              </div>
+              <UsageBar
+                label="Currently active workers"
+                used={usage.activeWorkerCount}
+                limit={usage.limits.maxWorkers}
+                pct={usage.percentages.workers}
+                warnLevel={usage.warnings.workers}
+              />
+              {usage.warnings.workers === "critical_100" && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                  Limit reached — deactivate a worker or upgrade to add more.
+                </p>
+              )}
+            </div>
+
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">Branches</h3>
+                <WarnBadge level={usage.warnings.branches} />
+              </div>
+              <UsageBar
+                label="Active branches"
+                used={usage.activeBranchCount}
+                limit={usage.limits.maxBranches}
+                pct={usage.percentages.branches}
+                warnLevel={usage.warnings.branches}
+              />
+              {usage.warnings.branches === "critical_100" && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                  Limit reached — delete a branch or upgrade to create more.
+                </p>
+              )}
+            </div>
+
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">Storage</h3>
+                <WarnBadge level={usage.warnings.storage} />
+              </div>
+              <UsageBar
+                label="Estimated usage (order records)"
+                used={usage.storageUsedMb}
+                limit={usage.limits.maxStorageMb}
+                pct={usage.percentages.storage}
+                warnLevel={usage.warnings.storage}
+                suffix=" MB"
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">Based on ~2 KB per order record.</p>
+            </div>
+          </div>
+
+          {status && (
+            <div className="rounded-lg border px-4 py-3 space-y-2 text-sm">
+              <h3 className="font-semibold text-sm mb-3">Plan Limits</h3>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Orders / month</span>
+                  <span className="font-medium">{isFinite(usage.limits.maxOrdersPerMonth) ? usage.limits.maxOrdersPerMonth.toLocaleString() : "Unlimited"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Workers</span>
+                  <span className="font-medium">{isFinite(usage.limits.maxWorkers) ? usage.limits.maxWorkers : "Unlimited"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Branches</span>
+                  <span className="font-medium">{isFinite(usage.limits.maxBranches) ? usage.limits.maxBranches : "Unlimited"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Storage</span>
+                  <span className="font-medium">{usage.limits.maxStorageMb >= 1024 ? `${(usage.limits.maxStorageMb / 1024).toFixed(0)} GB` : `${usage.limits.maxStorageMb} MB`}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">WhatsApp</span>
+                  <span className="font-medium">{status.features.HAS_WHATSAPP ? "✓ Included" : "Not included"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Multi-branch</span>
+                  <span className="font-medium">{status.features.HAS_MULTI_BRANCH ? "✓ Included" : "Not included"}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { isOwner } = useAuth();
   const { isOnline } = useNetworkStatus();
@@ -1215,6 +1458,7 @@ export default function SettingsPage() {
               {activeSection === "templates" && <MessageTemplatesSection />}
               {activeSection === "categories" && <ExpenseCategoriesSection />}
               {activeSection === "dashboard" && <DashboardPreferencesSection />}
+              {activeSection === "billing" && <BillingSection />}
             </CardContent>
           </Card>
         </div>
