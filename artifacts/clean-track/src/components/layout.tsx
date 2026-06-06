@@ -17,6 +17,7 @@ import {
   FileText,
   GitBranch,
   Activity,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -68,6 +69,7 @@ export function Layout() {
     { to: "/branches", label: "Branches", icon: GitBranch },
     { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
     { to: "/operations", label: "Operations", icon: Activity },
+    { to: "/communications", label: "Communications", icon: MessageSquare },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 

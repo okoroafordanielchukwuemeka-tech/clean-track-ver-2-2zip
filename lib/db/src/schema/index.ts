@@ -22,3 +22,7 @@ export * from "./device-heartbeats.js";
 export * from "./schema-snapshots.js";
 export * from "./alerts.js";
 export * from "./platform-admins.js";
+export * from "./notification-templates.js";
+export * from "./notification-events.js";
+export * from "./notification-messages.js";
+export * from "./conversations.js";

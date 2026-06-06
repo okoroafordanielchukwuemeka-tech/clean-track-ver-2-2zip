@@ -1,0 +1,153 @@
+Perform a Complete WhatsApp Communication Architecture Audit.
+
+Mission:
+
+Design the WhatsApp foundation for CleanTrack before integrating any provider.
+
+Do NOT connect WhatsApp APIs yet.
+
+==================================================
+PHASE A — AUDIT
+===============
+
+Audit:
+
+* customers
+* orders
+* payments
+* pickups
+* order status transitions
+* notification opportunities
+* phone number storage
+* multi-tenant isolation
+
+Identify every event that may trigger customer communication.
+
+Return:
+
+Current State
+Gaps
+Risks
+Recommended Trigger
+
+==================================================
+PHASE B — NOTIFICATION ENGINE DESIGN
+====================================
+
+Design a provider-agnostic notification engine.
+
+Future providers:
+
+* WhatsApp
+* SMS
+* Email
+* Push Notifications
+
+Design:
+
+notification_templates
+notification_messages
+notification_events
+
+Show:
+
+tables
+relationships
+indexes
+retention policy
+
+Do NOT implement providers.
+
+==================================================
+PHASE C — WHATSAPP TEMPLATE SYSTEM
+==================================
+
+Design templates for:
+
+1. Order Received
+2. Order Ready
+3. Order Delivered
+4. Pickup Reminder
+5. Payment Reminder
+
+Requirements:
+
+* editable by owner
+* variables supported
+* branch-aware
+* multi-tenant safe
+
+Variables examples:
+
+{{customer_name}}
+{{order_number}}
+{{branch_name}}
+{{balance}}
+
+==================================================
+PHASE D — MESSAGE LOGGING
+=========================
+
+Design message lifecycle:
+
+queued
+sent
+delivered
+read
+failed
+
+Provide:
+
+schema
+status transitions
+audit requirements
+
+==================================================
+PHASE E — SHARED INBOX FOUNDATION
+=================================
+
+Do NOT build inbox.
+
+Design future-ready architecture for:
+
+conversations
+messages
+participants
+assignments
+
+Show how customer replies could later appear inside CleanTrack.
+
+==================================================
+PHASE F — IMPLEMENTATION
+========================
+
+Implement ONLY:
+
+1. Notification Engine Foundation
+2. Notification Templates
+3. Message Log Schema
+
+Do NOT integrate WhatsApp providers.
+Do NOT send messages.
+Do NOT add webhooks.
+
+==================================================
+DELIVERABLES
+============
+
+Return:
+
+1. Architecture Report
+2. Database Design
+3. Notification Flow Diagram
+4. Future Shared Inbox Design
+5. Implementation Report
+6. Validation Results
+
+Focus on:
+
+scalability
+multi-tenancy
+auditability
+future WhatsApp integration
+future shared inbox support

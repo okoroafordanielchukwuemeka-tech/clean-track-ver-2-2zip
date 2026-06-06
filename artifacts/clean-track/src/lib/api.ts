@@ -242,6 +242,26 @@ export const api = {
     update: (id: number, data: Partial<MessageTemplateInput>) => request<MessageTemplate>("PATCH", `/message-templates/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/message-templates/${id}`),
   },
+  communication: {
+    stats: () => request<NotifStats>("GET", "/communication/stats"),
+    seedDefaults: () => request<{ seeded: number; message?: string }>("POST", "/communication/templates/seed-defaults"),
+    listTemplates: (params?: { trigger?: string; channel?: string; branchId?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))).toString() : "";
+      return request<NotifTemplate[]>("GET", `/communication/templates${qs}`);
+    },
+    getTemplate: (id: number) => request<NotifTemplate>("GET", `/communication/templates/${id}`),
+    createTemplate: (data: NotifTemplateInput) => request<NotifTemplate>("POST", "/communication/templates", data),
+    updateTemplate: (id: number, data: Partial<NotifTemplateInput>) => request<NotifTemplate>("PATCH", `/communication/templates/${id}`, data),
+    deleteTemplate: (id: number) => request<void>("DELETE", `/communication/templates/${id}`),
+    listMessages: (params?: { status?: string; channel?: string; limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))).toString() : "";
+      return request<{ messages: NotifMessage[]; total: number }>("GET", `/communication/messages${qs}`);
+    },
+    listEvents: (params?: { status?: string; limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]))).toString() : "";
+      return request<{ events: NotifEvent[]; total: number }>("GET", `/communication/events${qs}`);
+    },
+  },
   operations: {
     auditLog: (params?: { period?: string; action?: string; actorType?: string; actorName?: string; limit?: number; offset?: number }) => {
       const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
@@ -900,6 +920,72 @@ export interface WorkerPermission {
   canViewOrders: boolean;
   canProcessOrders: boolean;
   canAssignOrders: boolean;
+}
+
+export interface NotifTemplate {
+  id: number;
+  laundryId: number;
+  branchId: number | null;
+  eventTrigger: string;
+  channel: string;
+  name: string;
+  body: string;
+  variables: string[] | null;
+  isActive: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotifTemplateInput {
+  eventTrigger: string;
+  channel: string;
+  name: string;
+  body: string;
+  branchId?: number | null;
+  variables?: string[];
+  isActive?: boolean;
+}
+
+export interface NotifMessage {
+  id: number;
+  eventId: number | null;
+  templateId: number | null;
+  channel: string;
+  recipientPhone: string;
+  recipientName: string | null;
+  renderedBody: string;
+  status: string;
+  providerMessageId: string | null;
+  retryCount: number;
+  errorMessage: string | null;
+  queuedAt: string;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  readAt: string | null;
+  failedAt: string | null;
+}
+
+export interface NotifEvent {
+  id: number;
+  laundryId: number;
+  branchId: number | null;
+  eventType: string;
+  orderId: number | null;
+  customerId: number | null;
+  customerPhone: string | null;
+  customerName: string | null;
+  status: string;
+  skipReason: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface NotifStats {
+  total: number;
+  byStatus: Record<string, number>;
+  byChannel: Record<string, number>;
+  templates: { total: number; active: number };
 }
 
 export interface MessageTemplate {
