@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 # CleanTrack Database Restore Script
-# Usage: bash scripts/restore.sh <backup_file.sql.gz>
+# Usage: bash scripts/restore.sh <backup_file.sql.gz> [--yes|-y]
 # Requires: psql, DATABASE_URL env var
 # WARNING: This will DROP and recreate all tables. Use with care.
 
 set -euo pipefail
 
 BACKUP_FILE="${1:-}"
+AUTO_CONFIRM=false
+
+# Parse flags
+for arg in "$@"; do
+  if [[ "$arg" == "--yes" || "$arg" == "-y" ]]; then
+    AUTO_CONFIRM=true
+  fi
+done
 
 if [[ -z "$BACKUP_FILE" ]]; then
-  echo "Usage: bash scripts/restore.sh <backup_file.sql.gz>" >&2
+  echo "Usage: bash scripts/restore.sh <backup_file.sql.gz> [--yes|-y]" >&2
   exit 1
 fi
 
@@ -44,17 +52,24 @@ else
   echo "[restore] WARNING: No manifest found, skipping integrity check."
 fi
 
+# Mask credentials safely — handle both user:pass@host and socket-style URLs
+DB_DISPLAY=$(echo "$DATABASE_URL" | sed 's|://[^@]*@|://***:***@|')
 echo "[restore] Restoring from: ${BACKUP_FILE}"
-echo "[restore] Target: ${DATABASE_URL%%@*}@***"
+echo "[restore] Target: ${DB_DISPLAY}"
 echo ""
-read -r -p "[restore] This will overwrite the database. Continue? (yes/no): " CONFIRM
-if [[ "$CONFIRM" != "yes" ]]; then
-  echo "[restore] Aborted."
-  exit 0
+
+if [[ "$AUTO_CONFIRM" == "false" ]]; then
+  read -r -p "[restore] This will overwrite the database. Continue? (yes/no): " CONFIRM
+  if [[ "$CONFIRM" != "yes" ]]; then
+    echo "[restore] Aborted."
+    exit 0
+  fi
+else
+  echo "[restore] Auto-confirmed (--yes flag)."
 fi
 
 echo "[restore] Decompressing and restoring..."
-gunzip -c "$BACKUP_FILE" | psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1
+gunzip -c "$BACKUP_FILE" | psql "$DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1 2>&1
 
 echo "[restore] Restore complete."
 echo "[restore] Run 'pnpm db:push' if schema needs to be re-synced."

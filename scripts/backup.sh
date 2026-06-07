@@ -30,6 +30,7 @@ pg_dump "$DATABASE_URL" \
   --no-acl \
   --clean \
   --if-exists \
+  | grep -v "^SET transaction_timeout" \
   | gzip -9 > "$BACKUP_FILE"
 
 BACKUP_SIZE=$(stat -c%s "$BACKUP_FILE" 2>/dev/null || stat -f%z "$BACKUP_FILE")
