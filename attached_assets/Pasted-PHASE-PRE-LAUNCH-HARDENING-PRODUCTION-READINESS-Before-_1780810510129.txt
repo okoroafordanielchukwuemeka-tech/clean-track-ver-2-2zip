@@ -1,0 +1,224 @@
+PHASE: PRE-LAUNCH HARDENING & PRODUCTION READINESS
+
+Before writing any code, perform a COMPLETE audit of the current platform.
+
+DO NOT build new customer features.
+
+DO NOT build WhatsApp inbox.
+
+DO NOT build marketing features.
+
+DO NOT build loyalty systems.
+
+DO NOT build referral systems.
+
+DO NOT build AI features.
+
+Focus ONLY on production readiness.
+
+GOAL:
+
+Ensure CleanTrack can safely handle real laundry businesses before onboarding the first paying customer.
+
+---
+
+PHASE A — SECURITY AUDIT
+
+Audit:
+
+1. Authentication
+2. Authorization
+3. JWT handling
+4. Session handling
+5. Worker permissions
+6. Owner permissions
+7. Admin permissions
+8. Branch isolation
+9. Multi-tenant isolation
+10. API security
+
+Verify:
+
+* No JWT fallback secrets
+* No hardcoded secrets
+* No development credentials
+* No exposed admin routes
+* No privilege escalation paths
+
+Fix all critical findings.
+
+Provide evidence.
+
+---
+
+PHASE B — BACKUP SYSTEM
+
+Audit:
+
+1. Current backup process
+2. Current recovery process
+3. Current snapshot process
+4. Storage location
+5. Retention policy
+
+Implement:
+
+* Automatic daily backup
+* Automatic backup verification
+* Backup failure alerts
+* Backup health dashboard
+
+Design support for:
+
+* Cloudflare R2
+* AWS S3
+* Backblaze B2
+
+Do NOT integrate payment systems.
+
+Do NOT integrate external backup vendors yet.
+
+Build the architecture and automation.
+
+---
+
+PHASE C — DATA RECOVERY VALIDATION
+
+Create test data:
+
+* Customers
+* Orders
+* Payments
+* Receipts
+* Branches
+* Workers
+
+Perform:
+
+Backup
+→ Delete records
+→ Restore backup
+
+Verify:
+
+* No corruption
+* No missing data
+* No duplicate records
+
+Document results.
+
+---
+
+PHASE D — ENVIRONMENT VALIDATION
+
+Audit all environment variables.
+
+Required:
+
+JWT_SECRET
+DATABASE_URL
+SESSION_SECRET
+BACKUP_SECRET
+ALLOWED_ORIGINS
+
+System must fail startup if required variables are missing.
+
+No silent fallback values allowed.
+
+---
+
+PHASE E — RATE LIMITING & ABUSE PROTECTION
+
+Implement:
+
+* Login rate limiting
+* API abuse protection
+* Webhook abuse protection
+* Owner route protection
+* Admin route protection
+
+Verify:
+
+* Brute force attempts blocked
+* Excessive requests throttled
+
+---
+
+PHASE F — OBSERVABILITY
+
+Audit current monitoring.
+
+Verify:
+
+* Alert engine
+* Error logging
+* Server health
+* Database health
+* Backup health
+* Queue health
+
+Create:
+
+Production Health Dashboard
+
+Display:
+
+* API status
+* Database status
+* Backup status
+* Alert status
+* Active tenants
+* Active devices
+* Failed jobs
+* Critical alerts
+
+---
+
+PHASE G — DEPLOYMENT READINESS
+
+Audit:
+
+* Replit deployment readiness
+* Database readiness
+* Storage readiness
+* Scaling readiness
+
+Provide:
+
+Current capacity estimates:
+
+10 tenants
+50 tenants
+100 tenants
+500 tenants
+
+Identify bottlenecks.
+
+---
+
+PHASE H — LAUNCH READINESS REPORT
+
+Provide:
+
+1. Security Audit Results
+2. Backup Audit Results
+3. Recovery Validation Results
+4. Environment Audit Results
+5. Monitoring Audit Results
+6. Deployment Readiness
+7. Critical Risks
+8. Medium Risks
+9. Low Risks
+10. Launch Readiness Score
+
+IMPORTANT:
+
+Do NOT build new customer features.
+
+Do NOT build WhatsApp enhancements.
+
+Do NOT build billing features.
+
+Do NOT build marketing features.
+
+Focus only on making the current platform production-safe for the first paying customers.

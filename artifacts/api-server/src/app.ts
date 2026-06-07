@@ -8,6 +8,8 @@ import {
   apiLimiter,
   webhookLimiter,
   adminLimiter,
+  ownerLimiter,
+  recoveryLimiter,
 } from "./lib/rate-limiter.js";
 
 const app = express();
@@ -69,6 +71,16 @@ app.use("/api/admin", adminLimiter);
 
 // Webhooks: Meta sends bursts, allow higher throughput
 app.use("/api/webhooks", webhookLimiter);
+
+// Recovery/backup endpoints: expensive ops, tightest throttle
+app.use("/api/recovery", recoveryLimiter);
+
+// Owner management routes: workers, branches, expenditures, settings
+app.use("/api/workers", ownerLimiter);
+app.use("/api/branches", ownerLimiter);
+app.use("/api/expenditures", ownerLimiter);
+app.use("/api/batches", ownerLimiter);
+app.use("/api/subscription", ownerLimiter);
 
 // All other API endpoints: general rate limit
 app.use("/api", apiLimiter);

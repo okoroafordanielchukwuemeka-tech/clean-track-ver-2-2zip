@@ -60,7 +60,7 @@ router.use("/recovery", requireOwner, recoveryRouter);
 router.use("/health", productionHealthRouter);
 router.use("/alerts", requireOwner, alertsRouter);
 router.use("/communication", requireOwner, communicationRouter);
-router.use("/subscription", subscriptionRouter);
+router.use("/subscription", requireOwner, subscriptionRouter);
 
 // Platform admin routes (CleanTrack internal — not for laundry owners)
 router.use("/admin", adminRouter);
