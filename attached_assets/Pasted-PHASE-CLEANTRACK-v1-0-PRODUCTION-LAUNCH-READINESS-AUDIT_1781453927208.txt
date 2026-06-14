@@ -1,0 +1,368 @@
+PHASE: CLEANTRACK v1.0 PRODUCTION LAUNCH READINESS AUDIT
+
+IMPORTANT:
+
+DO NOT WRITE CODE.
+
+DO NOT MODIFY ANY FILES.
+
+DO NOT ADD FEATURES.
+
+This phase is ONLY a complete audit.
+
+CleanTrack is moving from MVP development into production preparation.
+
+The goal is to understand exactly what exists, what is missing, and what can block the first real customer launch.
+
+Audit the entire codebase, database, infrastructure, security, and user workflows.
+
+Provide a detailed report.
+
+================================================
+
+PHASE A — CURRENT PRODUCT INVENTORY
+
+Audit all existing implemented features.
+
+Report:
+
+1. Authentication system
+
+- signup flow
+- login flow
+- password security
+- session handling
+- role management
+
+
+2. Multi-tenant system
+
+Verify:
+
+- laundry isolation
+- branch isolation
+- worker permissions
+- owner permissions
+- admin permissions
+
+
+3. Core operations
+
+Verify:
+
+Customers
+
+Orders
+
+Services
+
+Payments
+
+Receipts
+
+Pickup workflow
+
+Partial pickup
+
+Discount workflow
+
+Workers
+
+Branches
+
+Reports
+
+
+For each feature report:
+
+Status:
+✅ Complete
+🟡 Needs improvement
+🔴 Missing
+
+
+================================================
+
+PHASE B — DATABASE PRODUCTION AUDIT
+
+Audit database infrastructure.
+
+Report:
+
+1. Database provider
+
+2. Database type
+
+3. All production tables
+
+4. Relationships
+
+5. Foreign keys
+
+6. Indexes
+
+7. Data isolation
+
+8. Backup system
+
+9. Recovery system
+
+
+Verify:
+
+If a laundry creates:
+
+- customers
+- orders
+- payments
+- receipts
+
+does the data permanently persist after:
+
+- logout
+- restart
+- deployment
+
+
+Identify any database risks.
+
+
+================================================
+
+PHASE C — SECURITY AUDIT
+
+Audit security before launch.
+
+Check:
+
+Authentication security
+
+Authorization security
+
+Tenant isolation
+
+API protection
+
+Rate limiting
+
+CORS
+
+Environment variables
+
+Secrets handling
+
+Password storage
+
+Webhook security
+
+SQL injection risks
+
+Data exposure risks
+
+
+Report:
+
+Critical issues
+
+High issues
+
+Medium issues
+
+Low issues
+
+
+DO NOT FIX YET.
+
+ONLY REPORT.
+
+
+================================================
+
+PHASE D — PRODUCTION DEPLOYMENT AUDIT
+
+Audit deployment readiness.
+
+Check:
+
+Current environment:
+
+Development or production?
+
+Report what is needed for:
+
+- custom domain
+- SSL
+- production database
+- environment variables
+- deployment configuration
+- monitoring
+
+
+Explain:
+
+What happens when the app goes live?
+
+================================================
+
+PHASE E — CUSTOMER ONBOARDING AUDIT
+
+Audit the experience of a new laundry owner.
+
+Simulate:
+
+A new laundry owner signs up.
+
+Check:
+
+1. Account creation
+
+2. Creating laundry profile
+
+3. Creating first branch
+
+4. Adding workers
+
+5. Creating first customer
+
+6. Creating first order
+
+7. Recording payment
+
+8. Sending notification
+
+
+Identify:
+
+Where a beginner user may get confused.
+
+
+================================================
+
+PHASE F — WHATSAPP PRODUCTION READINESS
+
+Audit WhatsApp integration.
+
+Check:
+
+Current status:
+
+Meta connection
+
+Webhook
+
+Credentials
+
+Message sending
+
+Delivery tracking
+
+Templates
+
+Tenant support
+
+Usage tracking
+
+
+Explain:
+
+What is needed before real laundries can use WhatsApp.
+
+================================================
+
+PHASE G — BILLING PRODUCTION READINESS
+
+Audit:
+
+Subscription system
+
+Trial system
+
+Plan limits
+
+Usage tracking
+
+Enforcement
+
+Owner billing dashboard
+
+Admin billing visibility
+
+
+Identify what is missing before charging customers.
+
+
+================================================
+
+PHASE H — SUPPORT SYSTEM AUDIT
+
+Audit current support readiness.
+
+Check if we have:
+
+- help system
+- support contact
+- error reporting
+- customer feedback system
+- documentation area
+
+
+Recommend minimum support system required for launch.
+
+
+================================================
+
+PHASE I — DEMO ENVIRONMENT READINESS
+
+Explain what is needed to create:
+
+A demo CleanTrack environment.
+
+Report:
+
+Required sample data:
+
+- branches
+- customers
+- orders
+- payments
+- workers
+- reports
+- WhatsApp examples
+
+
+================================================
+
+FINAL REPORT FORMAT
+
+Provide:
+
+1. Current Product Status
+
+2. Launch Readiness Score /100
+
+3. Completed Systems
+
+4. Missing Launch Blockers
+
+5. Security Risks
+
+6. Data Risks
+
+7. Customer Experience Issues
+
+8. Production Deployment Requirements
+
+9. Recommended Implementation Order
+
+
+IMPORTANT:
+
+Do not build anything.
+
+Do not refactor anything.
+
+Do not optimize anything.
+
+Only audit and provide the roadmap.
+
+The purpose is to safely move CleanTrack from MVP into a production SaaS product.
