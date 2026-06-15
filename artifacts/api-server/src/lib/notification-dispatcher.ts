@@ -5,20 +5,23 @@
  *  1. Match an internal EventType to a NotificationEventTrigger
  *  2. Look up active templates for that trigger + channel
  *  3. Interpolate {{variable}} placeholders
- *  4. Write notification_events + notification_messages records
- *  5. Route through ProviderRegistry to send (or queue if no provider)
+ *  4. Write notification_events record (status=pending)
+ *  5. Enqueue messages to message_queue (durable — worker handles delivery+retries)
+ *
+ * NOTE: This dispatcher no longer calls the WhatsApp API directly.
+ * The message_queue worker (60s interval) picks up queued messages and
+ * delivers them with exponential backoff retries (up to 5 attempts).
  */
 
 import { db } from "@workspace/db";
 import {
   notificationTemplates,
   notificationEvents,
-  notificationMessages,
+  messageQueue,
 } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { EventType } from "./events.js";
-import type { NotificationChannel, NotificationEventTrigger } from "@workspace/db/schema";
-import { providerRegistry } from "./providers/registry.js";
+import type { NotificationEventTrigger } from "@workspace/db/schema";
 
 // ─── Event → Trigger mapping ──────────────────────────────────────────────────
 
@@ -138,70 +141,31 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<vo
       .returning();
 
     const vars = payload.variables ?? {};
-    let anyFailed = false;
 
+    // Enqueue one message_queue entry per template
+    // The queue worker handles actual delivery with retries + rate limiting
     for (const tmpl of applicable) {
       const rendered = interpolate(tmpl.body, vars);
 
-      const [msg] = await db
-        .insert(notificationMessages)
-        .values({
-          laundryId: payload.laundryId,
-          eventId: event.id,
-          templateId: tmpl.id,
-          channel: tmpl.channel,
-          recipientPhone: payload.customerPhone,
-          recipientName: payload.customerName ?? null,
-          renderedBody: rendered,
-          status: "queued",
-          metadata: { trigger, eventType: payload.eventType },
-        })
-        .returning();
+      await db.insert(messageQueue).values({
+        laundryId: payload.laundryId,
+        templateName: tmpl.name,
+        recipientPhone: payload.customerPhone,
+        recipientName: payload.customerName ?? null,
+        variables: vars,
+        renderedBody: rendered,
+        channel: tmpl.channel,
+        status: "pending",
+        attempts: 0,
+        maxAttempts: 5,
+        notificationEventId: event.id,
+      });
 
-      // ── Attempt send via ProviderRegistry ────────────────────────────────
-      const provider = await providerRegistry.getProvider(
-        payload.laundryId,
-        tmpl.channel as NotificationChannel
+      console.log(
+        `[Dispatcher] Enqueued — channel=${tmpl.channel} trigger=${trigger} ` +
+        `laundry=${payload.laundryId} eventId=${event.id}`
       );
-
-      if (provider) {
-        try {
-          const result = await provider.send({
-            phone: payload.customerPhone,
-            body: rendered,
-          });
-          await db
-            .update(notificationMessages)
-            .set({
-              status: "sent",
-              providerMessageId: result.providerMessageId ?? null,
-              sentAt: new Date(),
-            })
-            .where(eq(notificationMessages.id, msg.id));
-
-          console.log(
-            `[Dispatcher] Sent — channel=${tmpl.channel} wamid=${result.providerMessageId}`
-          );
-        } catch (err: unknown) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          await db
-            .update(notificationMessages)
-            .set({ status: "failed", errorMessage: errorMsg, failedAt: new Date() })
-            .where(eq(notificationMessages.id, msg.id));
-          anyFailed = true;
-          console.error(`[Dispatcher] Send failed — channel=${tmpl.channel}:`, errorMsg);
-        }
-      } else {
-        console.log(
-          `[Dispatcher] Queued (no provider) — channel=${tmpl.channel} trigger=${trigger}`
-        );
-      }
     }
-
-    await db
-      .update(notificationEvents)
-      .set({ status: anyFailed ? "failed" : "dispatched" })
-      .where(eq(notificationEvents.id, event.id));
   } catch (err) {
     console.error("[Dispatcher] Unhandled error:", err);
   }

@@ -9,6 +9,7 @@ import { idempotencyKeys } from "@workspace/db/schema";
 import { lt } from "drizzle-orm";
 import { runAlertChecks } from "./lib/alert-engine.js";
 import { startBackupScheduler } from "./lib/backup-scheduler.js";
+import { startMessageQueueWorker } from "./lib/message-queue-worker.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
@@ -25,6 +26,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   scheduleAlertChecks();
   // Phase B: start daily backup scheduler
   startBackupScheduler();
+  // Task #3: start durable WhatsApp message queue worker
+  startMessageQueueWorker();
 });
 
 function scheduleIdempotencyCleanup() {

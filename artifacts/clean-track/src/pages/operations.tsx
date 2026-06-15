@@ -10,6 +10,8 @@ import type {
   OpsHealthResponse,
   OpsSyncHealthResponse,
   OpsSyncHealthDevice,
+  OpsFailedMessagesResponse,
+  FailedMessageEntry,
   RecoverySummary,
   DeletedWorker,
   DeletedCustomer,
@@ -76,6 +78,8 @@ import {
   AlertTriangle,
   Zap,
   Bell,
+  MessageSquareX,
+  Send,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -2039,6 +2043,127 @@ function AlertCenterTab() {
   );
 }
 
+function FailedMessagesTab() {
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["ops-failed-messages", page],
+    queryFn: () => api.operations.failedMessages({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }),
+    staleTime: 30_000,
+  });
+
+  const entries = (data as OpsFailedMessagesResponse | undefined)?.entries ?? [];
+  const total = (data as OpsFailedMessagesResponse | undefined)?.total ?? 0;
+
+  const requeueMutation = useMutation({
+    mutationFn: (id: number) => api.operations.requeueMessage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ops-failed-messages"] });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 items-center justify-between">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Dead-Letter Queue</p>
+          <p className="text-xs text-muted-foreground">
+            Messages that failed all {5} delivery attempts. Re-queue to retry immediately.
+          </p>
+        </div>
+        <div className="flex gap-2 items-center">
+          {total > 0 && (
+            <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+              {total} failed message{total !== 1 ? "s" : ""}
+            </span>
+          )}
+          <Button variant="outline" size="sm" className="h-8" onClick={() => refetch()}>
+            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading…</div>
+      ) : entries.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <MessageSquareX className="h-10 w-10 mx-auto mb-3 opacity-20" />
+          <p className="text-sm font-medium">No failed messages</p>
+          <p className="text-xs mt-1 opacity-70">
+            Messages that exhaust all retry attempts will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Created</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Recipient</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden sm:table-cell">Template</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden md:table-cell">Attempts</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden lg:table-cell">Last Error</th>
+                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {entries.map((e: FailedMessageEntry) => (
+                <tr key={e.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div title={e.createdAt ? fmtDate(e.createdAt) : ""} className="cursor-default">
+                      {e.createdAt ? fmtAge(e.createdAt) : "—"}
+                    </div>
+                    <div className="text-muted-foreground text-[10px]">
+                      {e.lastAttemptAt ? fmtDate(e.lastAttemptAt) : "—"}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="font-medium truncate max-w-[130px]">{e.recipientName ?? "—"}</div>
+                    <div className="text-muted-foreground font-mono text-[10px]">{e.recipientPhone}</div>
+                  </td>
+                  <td className="px-3 py-2 hidden sm:table-cell">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-medium">
+                      <Send className="h-2.5 w-2.5" />
+                      {e.templateName}
+                    </span>
+                    <div className="text-muted-foreground text-[10px] mt-0.5 capitalize">{e.channel}</div>
+                  </td>
+                  <td className="px-3 py-2 hidden md:table-cell">
+                    <span className="font-semibold text-red-600 dark:text-red-400">
+                      {e.attempts}/{e.maxAttempts}
+                    </span>
+                    <div className="text-muted-foreground text-[10px]">attempts</div>
+                  </td>
+                  <td className="px-3 py-2 hidden lg:table-cell max-w-[220px]">
+                    <p className="text-[10px] text-red-600 dark:text-red-400 truncate" title={e.lastError ?? ""}>
+                      {e.lastError ?? "Unknown error"}
+                    </p>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] px-2 gap-1 font-medium"
+                      disabled={requeueMutation.isPending}
+                      onClick={() => requeueMutation.mutate(e.id)}
+                    >
+                      <RotateCcw className="h-2.5 w-2.5" />
+                      Re-queue
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
+    </div>
+  );
+}
+
 export default function OperationsPage() {
   return (
     <div className="space-y-5">
@@ -2048,7 +2173,7 @@ export default function OperationsPage() {
           Operations Center
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Read-only audit trail — payments, pickups, worker actions, and system health.
+          Audit trail, system health, message queue, and operational tools.
         </p>
       </div>
 
@@ -2072,6 +2197,9 @@ export default function OperationsPage() {
           <TabsTrigger value="sync-health" className="text-xs gap-1.5">
             <Wifi className="h-3.5 w-3.5" /> Sync Health
           </TabsTrigger>
+          <TabsTrigger value="failed-messages" className="text-xs gap-1.5">
+            <MessageSquareX className="h-3.5 w-3.5" /> Failed Messages
+          </TabsTrigger>
           <TabsTrigger value="recovery" className="text-xs gap-1.5">
             <RotateCcw className="h-3.5 w-3.5" /> Recovery
           </TabsTrigger>
@@ -2089,6 +2217,7 @@ export default function OperationsPage() {
         <TabsContent value="worker-activity" className="mt-4"><WorkerActivityTab /></TabsContent>
         <TabsContent value="health" className="mt-4"><HealthTab /></TabsContent>
         <TabsContent value="sync-health" className="mt-4"><SyncHealthTab /></TabsContent>
+        <TabsContent value="failed-messages" className="mt-4"><FailedMessagesTab /></TabsContent>
         <TabsContent value="recovery" className="mt-4"><RecoveryTab /></TabsContent>
         <TabsContent value="runbook" className="mt-4"><RunbookTab /></TabsContent>
         <TabsContent value="alerts" className="mt-4"><AlertCenterTab /></TabsContent>

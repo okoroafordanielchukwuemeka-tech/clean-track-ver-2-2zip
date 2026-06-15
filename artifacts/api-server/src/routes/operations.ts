@@ -8,9 +8,11 @@ import {
   workers,
   branches,
   deviceHeartbeats,
+  messageQueue,
 } from "@workspace/db/schema";
 import { eq, and, gte, desc, sql, ilike, or } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
+import { requireOwner } from "../middleware/auth.js";
 
 export const operationsRouter = Router();
 
@@ -419,5 +421,109 @@ operationsRouter.get("/sync-health", async (req: AuthRequest, res) => {
   } catch (err) {
     console.error("operations/sync-health error:", err);
     return res.status(500).json({ error: "Failed to load sync health data" });
+  }
+});
+
+/**
+ * GET /api/operations/failed-messages
+ *
+ * Returns all failed message_queue entries scoped to the owner's laundry.
+ * Ordered by most recently created first.
+ */
+operationsRouter.get("/failed-messages", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+    const [entries, [countRow]] = await Promise.all([
+      db
+        .select({
+          id: messageQueue.id,
+          templateName: messageQueue.templateName,
+          recipientPhone: messageQueue.recipientPhone,
+          recipientName: messageQueue.recipientName,
+          channel: messageQueue.channel,
+          status: messageQueue.status,
+          attempts: messageQueue.attempts,
+          maxAttempts: messageQueue.maxAttempts,
+          lastError: messageQueue.lastError,
+          lastAttemptAt: messageQueue.lastAttemptAt,
+          nextRetryAt: messageQueue.nextRetryAt,
+          notificationEventId: messageQueue.notificationEventId,
+          createdAt: messageQueue.createdAt,
+        })
+        .from(messageQueue)
+        .where(and(eq(messageQueue.laundryId, laundryId), eq(messageQueue.status, "failed")))
+        .orderBy(desc(messageQueue.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(messageQueue)
+        .where(and(eq(messageQueue.laundryId, laundryId), eq(messageQueue.status, "failed"))),
+    ]);
+
+    const formatted = entries.map((e) => ({
+      ...e,
+      lastAttemptAt: e.lastAttemptAt?.toISOString() ?? null,
+      nextRetryAt: e.nextRetryAt?.toISOString() ?? null,
+      createdAt: e.createdAt.toISOString(),
+    }));
+
+    res.json({ entries: formatted, total: countRow.total });
+  } catch (err) {
+    console.error("operations/failed-messages error:", err);
+    res.status(500).json({ error: "Failed to load failed messages" });
+  }
+});
+
+/**
+ * POST /api/operations/failed-messages/:id/requeue
+ *
+ * Resets a dead-lettered message back to pending so the worker will retry it.
+ */
+operationsRouter.post("/failed-messages/:id/requeue", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const id = parseInt(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid message id" });
+    }
+
+    const [entry] = await db
+      .select({ id: messageQueue.id, laundryId: messageQueue.laundryId, status: messageQueue.status })
+      .from(messageQueue)
+      .where(and(eq(messageQueue.id, id), eq(messageQueue.laundryId, laundryId)));
+
+    if (!entry) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    if (entry.status !== "failed") {
+      return res.status(409).json({ error: `Message is in '${entry.status}' status — only 'failed' messages can be re-queued` });
+    }
+
+    const [updated] = await db
+      .update(messageQueue)
+      .set({
+        status: "pending",
+        attempts: 0,
+        nextRetryAt: null,
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(messageQueue.id, id), eq(messageQueue.laundryId, laundryId)))
+      .returning();
+
+    res.json({
+      id: updated.id,
+      status: updated.status,
+      message: "Message re-queued for delivery",
+    });
+  } catch (err) {
+    console.error("operations/failed-messages requeue error:", err);
+    res.status(500).json({ error: "Failed to re-queue message" });
   }
 });

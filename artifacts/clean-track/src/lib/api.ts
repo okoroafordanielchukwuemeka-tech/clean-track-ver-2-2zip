@@ -297,6 +297,11 @@ export const api = {
     },
     health: () => request<OpsHealthResponse>("GET", "/operations/health"),
     syncHealth: () => request<OpsSyncHealthResponse>("GET", "/operations/sync-health"),
+    failedMessages: (params?: { limit?: number; offset?: number }) => {
+      const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
+      return request<OpsFailedMessagesResponse>("GET", `/operations/failed-messages${qs}`);
+    },
+    requeueMessage: (id: number) => request<{ id: number; status: string; message: string }>("POST", `/operations/failed-messages/${id}/requeue`),
   },
   telemetry: {
     heartbeat: (data: HeartbeatInput) => request<void>("POST", "/telemetry/heartbeat", data),
@@ -1219,6 +1224,27 @@ export interface OpsSyncHealthResponse {
     offline: number;
   };
   generatedAt: string;
+}
+
+export interface FailedMessageEntry {
+  id: number;
+  templateName: string;
+  recipientPhone: string;
+  recipientName: string | null;
+  channel: string;
+  status: string;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  lastAttemptAt: string | null;
+  nextRetryAt: string | null;
+  notificationEventId: number | null;
+  createdAt: string;
+}
+
+export interface OpsFailedMessagesResponse {
+  entries: FailedMessageEntry[];
+  total: number;
 }
 
 export interface DRCheck {
