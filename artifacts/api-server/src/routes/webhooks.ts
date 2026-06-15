@@ -8,18 +8,170 @@
  * Meta's servers, not by authenticated users. They respond to Meta within
  * ~200ms and process status updates asynchronously.
  *
- * Security: the GET endpoint verifies the hub.verify_token against the
- * per-tenant webhook_verify_token stored in provider_configs.
+ * Security:
+ *   GET  — verifies hub.verify_token against per-tenant webhookVerifyToken
+ *   POST — verifies X-Hub-Signature-256 HMAC-SHA256 using per-tenant appSecret
+ *          (falls back to WHATSAPP_APP_SECRET env var for unidentified tenants)
+ *          Requests with missing or invalid signatures are rejected with HTTP 403.
  */
 
+import crypto from "crypto";
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { notificationMessages, providerConfigs } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
-import { providerRegistry } from "../lib/providers/registry.js";
 import { WhatsAppCloudProvider } from "../lib/providers/whatsapp-cloud.js";
 
 export const webhooksRouter = Router();
+
+// ─── Signature helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Compute the expected X-Hub-Signature-256 value for a raw body buffer
+ * using the provided secret (Meta App Secret).
+ */
+function computeSignature(rawBody: Buffer, secret: string): string {
+  const hmac = crypto.createHmac("sha256", secret);
+  hmac.update(rawBody);
+  return "sha256=" + hmac.digest("hex");
+}
+
+/**
+ * Timing-safe comparison of two signature strings.
+ * Returns true if they match.
+ */
+function signaturesMatch(expected: string, received: string): boolean {
+  try {
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(received, "utf8");
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Identify which laundry's phoneNumberId appears in a WhatsApp webhook payload.
+ * Returns null if the payload is malformed or no phoneNumberId is present.
+ */
+function extractPhoneNumberId(payload: unknown): string | null {
+  try {
+    const entry = (payload as any)?.entry?.[0];
+    const change = entry?.changes?.[0];
+    return change?.value?.metadata?.phone_number_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Look up the appSecret for the tenant that owns the given phoneNumberId.
+ * Returns null if no matching active config is found.
+ */
+async function lookupAppSecretByPhoneNumberId(
+  phoneNumberId: string
+): Promise<string | null> {
+  try {
+    const configs = await db
+      .select()
+      .from(providerConfigs)
+      .where(
+        and(
+          eq(providerConfigs.provider, "whatsapp"),
+          eq(providerConfigs.isActive, true)
+        )
+      );
+
+    const matched = configs.find((row: { config: unknown }) => {
+      const cfg = row.config as Record<string, unknown>;
+      return cfg.phoneNumberId === phoneNumberId;
+    });
+
+    if (!matched) return null;
+    const cfg = (matched as { config: unknown }).config as Record<string, unknown>;
+    return (cfg.appSecret as string) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify the X-Hub-Signature-256 header on an inbound webhook POST.
+ *
+ * Strategy (multi-tenant):
+ *   1. Parse the raw body buffer to extract phoneNumberId.
+ *   2. Look up the tenant's appSecret from providerConfigs.
+ *   3. Fall back to WHATSAPP_APP_SECRET env var (covers unknown/new tenants).
+ *   4. If no secret is available at all, allow through (degrade gracefully —
+ *      logged as a warning so operators know to configure it).
+ *   5. If a secret is available but the signature does not match, reject 403.
+ *
+ * Returns null on success, or an HTTP status code to return on failure.
+ */
+async function verifyWebhookSignature(
+  rawBody: Buffer,
+  signatureHeader: string | undefined,
+  payload: unknown
+): Promise<{ reject: boolean; reason: string }> {
+  // No signature header at all
+  if (!signatureHeader) {
+    const fallbackSecret = process.env.WHATSAPP_APP_SECRET;
+    if (fallbackSecret) {
+      // We have a secret configured but Meta didn't send a signature — reject
+      console.warn("[Webhook] Missing X-Hub-Signature-256 header — rejecting");
+      return { reject: true, reason: "Missing X-Hub-Signature-256" };
+    }
+    // No secret configured anywhere — allow through with a warning
+    console.warn(
+      "[Webhook] No X-Hub-Signature-256 header and WHATSAPP_APP_SECRET not set. " +
+      "Configure WHATSAPP_APP_SECRET or per-tenant App Secret to enforce signature verification."
+    );
+    return { reject: false, reason: "no_secret_configured" };
+  }
+
+  // We have a signature header — resolve the secret to verify against
+  const phoneNumberId = extractPhoneNumberId(payload);
+  let secret: string | null = null;
+
+  if (phoneNumberId) {
+    secret = await lookupAppSecretByPhoneNumberId(phoneNumberId);
+    if (secret) {
+      console.debug(
+        `[Webhook] Using per-tenant appSecret for phoneNumberId=${phoneNumberId}`
+      );
+    }
+  }
+
+  // Fall back to env var if no per-tenant secret found
+  if (!secret) {
+    secret = process.env.WHATSAPP_APP_SECRET ?? null;
+    if (secret) {
+      console.debug("[Webhook] Using WHATSAPP_APP_SECRET fallback");
+    }
+  }
+
+  if (!secret) {
+    // Signature is present but we have no secret to verify against
+    // Allow through so operators aren't locked out during initial setup,
+    // but log a clear warning.
+    console.warn(
+      "[Webhook] X-Hub-Signature-256 present but no appSecret configured " +
+      `(phoneNumberId=${phoneNumberId ?? "unknown"}). Cannot verify. Set WHATSAPP_APP_SECRET.`
+    );
+    return { reject: false, reason: "no_secret_to_verify_against" };
+  }
+
+  const expected = computeSignature(rawBody, secret);
+  if (!signaturesMatch(expected, signatureHeader)) {
+    console.warn(
+      `[Webhook] X-Hub-Signature-256 mismatch — rejecting (phoneNumberId=${phoneNumberId ?? "unknown"})`
+    );
+    return { reject: true, reason: "Signature mismatch" };
+  }
+
+  return { reject: false, reason: "ok" };
+}
 
 // ─── GET /webhooks/whatsapp — challenge verification ───────────────────────────
 
@@ -44,7 +196,7 @@ webhooksRouter.get("/whatsapp", async (req, res) => {
         )
       );
 
-    const matched = configs.find((row) => {
+    const matched = configs.find((row: { config: unknown }) => {
       const cfg = row.config as Record<string, unknown>;
       return cfg.webhookVerifyToken === token;
     });
@@ -66,12 +218,30 @@ webhooksRouter.get("/whatsapp", async (req, res) => {
 
 // ─── POST /webhooks/whatsapp — status updates ──────────────────────────────────
 
-webhooksRouter.post("/whatsapp", (req, res) => {
-  // Respond immediately — Meta requires < 20 s response
+webhooksRouter.post("/whatsapp", async (req, res) => {
+  // req.body is a raw Buffer (from express.raw middleware in app.ts)
+  const rawBody: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+  const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
+
+  // Parse payload for both signature lookup and processing
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    return res.status(400).json({ error: "Invalid JSON payload" });
+  }
+
+  // ── Signature verification ───────────────────────────────────────────────
+  const { reject, reason } = await verifyWebhookSignature(rawBody, signatureHeader, payload);
+  if (reject) {
+    return res.status(403).end();
+  }
+
+  // ── Respond immediately — Meta requires < 20 s response ─────────────────
   res.status(200).json({ status: "ok" });
 
-  // Process asynchronously
-  processWhatsAppWebhook(req.body).catch((err) =>
+  // ── Process asynchronously ───────────────────────────────────────────────
+  processWhatsAppWebhook(payload).catch((err) =>
     console.error("[Webhook] Processing error:", err)
   );
 });

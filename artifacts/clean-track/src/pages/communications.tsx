@@ -177,9 +177,10 @@ function WhatsAppSetupCard() {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState<WaConfigInput>({
-    phoneNumberId: "", accessToken: "", businessAccountId: "", webhookVerifyToken: "",
+    phoneNumberId: "", accessToken: "", businessAccountId: "", webhookVerifyToken: "", appSecret: "",
   });
   const [tokenTouched, setTokenTouched] = useState(false);
+  const [secretTouched, setSecretTouched] = useState(false);
 
   const { data: cfg, isLoading } = useQuery<WaProviderConfig>({
     queryKey: ["wa-config"],
@@ -193,6 +194,7 @@ function WhatsAppSetupCard() {
         accessToken:        cfg.accessTokenMasked ?? "",
         businessAccountId:  cfg.businessAccountId ?? "",
         webhookVerifyToken: cfg.webhookVerifyToken ?? "",
+        appSecret:          cfg.appSecretMasked ?? "",
         apiVersion:         cfg.apiVersion ?? "v21.0",
       });
     }
@@ -202,10 +204,12 @@ function WhatsAppSetupCard() {
     mutationFn: () => api.communication.saveWhatsAppConfig({
       ...form,
       accessToken: tokenTouched ? form.accessToken : (form.accessToken || "saved"),
+      appSecret:   secretTouched ? (form.appSecret ?? "") : (form.appSecret || "saved"),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wa-config"] });
       setTokenTouched(false);
+      setSecretTouched(false);
       toast.success("WhatsApp configuration saved");
     },
     onError: () => toast.error("Failed to save configuration"),
@@ -228,8 +232,9 @@ function WhatsAppSetupCard() {
     mutationFn: () => api.communication.deleteWhatsAppConfig(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wa-config"] });
-      setForm({ phoneNumberId: "", accessToken: "", businessAccountId: "", webhookVerifyToken: "" });
+      setForm({ phoneNumberId: "", accessToken: "", businessAccountId: "", webhookVerifyToken: "", appSecret: "" });
       setTokenTouched(false);
+      setSecretTouched(false);
       toast.success("WhatsApp configuration removed");
     },
   });
@@ -357,6 +362,29 @@ function WhatsAppSetupCard() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">Enter this exact value in Meta's webhook configuration</p>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">
+                App Secret
+                {cfg?.appSecretSaved && !secretTouched && (
+                  <span className="ml-2 text-green-400 text-xs">(saved)</span>
+                )}
+              </Label>
+              <Input
+                type="password"
+                value={form.appSecret ?? ""}
+                onChange={(e) => {
+                  setSecretTouched(true);
+                  setForm((f) => ({ ...f, appSecret: e.target.value }));
+                }}
+                placeholder={cfg?.appSecretSaved && !secretTouched ? "••••••••••••••••" : "From Meta App Dashboard → App Secret"}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Found in Meta Developers → Your App → Settings → Basic → App Secret.
+                Used to verify <code className="text-primary">X-Hub-Signature-256</code> on inbound webhooks — strongly recommended in production.
+              </p>
             </div>
           </div>
 

@@ -55,6 +55,14 @@ app.use(
 );
 
 // ── Body parsing ──────────────────────────────────────────────────────────
+// Webhook route must receive the raw body buffer so we can compute the
+// X-Hub-Signature-256 HMAC. Capture it as raw bytes BEFORE the global
+// JSON parser runs (express skips re-parsing once req.body is set).
+app.use(
+  "/api/webhooks",
+  express.raw({ type: "application/json", limit: "1mb" })
+);
+// All other routes use the normal JSON parser.
 app.use(express.json({ limit: "1mb" }));
 
 // ── Version middleware ────────────────────────────────────────────────────

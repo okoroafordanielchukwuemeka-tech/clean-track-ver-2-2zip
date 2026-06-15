@@ -1022,6 +1022,8 @@ export interface WaProviderConfig {
   accessTokenMasked?: string;
   businessAccountId?: string;
   webhookVerifyToken?: string;
+  appSecretSaved?: boolean;
+  appSecretMasked?: string;
   apiVersion?: string;
   displayPhoneNumber?: string;
   verifiedName?: string;
@@ -1033,6 +1035,7 @@ export interface WaConfigInput {
   accessToken: string;
   businessAccountId: string;
   webhookVerifyToken: string;
+  appSecret?: string;
   apiVersion?: string;
 }
 

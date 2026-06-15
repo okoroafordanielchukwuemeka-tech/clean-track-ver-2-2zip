@@ -419,6 +419,7 @@ const waConfigSchema = z.object({
   accessToken: z.string().min(1),
   businessAccountId: z.string().min(1),
   webhookVerifyToken: z.string().min(8),
+  appSecret: z.string().optional(),
   apiVersion: z.string().optional(),
 });
 
@@ -447,11 +448,17 @@ communicationRouter.get(
 
       const cfg = row.config as Record<string, unknown>;
 
-      // Mask the access token — show only last 4 chars
+      // Mask secrets — show only last 4 chars
+      const maskSecret = (raw: string): string =>
+        raw.length > 4
+          ? "•".repeat(raw.length - 4) + raw.slice(-4)
+          : "•".repeat(raw.length);
+
       const rawToken = (cfg.accessToken as string) ?? "";
-      const maskedToken = rawToken.length > 4
-        ? "•".repeat(rawToken.length - 4) + rawToken.slice(-4)
-        : "•".repeat(rawToken.length);
+      const maskedToken = maskSecret(rawToken);
+
+      const rawAppSecret = (cfg.appSecret as string) ?? "";
+      const maskedAppSecret = rawAppSecret.length > 0 ? maskSecret(rawAppSecret) : "";
 
       res.json({
         isConfigured: true,
@@ -464,6 +471,8 @@ communicationRouter.get(
         accessTokenMasked: maskedToken,
         businessAccountId: cfg.businessAccountId ?? "",
         webhookVerifyToken: cfg.webhookVerifyToken ?? "",
+        appSecretSaved: rawAppSecret.length > 0,
+        appSecretMasked: maskedAppSecret,
         apiVersion: cfg.apiVersion ?? "v21.0",
         displayPhoneNumber: cfg.displayPhoneNumber,
         verifiedName: cfg.verifiedName,
@@ -489,10 +498,12 @@ communicationRouter.put(
         return res.status(400).json({ error: parsed.error.errors });
       }
 
-      const { phoneNumberId, accessToken, businessAccountId, webhookVerifyToken, apiVersion } =
+      const { phoneNumberId, accessToken, businessAccountId, webhookVerifyToken, appSecret, apiVersion } =
         parsed.data;
 
-      // If access token is all bullets (user didn't change it), keep the old one
+      // If a secret field is all bullets (user didn't change it), keep the old value
+      const isMasked = (v: string) => /^•+$/.test(v) || v === "saved";
+
       const [existing] = await db
         .select()
         .from(providerConfigs)
@@ -503,11 +514,22 @@ communicationRouter.put(
           )
         );
 
-      const isMaskedToken = /^•+$/.test(accessToken) || accessToken === "saved";
+      const oldCfg = (existing?.config ?? {}) as Record<string, unknown>;
+
       const finalToken =
-        isMaskedToken && existing
-          ? ((existing.config as Record<string, unknown>).accessToken as string)
+        isMasked(accessToken) && existing
+          ? (oldCfg.accessToken as string)
           : accessToken;
+
+      // appSecret: keep existing if user didn't change it (masked), clear if empty, save if new
+      let finalAppSecret: string | undefined;
+      if (!appSecret || appSecret.trim() === "") {
+        finalAppSecret = undefined; // clearing the field
+      } else if (isMasked(appSecret) && existing) {
+        finalAppSecret = (oldCfg.appSecret as string) || undefined; // keep old
+      } else {
+        finalAppSecret = appSecret; // new value
+      }
 
       const newConfig: Record<string, unknown> = {
         phoneNumberId,
@@ -517,9 +539,12 @@ communicationRouter.put(
         apiVersion: apiVersion ?? "v21.0",
       };
 
+      if (finalAppSecret) {
+        newConfig.appSecret = finalAppSecret;
+      }
+
       // Preserve verification metadata
       if (existing) {
-        const oldCfg = existing.config as Record<string, unknown>;
         if (oldCfg.displayPhoneNumber) newConfig.displayPhoneNumber = oldCfg.displayPhoneNumber;
         if (oldCfg.verifiedName) newConfig.verifiedName = oldCfg.verifiedName;
         if (oldCfg.qualityRating) newConfig.qualityRating = oldCfg.qualityRating;

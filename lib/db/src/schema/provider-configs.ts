@@ -13,6 +13,8 @@ export interface WhatsAppProviderConfig {
   accessToken: string;
   businessAccountId: string;
   webhookVerifyToken: string;
+  /** Meta App Secret — used to verify X-Hub-Signature-256 on inbound webhooks */
+  appSecret?: string;
   apiVersion?: string;          // default: v21.0
   displayPhoneNumber?: string;  // populated after verification
   verifiedName?: string;        // populated after verification
