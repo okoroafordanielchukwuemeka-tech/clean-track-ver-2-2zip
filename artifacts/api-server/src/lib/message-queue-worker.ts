@@ -18,6 +18,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, lte, inArray, or, sql, gte } from "drizzle-orm";
 import { providerRegistry } from "./providers/registry.js";
+import type { NotificationChannel } from "@workspace/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -74,9 +75,18 @@ async function countRecentSentForTenant(laundryId: number): Promise<number> {
   return row?.count ?? 0;
 }
 
+// ─── In-process mutex (prevents overlapping worker cycles) ────────────────────
+
+let workerRunning = false;
+
 // ─── Core processing ──────────────────────────────────────────────────────────
 
 export async function processMessageQueue(): Promise<void> {
+  if (workerRunning) {
+    console.debug("[MessageQueue] Previous cycle still running — skipping this tick");
+    return;
+  }
+  workerRunning = true;
   try {
     const now = new Date();
 
@@ -99,6 +109,8 @@ export async function processMessageQueue(): Promise<void> {
     }
   } catch (err) {
     console.error("[MessageQueue] Worker cycle error:", err);
+  } finally {
+    workerRunning = false;
   }
 }
 
@@ -117,34 +129,41 @@ async function processTenantBatch(laundryId: number, now: Date): Promise<void> {
     const remainingCapacity = RATE_LIMIT_PER_MIN - sentLastMinute;
     const limit = Math.min(BATCH_PER_TENANT, remainingCapacity);
 
-    // Claim a batch for this tenant
-    const messages = await db
-      .select()
-      .from(messageQueue)
-      .where(
-        and(
-          eq(messageQueue.laundryId, laundryId),
-          inArray(messageQueue.status, ["pending", "retry"]),
-          or(
-            sql`${messageQueue.nextRetryAt} IS NULL`,
-            lte(messageQueue.nextRetryAt, now)
+    // Atomic claim: SELECT ... FOR UPDATE SKIP LOCKED + UPDATE inside a single
+    // transaction so the advisory lock spans both statements, preventing any
+    // concurrent worker from claiming the same rows.
+    const messages = await db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(messageQueue)
+        .where(
+          and(
+            eq(messageQueue.laundryId, laundryId),
+            inArray(messageQueue.status, ["pending", "retry"]),
+            or(
+              sql`${messageQueue.nextRetryAt} IS NULL`,
+              lte(messageQueue.nextRetryAt, now)
+            )
           )
         )
-      )
-      .orderBy(messageQueue.createdAt)
-      .limit(limit)
-      .for("update", { skipLocked: true });
+        .orderBy(messageQueue.createdAt)
+        .limit(limit)
+        .for("update", { skipLocked: true });
+
+      if (rows.length === 0) return [];
+
+      const ids = rows.map((r) => r.id);
+      await tx
+        .update(messageQueue)
+        .set({ status: "sending", lastAttemptAt: now, updatedAt: now })
+        .where(inArray(messageQueue.id, ids));
+
+      return rows;
+    });
 
     if (messages.length === 0) return;
 
-    // Mark all as sending (claim them)
-    const ids = messages.map((m) => m.id);
-    await db
-      .update(messageQueue)
-      .set({ status: "sending", lastAttemptAt: now, updatedAt: now })
-      .where(inArray(messageQueue.id, ids));
-
-    // Process each message
+    // Process each claimed message outside the claim transaction
     for (const msg of messages) {
       await sendMessage(msg, now);
     }
@@ -160,7 +179,8 @@ async function sendMessage(
   const newAttempts = msg.attempts + 1;
 
   try {
-    const provider = await providerRegistry.getProvider(msg.laundryId, "whatsapp" as any);
+    const channel = msg.channel as NotificationChannel;
+    const provider = await providerRegistry.getProvider(msg.laundryId, channel);
 
     if (!provider) {
       // No provider configured — move to failed immediately (no point retrying)
