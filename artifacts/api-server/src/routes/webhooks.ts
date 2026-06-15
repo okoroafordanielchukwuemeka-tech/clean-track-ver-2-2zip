@@ -100,37 +100,32 @@ async function lookupAppSecretByPhoneNumberId(
  * Verify the X-Hub-Signature-256 header on an inbound webhook POST.
  *
  * Strategy (multi-tenant):
- *   1. Parse the raw body buffer to extract phoneNumberId.
- *   2. Look up the tenant's appSecret from providerConfigs.
- *   3. Fall back to WHATSAPP_APP_SECRET env var (covers unknown/new tenants).
- *   4. If no secret is available at all, allow through (degrade gracefully —
- *      logged as a warning so operators know to configure it).
- *   5. If a secret is available but the signature does not match, reject 403.
+ * Fail-closed: any request that cannot be cryptographically verified is
+ * rejected with 403. This means:
+ *   - Missing X-Hub-Signature-256 header → 403
+ *   - No appSecret configured (neither per-tenant nor env fallback) → 403
+ *   - Signature present but does not match → 403
  *
- * Returns null on success, or an HTTP status code to return on failure.
+ * Secret resolution order:
+ *   1. Parse payload to extract phoneNumberId → look up per-tenant appSecret
+ *   2. Fall back to WHATSAPP_APP_SECRET env var (single-tenant / bootstrap use)
+ *   3. If neither is available → reject (we cannot verify, so we must deny)
  */
 async function verifyWebhookSignature(
   rawBody: Buffer,
   signatureHeader: string | undefined,
   payload: unknown
 ): Promise<{ reject: boolean; reason: string }> {
-  // No signature header at all
-  if (!signatureHeader) {
-    const fallbackSecret = process.env.WHATSAPP_APP_SECRET;
-    if (fallbackSecret) {
-      // We have a secret configured but Meta didn't send a signature — reject
-      console.warn("[Webhook] Missing X-Hub-Signature-256 header — rejecting");
-      return { reject: true, reason: "Missing X-Hub-Signature-256" };
-    }
-    // No secret configured anywhere — allow through with a warning
+  // Missing signature header → always reject (fail-closed)
+  if (!signatureHeader || !signatureHeader.startsWith("sha256=")) {
     console.warn(
-      "[Webhook] No X-Hub-Signature-256 header and WHATSAPP_APP_SECRET not set. " +
-      "Configure WHATSAPP_APP_SECRET or per-tenant App Secret to enforce signature verification."
+      "[Webhook] Missing or malformed X-Hub-Signature-256 header — rejecting. " +
+      "Ensure WHATSAPP_APP_SECRET (or per-tenant App Secret) is configured in Meta Developer settings."
     );
-    return { reject: false, reason: "no_secret_configured" };
+    return { reject: true, reason: "missing_signature" };
   }
 
-  // We have a signature header — resolve the secret to verify against
+  // Resolve the secret to verify against (fail-closed if none found)
   const phoneNumberId = extractPhoneNumberId(payload);
   let secret: string | null = null;
 
@@ -138,7 +133,7 @@ async function verifyWebhookSignature(
     secret = await lookupAppSecretByPhoneNumberId(phoneNumberId);
     if (secret) {
       console.debug(
-        `[Webhook] Using per-tenant appSecret for phoneNumberId=${phoneNumberId}`
+        `[Webhook] Verifying with per-tenant appSecret for phoneNumberId=${phoneNumberId}`
       );
     }
   }
@@ -147,27 +142,27 @@ async function verifyWebhookSignature(
   if (!secret) {
     secret = process.env.WHATSAPP_APP_SECRET ?? null;
     if (secret) {
-      console.debug("[Webhook] Using WHATSAPP_APP_SECRET fallback");
+      console.debug("[Webhook] Verifying with WHATSAPP_APP_SECRET env fallback");
     }
   }
 
+  // No secret available → cannot verify → reject (fail-closed)
   if (!secret) {
-    // Signature is present but we have no secret to verify against
-    // Allow through so operators aren't locked out during initial setup,
-    // but log a clear warning.
     console.warn(
       "[Webhook] X-Hub-Signature-256 present but no appSecret configured " +
-      `(phoneNumberId=${phoneNumberId ?? "unknown"}). Cannot verify. Set WHATSAPP_APP_SECRET.`
+      `(phoneNumberId=${phoneNumberId ?? "unknown"}) — rejecting. ` +
+      "Set WHATSAPP_APP_SECRET env var or configure App Secret in Communication settings."
     );
-    return { reject: false, reason: "no_secret_to_verify_against" };
+    return { reject: true, reason: "no_secret_configured" };
   }
 
+  // Verify the signature using timing-safe comparison
   const expected = computeSignature(rawBody, secret);
   if (!signaturesMatch(expected, signatureHeader)) {
     console.warn(
       `[Webhook] X-Hub-Signature-256 mismatch — rejecting (phoneNumberId=${phoneNumberId ?? "unknown"})`
     );
-    return { reject: true, reason: "Signature mismatch" };
+    return { reject: true, reason: "signature_mismatch" };
   }
 
   return { reject: false, reason: "ok" };
