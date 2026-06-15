@@ -8,6 +8,8 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
+import crypto from "crypto";
+import { buildOffSiteAdapterFromEnv } from "../lib/backup-scheduler.js";
 
 const execAsync = promisify(exec);
 
@@ -85,7 +87,7 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
     const dbSizeBytes = Number((dbSizeResult.rows[0] as { bytes: string }).bytes);
     const dbSizePretty = (dbSizeResult.rows[0] as { pretty: string }).pretty;
 
-    const [deletedWorkers, deletedCustomers, deletedBranches, deletedPayments, auditLogCount, idemCount, snapshotCount] = await Promise.all([
+    const [deletedWorkers, deletedCustomers, deletedBranches, deletedPayments, auditLogCount, idemCount, snapshotCount, drizzleMigrationsResult] = await Promise.all([
       db.select({ c: count() }).from(workers).where(and(eq(workers.laundryId, laundryId), isNotNull(workers.deletedAt))),
       db.select({ c: count() }).from(customers).where(and(eq(customers.laundryId, laundryId), isNotNull(customers.deletedAt))),
       db.select({ c: count() }).from(branches).where(and(eq(branches.laundryId, laundryId), isNotNull(branches.deletedAt))),
@@ -93,6 +95,7 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
       db.select({ c: count() }).from(auditLog).where(eq(auditLog.laundryId, laundryId)),
       db.select({ c: count() }).from(idempotencyKeys),
       db.select({ c: count() }).from(schemaSnapshots),
+      db.execute(sql`SELECT COUNT(*)::int as cnt FROM __drizzle_migrations`).catch(() => ({ rows: [{ cnt: 0 }] })),
     ]);
 
     const manifest = readLatestBackupManifest();
@@ -157,10 +160,15 @@ recoveryRouter.get("/readiness", requireOwner, async (req: AuthRequest, res) => 
       {
         id: "migration_tracking",
         label: "Migration tracking",
-        status: Number(snapshotCount[0].c) > 0 ? "pass" : "warn",
-        detail: Number(snapshotCount[0].c) > 0
-          ? `${Number(snapshotCount[0].c)} schema checkpoint(s) recorded`
-          : "No checkpoints yet — record one before running migrations",
+        status: Number(drizzleMigrationsResult.rows[0]?.cnt ?? 0) > 0 ? "pass" : "warn",
+        detail: (() => {
+          const appliedCount = Number(drizzleMigrationsResult.rows[0]?.cnt ?? 0);
+          const snapshotsCnt = Number(snapshotCount[0].c);
+          if (appliedCount > 0) {
+            return `${appliedCount} Drizzle migration(s) applied · ${snapshotsCnt} schema checkpoint(s)`;
+          }
+          return `No migrations applied yet — run 'pnpm db:migrate' · ${snapshotsCnt} schema checkpoint(s)`;
+        })(),
         critical: false,
       },
       {
@@ -269,8 +277,48 @@ recoveryRouter.post("/trigger-backup", requireOwner, async (req: AuthRequest, re
 
     const { stdout, stderr } = await execAsync(
       `bash "${scriptFile}" "${backupsDir}"`,
-      { timeout: 120_000, env: { ...process.env } }
+      { timeout: 180_000, env: { ...process.env } }
     );
+
+    // HMAC-sign the manifest (same as the scheduler does)
+    const manifests = fs.readdirSync(backupsDir)
+      .filter((f) => f.endsWith(".manifest.json"))
+      .sort()
+      .reverse();
+
+    let offsiteResult: { provider: string; location: string } | null = null;
+
+    if (manifests.length > 0) {
+      const manifestPath = path.join(backupsDir, manifests[0]);
+      const raw = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+
+      // Add HMAC signature
+      const secret = process.env.BACKUP_SECRET!;
+      const { hmacSignature: _existing, ...rest } = raw;
+      raw.hmacSignature = crypto.createHmac("sha256", secret).update(JSON.stringify(rest)).digest("hex");
+      raw.triggeredBy = req.auth!.email ?? `owner:${req.auth!.laundryId}`;
+      raw.triggeredAt = new Date().toISOString();
+      fs.writeFileSync(manifestPath, JSON.stringify(raw, null, 2));
+
+      // Attempt off-site upload (non-fatal if fails)
+      const adapter = buildOffSiteAdapterFromEnv();
+      if (adapter) {
+        try {
+          const backupFileName = manifests[0].replace(".manifest.json", ".sql.gz.enc");
+          const backupFilePath = path.join(backupsDir, backupFileName);
+          if (fs.existsSync(backupFilePath)) {
+            const remoteKey = `cleantrack/backups/${backupFileName}`;
+            const result = await adapter.upload(backupFilePath, remoteKey);
+            await adapter.upload(manifestPath, `cleantrack/backups/${manifests[0]}`).catch(() => {});
+            offsiteResult = { provider: result.provider, location: result.location };
+            raw.offsiteUpload = { provider: result.provider, location: result.location, uploadedAt: result.uploadedAt };
+            fs.writeFileSync(manifestPath, JSON.stringify(raw, null, 2));
+          }
+        } catch (uploadErr: any) {
+          console.warn(`[recovery/trigger-backup] Off-site upload failed: ${uploadErr.message}`);
+        }
+      }
+    }
 
     const manifest = readLatestBackupManifest();
     if (manifest) {
@@ -283,10 +331,15 @@ recoveryRouter.post("/trigger-backup", requireOwner, async (req: AuthRequest, re
       auth: req.auth!,
       laundryId: req.auth!.laundryId,
       action: "backup_triggered",
-      metadata: { file: manifest?.file, sizeBytes: manifest?.sizeBytes },
+      metadata: { file: manifest?.file, sizeBytes: manifest?.sizeBytes, offsite: offsiteResult?.provider ?? null },
     }).catch(() => {});
 
-    res.json({ success: true, output: stdout + (stderr ? `\n[stderr] ${stderr}` : ""), manifest });
+    res.json({
+      success: true,
+      output: stdout + (stderr ? `\n[stderr] ${stderr}` : ""),
+      manifest,
+      offsiteUpload: offsiteResult,
+    });
   } catch (err: any) {
     res.status(500).json({
       success: false,
@@ -303,10 +356,11 @@ recoveryRouter.post("/verify-latest", requireOwner, async (req: AuthRequest, res
       return res.status(404).json({ success: false, error: "No backups directory found" });
     }
 
-    const backupFiles = fs.readdirSync(dir)
-      .filter((f) => f.endsWith(".sql.gz"))
-      .sort()
-      .reverse();
+    // Prefer encrypted .sql.gz.enc files; fall back to legacy .sql.gz
+    const allFiles = fs.readdirSync(dir).sort().reverse();
+    const encFiles = allFiles.filter((f) => f.endsWith(".sql.gz.enc"));
+    const legacyFiles = allFiles.filter((f) => f.endsWith(".sql.gz") && !f.endsWith(".sql.gz.enc"));
+    const backupFiles = encFiles.length > 0 ? encFiles : legacyFiles;
 
     if (backupFiles.length === 0) {
       return res.status(404).json({ success: false, error: "No backup files found" });
@@ -631,7 +685,7 @@ recoveryRouter.post("/payments/:id/restore", requireOwner, async (req: AuthReque
     if (order) {
       const remaining = await db.select().from(paymentRecords)
         .where(and(eq(paymentRecords.orderId, order.id), isNull(paymentRecords.deletedAt)));
-      const newAmountPaid = remaining.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const newAmountPaid = remaining.reduce((sum: number, p: { amount: string }) => sum + parseFloat(p.amount), 0);
       const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
       const newPaymentStatus = totalDue <= 0 || newAmountPaid >= totalDue ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
       await db.update(orders).set({

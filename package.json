@@ -9,6 +9,7 @@
     "db:migrate:generate": "pnpm --filter @workspace/db generate",
     "db:migrate": "pnpm --filter @workspace/db migrate",
     "db:migrate:check": "pnpm --filter @workspace/db migrate:check",
+    "db:migrate:status": "node scripts/db-migrate-status.mjs",
     "db:backup": "bash scripts/backup.sh ./backups",
     "db:verify-backup": "bash scripts/verify-backup.sh",
     "db:restore": "bash scripts/restore.sh"
