@@ -30,7 +30,7 @@ const ENV_REQUIREMENTS: EnvRequirement[] = [
   },
   {
     key: "BACKUP_SECRET",
-    description: "Secret key for HMAC-signing backup manifests (tamper detection)",
+    description: "Secret key for AES-256 backup encryption and HMAC-signing backup manifests",
     required: true,
   },
 ];
@@ -46,11 +46,28 @@ const ENV_WARNINGS: EnvRequirement[] = [
     description: "Meta webhook verification token. Webhooks not verified if unset.",
     required: false,
   },
+  {
+    key: "WHATSAPP_APP_SECRET",
+    description: "Meta App Secret for X-Hub-Signature-256 webhook payload verification. Highly recommended in production.",
+    required: false,
+  },
+  {
+    key: "BACKUP_OFFSITE_PROVIDER",
+    description: "Off-site backup provider (r2|s3|b2). Off-site backups disabled if unset.",
+    required: false,
+  },
 ];
 
+// Off-site provider credential requirements (checked only when provider is set)
+const OFFSITE_ENV_GROUPS: Record<string, string[]> = {
+  r2: ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME"],
+  s3: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME"],
+  b2: ["B2_KEY_ID", "B2_APP_KEY", "B2_ENDPOINT", "B2_BUCKET_NAME"],
+};
+
 /**
- * Validates the environment. Throws a descriptive error (terminating the process)
- * if any required variable is missing or empty.
+ * Validates the environment. Calls process.exit(1) with a descriptive error
+ * if any required variable is missing or weak.
  *
  * Logs warnings for optional-but-recommended variables.
  */
@@ -87,7 +104,7 @@ export function validateEnvironment(): void {
     process.exit(1);
   }
 
-  // Validate JWT_SECRET strength
+  // Validate secret strength
   const jwtSecret = process.env.JWT_SECRET!;
   if (jwtSecret.length < 32) {
     console.error(
@@ -96,11 +113,10 @@ export function validateEnvironment(): void {
     process.exit(1);
   }
 
-  // Validate BACKUP_SECRET strength
   const backupSecret = process.env.BACKUP_SECRET!;
   if (backupSecret.length < 32) {
     console.error(
-      "[env] FATAL: BACKUP_SECRET is too short. Minimum 32 characters required."
+      "[env] FATAL: BACKUP_SECRET is too short. Minimum 32 characters required for AES-256."
     );
     process.exit(1);
   }
@@ -110,6 +126,28 @@ export function validateEnvironment(): void {
     const val = process.env[warn.key];
     if (!val || val.trim() === "") {
       console.warn(`[env] ⚠ WARNING: ${warn.key} not set — ${warn.description}`);
+    }
+  }
+
+  // If off-site provider is set, validate its credentials
+  const offsiteProvider = process.env.BACKUP_OFFSITE_PROVIDER?.toLowerCase();
+  if (offsiteProvider) {
+    const required = OFFSITE_ENV_GROUPS[offsiteProvider];
+    if (!required) {
+      console.warn(
+        `[env] ⚠ WARNING: Unknown BACKUP_OFFSITE_PROVIDER="${offsiteProvider}". ` +
+        `Supported: r2, s3, b2`
+      );
+    } else {
+      const missingCreds = required.filter((k) => !process.env[k]?.trim());
+      if (missingCreds.length > 0) {
+        console.warn(
+          `[env] ⚠ WARNING: BACKUP_OFFSITE_PROVIDER=${offsiteProvider} is set but ` +
+          `missing credentials: ${missingCreds.join(", ")}. Off-site backups will be skipped.`
+        );
+      } else {
+        console.log(`[env]   ✓ Off-site backup provider: ${offsiteProvider}`);
+      }
     }
   }
 

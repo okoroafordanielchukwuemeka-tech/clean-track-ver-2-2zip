@@ -13,7 +13,7 @@ Clean Track is a professional laundry operations management SaaS application wit
 ## Architecture
 - **Monorepo** managed with pnpm workspaces
 - `artifacts/api-server/` — Express + TypeScript REST API (port 3001)
-- `artifacts/clean-track/` — React + Vite frontend (port 5173)
+- `artifacts/clean-track/` — React + Vite frontend (port 5000)
 - `lib/db/` — PostgreSQL + Drizzle ORM database package
 - `lib/api-spec/` — OpenAPI 3.1 specification
 
@@ -24,12 +24,65 @@ Clean Track is a professional laundry operations management SaaS application wit
 - **Language**: TypeScript throughout
 
 ## Running the Project
-- API server: `cd artifacts/api-server && pnpm dev`
-- Frontend: `cd artifacts/clean-track && pnpm dev`
-- Database push: `cd lib/db && pnpm push`
+```bash
+pnpm dev         # starts both API server (port 3001) and frontend (port 5000)
+```
+
+## Database Workflow
+
+### Development (fast schema sync)
+```bash
+pnpm db:push     # sync schema directly to DB — use in development only
+```
+
+### Production (safe migration history)
+```bash
+pnpm db:migrate:generate   # generate a new numbered SQL migration from schema changes
+pnpm db:migrate            # apply all pending migrations (safe, with history)
+pnpm db:migrate:check      # verify schema matches current migrations
+```
+
+> **Important**: Use `db:migrate` in production, never `db:push`.
+> `db:push` can silently drop columns. Migrations create a permanent history
+> in the `__drizzle_migrations` table and are safe to replay.
+
+## Backup & Recovery
+
+### Create a backup
+```bash
+pnpm db:backup                        # creates encrypted .sql.gz.enc in ./backups/
+bash scripts/verify-backup.sh <file>  # verify integrity + decryption
+```
+
+### Restore from backup
+```bash
+bash scripts/restore.sh <file.sql.gz.enc>  # prompts for confirmation
+bash scripts/restore.sh <file> --yes       # auto-confirm (CI/CD)
+```
+
+### End-to-end backup test
+```bash
+bash scripts/test-backup-restore.sh           # tests backup + verify (non-destructive)
+bash scripts/test-backup-restore.sh --restore # also tests restore (DESTRUCTIVE)
+```
+
+### Off-site backups (Cloudflare R2)
+Set these environment variables to enable automatic encrypted R2 uploads after each backup:
+```
+BACKUP_OFFSITE_PROVIDER=r2
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET_NAME=cleantrack-backups
+```
 
 ## Required Environment Variables
-- `DATABASE_URL` — PostgreSQL connection string
+- `DATABASE_URL` — PostgreSQL connection string (set automatically by Replit)
+- `JWT_SECRET` — Token signing secret (min 32 chars)
+- `SESSION_SECRET` — Session integrity secret (min 32 chars)
+- `BACKUP_SECRET` — AES-256 backup encryption key + HMAC signing (min 32 chars)
+
+See `.env.example` for the full list of required and optional variables.
 
 ## User Preferences
 - Currency displayed in Nigerian Naira (NGN)

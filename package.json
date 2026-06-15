@@ -6,6 +6,9 @@
     "build": "pnpm --filter @workspace/api-server build && pnpm --filter @workspace/clean-track build",
     "db:push": "pnpm --filter @workspace/db push",
     "db:push-force": "pnpm --filter @workspace/db push-force",
+    "db:migrate:generate": "pnpm --filter @workspace/db generate",
+    "db:migrate": "pnpm --filter @workspace/db migrate",
+    "db:migrate:check": "pnpm --filter @workspace/db migrate:check",
     "db:backup": "bash scripts/backup.sh ./backups",
     "db:verify-backup": "bash scripts/verify-backup.sh",
     "db:restore": "bash scripts/restore.sh"
