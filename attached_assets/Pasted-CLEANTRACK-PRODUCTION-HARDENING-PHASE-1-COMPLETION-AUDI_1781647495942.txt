@@ -1,0 +1,229 @@
+CLEANTRACK PRODUCTION HARDENING PHASE 1 — COMPLETION AUDIT
+
+IMPORTANT:
+
+Do not write new code.
+
+Do not add features.
+
+This is a verification audit only.
+
+We have completed Production Hardening Phase 1.
+
+I need a complete technical review before moving to SaaS monetization and customer onboarding.
+
+Audit everything that was implemented.
+
+=================================
+
+1. PASSWORD RESET SYSTEM AUDIT
+
+Verify:
+
+- Does forgot password work from start to finish?
+- Can an owner request a reset link?
+- Is the reset email actually delivered?
+- Does the token expire?
+- Is the token stored securely?
+- Are raw tokens stored anywhere?
+- Can a token be reused after successful reset?
+- Are reset requests rate limited?
+- Can attackers discover whether an email exists?
+
+Test:
+
+Successful reset
+
+Expired token
+
+Invalid token
+
+Used token
+
+Multiple reset requests
+
+
+Provide PASS/FAIL.
+
+
+=================================
+
+2. EMAIL SYSTEM AUDIT
+
+Verify:
+
+- Which email provider is being used?
+- Are production credentials configured?
+- Are emails delivered successfully?
+- Are failures logged?
+- Are emails queued or sent directly?
+- Can the system handle many users requesting emails?
+
+Explain:
+
+Current email architecture
+
+Production risks
+
+Recommended improvements
+
+
+=================================
+
+3. ERROR MONITORING AUDIT
+
+Verify:
+
+- Are application errors captured?
+- Are database failures captured?
+- Are WhatsApp failures captured?
+- Are payment failures captured?
+- Is user/laundry context attached?
+- Can admins view errors?
+
+Test by creating a controlled test error.
+
+Confirm it is recorded.
+
+
+=================================
+
+4. LOGGING AUDIT
+
+Verify:
+
+Production logs include:
+
+- Request ID
+- Timestamp
+- Error level
+- Route
+- User ID
+- Laundry ID
+
+Check:
+
+Are important routes using the new logger?
+
+Identify remaining console.log / console.error usage.
+
+
+=================================
+
+5. DATABASE PRODUCTION SAFETY AUDIT
+
+Verify:
+
+- PostgreSQL connection pool settings
+- Maximum connections
+- Timeout handling
+- Connection recovery
+- Graceful shutdown
+
+Also audit:
+
+Database migration safety.
+
+Current system uses drizzle-kit push.
+
+Explain:
+
+Can this safely be used in production?
+
+If not:
+
+Recommend migration strategy.
+
+Do not change yet.
+
+
+=================================
+
+6. BACKUP AND RECOVERY AUDIT
+
+Verify:
+
+- Daily backups running
+- Encryption working
+- HMAC validation working
+- Backup restoration tested
+- Off-site backup readiness
+
+Test recovery process.
+
+Confirm:
+
+If Replit is completely unavailable, can CleanTrack recover?
+
+
+=================================
+
+7. SECURITY AUDIT
+
+Verify:
+
+Authentication:
+
+- Owner login
+- Worker login
+- Admin login
+
+Authorization:
+
+- Tenant isolation
+- Branch isolation
+- Permission enforcement
+
+
+Test:
+
+Attempt cross-laundry access.
+
+Attempt unauthorized API calls.
+
+Report results.
+
+
+=================================
+
+8. PRODUCTION DEPLOYMENT CHECKLIST
+
+Create a final checklist:
+
+Before first real customer:
+
+What is complete?
+
+What is missing?
+
+What must be configured manually?
+
+What decisions do I still need to make?
+
+
+=================================
+
+9. FINAL SCORE
+
+Give:
+
+Technical readiness score /100
+
+Security score /100
+
+SaaS readiness score /100
+
+Production launch recommendation:
+
+READY
+
+OR
+
+NOT READY
+
+Explain why.
+
+
+No code changes.
+
+Audit only.
