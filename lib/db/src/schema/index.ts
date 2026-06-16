@@ -29,3 +29,5 @@ export * from "./conversations.js";
 export * from "./provider-configs.js";
 export * from "./subscription-logs.js";
 export * from "./message-queue.js";
+export * from "./password-reset-tokens.js";
+export * from "./error-log.js";

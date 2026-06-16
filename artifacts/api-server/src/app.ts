@@ -1,6 +1,7 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import crypto from "crypto";
 import { router } from "./routes/index.js";
 import { versionMiddleware } from "./middleware/version.js";
 import {
@@ -10,7 +11,11 @@ import {
   adminLimiter,
   ownerLimiter,
   recoveryLimiter,
+  passwordResetLimiter,
 } from "./lib/rate-limiter.js";
+import { trackError } from "./lib/error-tracker.js";
+import { logError } from "./lib/logger.js";
+import type { AuthRequest } from "./middleware/auth.js";
 
 const app = express();
 
@@ -18,6 +23,13 @@ const app = express();
 // Required for req.ip to return the real client IP (not ::1/::ffff:127.0.0.1)
 // and for express-rate-limit v8 to generate keys correctly.
 app.set("trust proxy", 1);
+
+// ── Phase D: Request ID middleware ────────────────────────────────────────
+// Attach a unique request ID to every request for log correlation.
+app.use((req: AuthRequest & { requestId?: string }, _res: Response, next: NextFunction) => {
+  req.requestId = crypto.randomUUID();
+  next();
+});
 
 // ── Security headers (Phase A) ────────────────────────────────────────────
 // helmet sets: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection,
@@ -68,11 +80,15 @@ app.use(express.json({ limit: "1mb" }));
 // ── Version middleware ────────────────────────────────────────────────────
 app.use(versionMiddleware);
 
-// ── Per-route rate limiters (Phase E) ─────────────────────────────────────
+// ── Per-route rate limiters ───────────────────────────────────────────────
 // Applied before the router so limits cover all matching paths.
 
 // Auth endpoints: strict brute-force protection
 app.use("/api/auth", authLimiter);
+
+// Password reset: separate stricter limiter to protect email budget
+app.use("/api/auth/forgot-password", passwordResetLimiter);
+app.use("/api/auth/reset-password", passwordResetLimiter);
 
 // Admin endpoints: internal only, tightest limits
 app.use("/api/admin", adminLimiter);
@@ -95,5 +111,49 @@ app.use("/api", apiLimiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────
 app.use("/api", router);
+
+// ── Phase C: Global error handler middleware ──────────────────────────────
+// Must be defined AFTER all routes (Express requires 4-arg error handlers).
+// Catches any error thrown or passed to next(err) from route handlers.
+// Never leaks internal details to clients.
+app.use(
+  (
+    err: Error,
+    req: AuthRequest & { requestId?: string },
+    res: Response,
+    _next: NextFunction
+  ) => {
+    const statusCode = (err as any).status ?? (err as any).statusCode ?? 500;
+    const requestId = req.requestId;
+    const laundryId = req.auth?.laundryId;
+
+    logError("[global-error-handler] Unhandled error", err, {
+      requestId,
+      laundryId,
+      endpoint: req.path,
+      method: req.method,
+      statusCode,
+    });
+
+    // Persist to error_log table (non-blocking)
+    trackError(err, {
+      requestId,
+      laundryId,
+      endpoint: req.path,
+      method: req.method,
+      statusCode,
+    }).catch(() => {});
+
+    if (res.headersSent) return;
+
+    res.status(statusCode).json({
+      error:
+        statusCode < 500
+          ? err.message
+          : "An unexpected error occurred. Our team has been notified.",
+      ...(requestId ? { requestId } : {}),
+    });
+  }
+);
 
 export default app;

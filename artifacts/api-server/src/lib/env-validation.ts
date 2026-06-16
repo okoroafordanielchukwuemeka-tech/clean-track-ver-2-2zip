@@ -1,5 +1,5 @@
 /**
- * Phase D — Environment Validation
+ * Phase A — Environment Validation
  *
  * Validates all required environment variables at startup.
  * The server MUST NOT start if any required variable is missing.
@@ -24,11 +24,6 @@ const ENV_REQUIREMENTS: EnvRequirement[] = [
     required: true,
   },
   {
-    key: "SESSION_SECRET",
-    description: "Secret key for session integrity and future session-store signing",
-    required: true,
-  },
-  {
     key: "BACKUP_SECRET",
     description: "Secret key for AES-256 backup encryption and HMAC-signing backup manifests",
     required: true,
@@ -37,8 +32,18 @@ const ENV_REQUIREMENTS: EnvRequirement[] = [
 
 const ENV_WARNINGS: EnvRequirement[] = [
   {
+    key: "SESSION_SECRET",
+    description: "Reserved for future session-store signing. Not currently used but recommended.",
+    required: false,
+  },
+  {
     key: "ALLOWED_ORIGINS",
     description: "Comma-separated list of allowed CORS origins. All origins allowed if unset — NOT safe for production.",
+    required: false,
+  },
+  {
+    key: "SMTP_HOST",
+    description: "SMTP server for password reset emails. Password reset emails will not be sent if unset.",
     required: false,
   },
   {
@@ -73,6 +78,17 @@ const OFFSITE_ENV_GROUPS: Record<string, string[]> = {
  */
 export function validateEnvironment(): void {
   console.log("[env] Validating environment variables...");
+
+  // ── Phase A: NODE_ENV check ───────────────────────────────────────────
+  const nodeEnv = process.env.NODE_ENV;
+  if (!nodeEnv) {
+    console.warn(
+      "[env] ⚠ WARNING: NODE_ENV is not set. " +
+      "Set NODE_ENV=production in your deployment environment to activate all production security checks."
+    );
+  } else {
+    console.log(`[env]   ✓ NODE_ENV=${nodeEnv}`);
+  }
 
   const missing: string[] = [];
 
@@ -154,7 +170,8 @@ export function validateEnvironment(): void {
   const isProduction = process.env.NODE_ENV === "production";
   if (isProduction && !process.env.ALLOWED_ORIGINS) {
     console.error(
-      "[env] FATAL: ALLOWED_ORIGINS must be set in production. CORS will accept all origins otherwise."
+      "[env] FATAL: ALLOWED_ORIGINS must be set in production. " +
+      "Set it to your deployed frontend domain, e.g.: https://cleantrack.replit.app"
     );
     process.exit(1);
   }

@@ -1,0 +1,323 @@
+CLEANTRACK PRODUCTION HARDENING PHASE 1
+
+IMPORTANT:
+
+We are transitioning CleanTrack from MVP/testing stage into a real commercial SaaS product.
+
+Do not build new business features.
+
+Do not modify existing workflows unless required for security or production stability.
+
+Before making changes:
+
+1. Audit the current implementation.
+2. Identify exactly what already exists.
+3. Create an implementation plan.
+4. Only then write code.
+
+Goal:
+
+Make CleanTrack safe and stable for real paying laundry businesses.
+
+=================================
+
+PHASE A — Production Environment Configuration
+
+Audit and fix:
+
+1. NODE_ENV configuration
+
+Verify:
+
+- Development mode
+- Production mode
+- Deployment behavior
+
+Ensure production correctly runs:
+
+NODE_ENV=production
+
+Verify security checks actually activate.
+
+---------------------------------
+
+2. ALLOWED_ORIGINS
+
+Audit current CORS configuration.
+
+Implement production-safe configuration.
+
+Requirements:
+
+Development:
+- Allow local development
+
+Production:
+- Only allow the deployed CleanTrack domain
+
+Example:
+
+https://cleantrack.replit.app
+
+Do not allow wildcard origins in production.
+
+Test:
+
+- Valid frontend request succeeds
+- Unknown origin is rejected
+
+
+=================================
+
+PHASE B — Password Recovery System
+
+Currently owners can permanently lose access if they forget passwords.
+
+Implement a secure password reset system.
+
+Requirements:
+
+Owner clicks:
+
+"Forgot Password"
+
+↓
+
+Enter email
+
+↓
+
+Receive reset link
+
+↓
+
+Create new password
+
+↓
+
+Login normally
+
+
+Security requirements:
+
+- Token must expire
+- Token must be single-use
+- Store hashed reset tokens
+- Never store raw reset tokens
+- Rate limit reset requests
+- Prevent email enumeration attacks
+
+
+Create:
+
+password_reset_tokens table
+
+
+Test:
+
+Successful reset
+
+Expired token
+
+Used token
+
+Invalid token
+
+Multiple requests
+
+
+=================================
+
+PHASE C — Production Error Monitoring
+
+Current issue:
+
+Production errors are only visible in logs.
+
+Implement proper error monitoring.
+
+Requirements:
+
+Add production error tracking.
+
+Capture:
+
+- Backend exceptions
+- Failed API requests
+- Database failures
+- WhatsApp failures
+- Payment failures
+
+
+Include:
+
+- Error timestamp
+- User/laundry context
+- Endpoint
+- Stack trace
+
+
+Do not expose sensitive customer data.
+
+
+=================================
+
+PHASE D — Structured Logging
+
+Audit existing logger.
+
+Improve production logs.
+
+Requirements:
+
+Every important request should include:
+
+- Request ID
+- Timestamp
+- Severity level
+- Route
+- User ID if available
+- Laundry ID if available
+
+
+Replace random console logging where appropriate.
+
+
+Levels:
+
+INFO
+
+WARNING
+
+ERROR
+
+
+=================================
+
+PHASE E — Database Production Tuning
+
+Audit PostgreSQL connection handling.
+
+Current:
+
+Default pg pool settings.
+
+Improve for production.
+
+Configure:
+
+- Maximum connections
+- Idle timeout
+- Connection timeout
+- Error handling
+
+
+Ensure:
+
+- No connection leaks
+- Graceful shutdown
+- Database reconnect handling
+
+
+=================================
+
+PHASE F — Backup Improvement
+
+Current:
+
+Backups exist but are local only.
+
+Prepare production backup strategy.
+
+Implement:
+
+Off-site backup support.
+
+Recommended:
+
+Cloudflare R2 OR AWS S3
+
+Requirements:
+
+- Daily automated backup
+- Encrypted backup files
+- Backup verification
+- Failure alerts
+
+
+Do not delete existing backup system.
+
+
+=================================
+
+PHASE G — Security Verification
+
+After implementation run a complete security test.
+
+Verify:
+
+Authentication
+
+- Owner login works
+- Worker login works
+- Invalid tokens rejected
+
+
+Authorization:
+
+Worker cannot access other laundries.
+
+Laundry A cannot access Laundry B data.
+
+
+API:
+
+Test:
+
+- Unauthorized requests
+- Invalid inputs
+- Rate limits
+
+
+Database:
+
+Confirm:
+
+- No data loss
+- No schema corruption
+
+
+=================================
+
+PHASE H — Production Readiness Report
+
+After completing everything provide:
+
+1. Changes made
+
+2. Files modified
+
+3. Security improvements
+
+4. Tests performed
+
+5. Failed tests
+
+6. Remaining risks
+
+7. Production readiness score
+
+8. What should be done next before launch
+
+
+IMPORTANT:
+
+Do not start:
+
+- Payment integration
+- Paystack
+- Flutterwave
+- Subscription billing
+- Demo environment
+
+until this phase is completed and verified.

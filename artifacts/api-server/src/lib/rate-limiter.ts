@@ -33,6 +33,26 @@ export const authLimiter = rateLimit({
 });
 
 /**
+ * Password reset: 5 requests per 15 minutes per IP.
+ * Prevents email enumeration abuse and protects the email sending budget.
+ */
+export const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: RATE_LIMIT_HEADERS,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  message: {
+    error: "Too many password reset requests. Please wait 15 minutes before trying again.",
+    retryAfter: 15 * 60,
+  },
+  handler: (req, res, _next, options) => {
+    console.warn(`[rate-limit] Password reset limit hit: ${req.ip}`);
+    res.status(429).json(options.message);
+  },
+});
+
+/**
  * General API: all authenticated business endpoints.
  * 300 requests per minute per IP.
  * Allows normal worker/owner usage while blocking scripted abuse.
