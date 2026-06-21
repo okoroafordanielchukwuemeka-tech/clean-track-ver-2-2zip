@@ -20,6 +20,13 @@ export const laundries = pgTable("laundries", {
   standardTurnaroundHours: integer("standard_turnaround_hours").notNull().default(72),
   expressTurnaroundHours: integer("express_turnaround_hours").notNull().default(24),
   premiumTurnaroundHours: integer("premium_turnaround_hours").notNull().default(48),
+  // ── Auth security fields ─────────────────────────────────────────────────
+  // Track failed login attempts for per-account lockout (complements IP rate limiting)
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
+  // Used to invalidate all existing tokens when password changes
+  passwordChangedAt: timestamp("password_changed_at"),
+  // ── Business settings ────────────────────────────────────────────────────
   businessProfile: jsonb("business_profile").$type<{
     whatsapp?: string;
     address?: string;

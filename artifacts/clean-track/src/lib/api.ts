@@ -104,6 +104,15 @@ export const api = {
     ownerLogin: (data: OwnerLoginInput) => request<AuthResponse>("POST", "/auth/owner-login", data),
     workerLogin: (data: WorkerLoginInput) => request<WorkerAuthResponse>("POST", "/auth/worker-login", data),
     me: () => request<AuthUser>("GET", "/auth/me"),
+    forgotPassword: (email: string) =>
+      request<{ message: string }>("POST", "/auth/forgot-password", { email }),
+    resetPassword: (token: string, newPassword: string) =>
+      request<{ message: string }>("POST", "/auth/reset-password", { token, newPassword }),
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<{ message: string; token: string }>("POST", "/auth/change-password", {
+        currentPassword,
+        newPassword,
+      }),
   },
   branches: {
     list: () => request<import("@/context/branch-context").Branch[]>("GET", "/branches"),

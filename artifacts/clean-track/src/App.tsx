@@ -23,6 +23,8 @@ import SettingsPage from "@/pages/settings";
 import WorkerStation from "@/pages/worker";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import WorkerLogin from "@/pages/worker-login";
 import NotFound from "@/pages/not-found";
 import DiscountApprovals from "@/pages/discount-approvals";
@@ -80,6 +82,8 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/worker-login" element={<WorkerLogin />} />
               <Route path="/demo-access" element={<DemoLogin />} />
 

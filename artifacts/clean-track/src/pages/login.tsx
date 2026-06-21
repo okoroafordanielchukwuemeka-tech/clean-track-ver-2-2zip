@@ -138,6 +138,12 @@ export default function Login() {
             </form>
 
             <div className="mt-6 space-y-3 text-center text-sm">
+              <Link
+                to="/forgot-password"
+                className="block text-slate-400 hover:text-blue-400 transition-colors"
+              >
+                Forgot your password?
+              </Link>
               <p className="text-slate-400">
                 New laundry business?{" "}
                 <Link to="/signup" className="text-blue-400 hover:text-blue-300 font-medium">
