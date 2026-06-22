@@ -24,11 +24,16 @@ interface MailOptions {
   text: string;
 }
 
+function getSmtpPass(): string | undefined {
+  // Support Resend integration: RESEND_API_KEY doubles as the SMTP password
+  return process.env.SMTP_PASS || process.env.RESEND_API_KEY;
+}
+
 function isSmtpConfigured(): boolean {
   return !!(
     process.env.SMTP_HOST &&
     process.env.SMTP_USER &&
-    process.env.SMTP_PASS
+    getSmtpPass()
   );
 }
 
@@ -39,7 +44,7 @@ function createTransport() {
     secure: parseInt(process.env.SMTP_PORT || "587", 10) === 465,
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      pass: getSmtpPass(),
     },
   });
 }
