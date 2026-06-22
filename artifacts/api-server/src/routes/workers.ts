@@ -101,9 +101,12 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid worker ID" });
     const data = workerUpdateSchema.parse(req.body);
-    const updatePayload: typeof data & { pin?: string } = { ...data };
+    const updatePayload: typeof data & { pin?: string; failedPinAttempts?: number; pinLockedUntil?: null } = { ...data };
     if (data.pin) {
       updatePayload.pin = await bcrypt.hash(data.pin, 12);
+      // PIN reset by owner clears any active lockout
+      updatePayload.failedPinAttempts = 0;
+      updatePayload.pinLockedUntil = null;
     }
     const [worker] = await db.update(workers)
       .set({ ...updatePayload, updatedAt: new Date() })

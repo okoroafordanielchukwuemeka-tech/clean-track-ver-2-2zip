@@ -282,20 +282,105 @@ authRouter.post("/worker-login", async (req, res) => {
       return res.status(401).json({ error: "Invalid phone number or PIN" });
     }
 
-    let worker = null;
-    for (const w of allMatching) {
+    const now = new Date();
+
+    // ── Separate locked vs unlocked accounts ──────────────────────────
+    const lockedWorkers = allMatching.filter(
+      (w) => w.pinLockedUntil && w.pinLockedUntil > now
+    );
+    const unlockedWorkers = allMatching.filter(
+      (w) => !w.pinLockedUntil || w.pinLockedUntil <= now
+    );
+
+    // ── Try PIN against every unlocked worker (bcrypt only — no plaintext) ─
+    let matchedWorker = null;
+    const triedWorkers: typeof allMatching = [];
+
+    for (const w of unlockedWorkers) {
       if (!w.pin) continue;
-      const isHashed = w.pin.startsWith("$2");
-      const valid = isHashed
-        ? await bcrypt.compare(data.pin, w.pin)
-        : w.pin === data.pin;
+      triedWorkers.push(w);
+      const valid = await bcrypt.compare(data.pin, w.pin);
       if (valid) {
-        worker = w;
+        matchedWorker = w;
         break;
       }
     }
 
-    if (!worker || !worker.laundryId) {
+    if (!matchedWorker) {
+      // ── PIN did not match any unlocked worker ──────────────────────
+      if (triedWorkers.length > 0) {
+        // Increment failed attempt counter; lock if threshold reached
+        let anyJustLocked = false;
+        let attemptsLeftAfter = MAX_FAILED_ATTEMPTS;
+
+        for (const w of triedWorkers) {
+          const newAttempts = (w.failedPinAttempts ?? 0) + 1;
+          const shouldLock = newAttempts >= MAX_FAILED_ATTEMPTS;
+          if (shouldLock) anyJustLocked = true;
+
+          await db
+            .update(workers)
+            .set({
+              failedPinAttempts: newAttempts,
+              pinLockedUntil: shouldLock
+                ? new Date(now.getTime() + LOCKOUT_DURATION_MS)
+                : null,
+              updatedAt: now,
+            })
+            .where(eq(workers.id, w.id));
+
+          if (shouldLock) {
+            warn("[auth] Worker PIN account locked after failed attempts", {
+              workerId: w.id,
+              attempts: newAttempts,
+            });
+          }
+
+          // Report attempts remaining based on the first tried worker
+          if (w === triedWorkers[0]) {
+            attemptsLeftAfter = MAX_FAILED_ATTEMPTS - newAttempts;
+          }
+        }
+
+        if (anyJustLocked) {
+          return res.status(401).json({
+            error: `Too many failed attempts. Account locked for ${LOCKOUT_DURATION_MS / 60_000} minutes.`,
+            locked: true,
+          });
+        }
+
+        return res.status(401).json({
+          error: `Invalid phone number or PIN. ${attemptsLeftAfter} attempt${attemptsLeftAfter !== 1 ? "s" : ""} remaining before lockout.`,
+        });
+      }
+
+      // ── All matching workers are locked — report earliest unlock time ─
+      if (lockedWorkers.length > 0) {
+        const earliest = lockedWorkers.reduce(
+          (min, w) => (w.pinLockedUntil! < min ? w.pinLockedUntil! : min),
+          lockedWorkers[0].pinLockedUntil!
+        );
+        const remaining = Math.ceil((earliest.getTime() - now.getTime()) / 60_000);
+        return res.status(401).json({
+          error: `Account temporarily locked due to too many failed attempts. Try again in ${remaining} minute${remaining !== 1 ? "s" : ""}.`,
+          locked: true,
+          lockedUntil: earliest.toISOString(),
+        });
+      }
+
+      // No worker had a PIN set
+      return res.status(401).json({ error: "Invalid phone number or PIN" });
+    }
+
+    // ── Successful login — reset failure counters ──────────────────────
+    await db
+      .update(workers)
+      .set({ failedPinAttempts: 0, pinLockedUntil: null, updatedAt: now })
+      .where(eq(workers.id, matchedWorker.id));
+
+    const worker = matchedWorker;
+
+    if (!worker.laundryId) {
       return res.status(401).json({ error: "Invalid phone number or PIN" });
     }
 
