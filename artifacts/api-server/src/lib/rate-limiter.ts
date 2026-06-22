@@ -15,6 +15,7 @@ const SKIP_SUCCESSFUL_REQUESTS = false;
  * Auth endpoints: login, signup, PIN entry.
  * 10 attempts per 15 minutes per IP.
  * Blocks brute-force attacks on owner passwords and worker PINs.
+ * Skips read-only session endpoints (e.g. /me) that are already JWT-protected.
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -22,6 +23,7 @@ export const authLimiter = rateLimit({
   standardHeaders: RATE_LIMIT_HEADERS,
   legacyHeaders: false,
   skipSuccessfulRequests: SKIP_SUCCESSFUL_REQUESTS,
+  skip: (req) => req.path === "/me",
   message: {
     error: "Too many login attempts. Please wait 15 minutes before trying again.",
     retryAfter: 15 * 60,

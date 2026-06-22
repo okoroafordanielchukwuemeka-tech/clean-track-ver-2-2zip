@@ -13,6 +13,7 @@ export const workers = pgTable("workers", {
   isActive: boolean("is_active").notNull().default(true),
   failedPinAttempts: integer("failed_pin_attempts").notNull().default(0),
   pinLockedUntil: timestamp("pin_locked_until"),
+  pinChangedAt: timestamp("pin_changed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),

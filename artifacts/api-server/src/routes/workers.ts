@@ -82,7 +82,9 @@ workersRouter.post("/", requireOwner, requireOperational, requirePlanLimit("work
     const laundryId = req.auth!.laundryId;
     const data = workerInputSchema.parse(req.body);
     const pinHash = await bcrypt.hash(data.pin, 12);
-    const [worker] = await db.insert(workers).values({ ...data, pin: pinHash, laundryId }).returning();
+    // Truncate to second boundary to match JWT iat precision
+    const pinChangedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+    const [worker] = await db.insert(workers).values({ ...data, pin: pinHash, pinChangedAt, laundryId }).returning();
 
     const defaults = data.role === "admin" ? ADMIN_DEFAULT_PERMISSIONS : WORKER_DEFAULT_PERMISSIONS;
     await db.insert(workerPermissions).values({ workerId: worker.id, laundryId, ...defaults });
@@ -101,9 +103,11 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid worker ID" });
     const data = workerUpdateSchema.parse(req.body);
-    const updatePayload: typeof data & { pin?: string; failedPinAttempts?: number; pinLockedUntil?: null } = { ...data };
+    const updatePayload: typeof data & { pin?: string; failedPinAttempts?: number; pinLockedUntil?: null; pinChangedAt?: Date } = { ...data };
     if (data.pin) {
       updatePayload.pin = await bcrypt.hash(data.pin, 12);
+      // Truncate to second boundary to match JWT iat precision
+      updatePayload.pinChangedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
       // PIN reset by owner clears any active lockout
       updatePayload.failedPinAttempts = 0;
       updatePayload.pinLockedUntil = null;

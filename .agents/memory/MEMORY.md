@@ -28,3 +28,4 @@
 - [Plan Limit Enforcement](plan-limit-enforcement.md) — usage-service.ts computes live DB truth; requirePlanLimit() on POST /orders|workers|branches; 12 usage alert rules in alert-engine; GET /subscription/usage; Settings Billing tab; admin TenantsTab usage bars + sort
 - [Worker Operational Messaging](worker-operational-messaging.md) — 3 worker-accessible endpoints on /orders router; messages query JOINs notificationEvents to filter by orderId; Order.status type lacks "cancelled" so never compare against it
 - [Pre-launch Hardening](pre-launch-hardening.md) — express-rate-limit v8 requires app.set("trust proxy",1) before limiters; SESSION_SECRET is a Replit Secret (not env var); BACKUP_SECRET stored as shared env var; api.health.production() added to api.ts
+- [Worker Token Invalidation](worker-token-invalidation.md) — DB lookup required in requireAuth (async); pure-JWT iat vs pinChangedAt comparison is circular; authLimiter skips /me endpoint

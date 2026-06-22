@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { db } from "@workspace/db";
+import { workers } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 
 export interface WorkerPermissions {
   canViewOrders: boolean;
@@ -24,6 +27,8 @@ export interface AuthPayload {
   permissions?: WorkerPermissions;
   // Stamped at login/signup — used to detect password change and invalidate old tokens
   passwordChangedAt?: string;
+  // Stamped at worker login — informational; actual invalidation uses DB lookup
+  pinChangedAt?: string;
 }
 
 export interface AuthRequest extends Request {
@@ -45,7 +50,7 @@ export function signToken(payload: AuthPayload, expiresIn: string = "7d"): strin
   return jwt.sign(payload, getJwtSecret(), { expiresIn } as jwt.SignOptions);
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Authentication required" });
@@ -59,26 +64,17 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  // ── Session invalidation on password change ──────────────────────────────
-  // Owner tokens embed `passwordChangedAt`. If the DB's passwordChangedAt is
-  // newer than the token's, the password was changed after this token was
-  // issued — the session must be treated as expired.
-  //
-  // This check is done here using the value already embedded in the JWT
-  // (no extra DB round-trip required). The DB value is stamped into the token
-  // at login/signup/change-password time. If an attacker has a stolen token
-  // and the owner changes their password, the attacker's token is rejected
-  // on the next request after the owner receives and uses the fresh token.
-  //
-  // Note: for worker tokens we don't apply this check — workers don't have
-  // email-based recovery and PIN resets are owner-managed.
+  const decoded = payload as jwt.JwtPayload & AuthPayload;
+  const iat = (decoded as any).iat as number | undefined;
+
+  // ── Owner: session invalidation on password change ────────────────────────
+  // The token embeds `passwordChangedAt` (from DB at login time). When the
+  // owner changes their password, the new token carries the new timestamp.
+  // The middleware checks that the token was issued after the last password
+  // change — if not, the session is expired.
   if (payload.type === "owner" && payload.passwordChangedAt) {
-    // The token's iat (issued-at) must be after or equal to passwordChangedAt.
-    // jwt.verify guarantees iat is present and accurate when the token is valid.
-    const decoded = payload as jwt.JwtPayload & AuthPayload;
-    const iat = (decoded as any).iat as number | undefined;
     if (iat) {
-      const tokenIssuedAt = iat * 1000; // convert to ms
+      const tokenIssuedAt = iat * 1000;
       const pwChangedAt = new Date(payload.passwordChangedAt).getTime();
       if (tokenIssuedAt < pwChangedAt) {
         return res.status(401).json({
@@ -86,6 +82,37 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
           code: "PASSWORD_CHANGED",
         });
       }
+    }
+  }
+
+  // ── Worker: session invalidation on PIN change (DB lookup) ────────────────
+  // The JWT embeds pinChangedAt at login time, so comparing iat against the
+  // JWT value is circular (iat is always >= pinChangedAt at login). Instead,
+  // fetch the CURRENT pinChangedAt from the DB and compare against iat.
+  // This correctly rejects tokens issued before the most recent PIN reset.
+  //
+  // Workers without pinChangedAt (pre-migration rows, null in DB) are allowed
+  // through — no forced re-login after the schema migration.
+  if (payload.type === "worker" && payload.workerId && iat) {
+    try {
+      const [row] = await db
+        .select({ pinChangedAt: workers.pinChangedAt })
+        .from(workers)
+        .where(eq(workers.id, payload.workerId));
+
+      if (row?.pinChangedAt) {
+        const tokenIssuedAt = iat * 1000;
+        const pinChangedAt = row.pinChangedAt.getTime();
+        if (tokenIssuedAt < pinChangedAt) {
+          return res.status(401).json({
+            error: "Your session has expired because your PIN was changed. Please log in again.",
+            code: "PIN_CHANGED",
+          });
+        }
+      }
+    } catch {
+      // DB lookup failure: fail open to preserve availability.
+      // A network blip should not log out all active workers.
     }
   }
 

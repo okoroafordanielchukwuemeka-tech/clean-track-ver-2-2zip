@@ -418,6 +418,7 @@ authRouter.post("/worker-login", async (req, res) => {
         branchId: worker.branchId ?? undefined,
         name: worker.name,
         permissions,
+        pinChangedAt: worker.pinChangedAt?.toISOString(),
       },
       "12h"
     );
