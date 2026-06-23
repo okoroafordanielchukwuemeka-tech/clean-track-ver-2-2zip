@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { WashingMachine, Eye, EyeOff } from "lucide-react";
+import { WashingMachine, Eye, EyeOff, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -111,12 +111,19 @@ export default function Login() {
                   Create your workspace
                 </Link>
               </p>
-              <div className="border-t border-slate-700 pt-3">
+              <div className="border-t border-slate-700 pt-3 space-y-2">
                 <Link
                   to="/worker-login"
-                  className="text-slate-500 hover:text-slate-300 transition-colors"
+                  className="block text-slate-500 hover:text-slate-300 transition-colors"
                 >
                   Worker? Sign in with phone & PIN →
+                </Link>
+                <Link
+                  to="/demo-access"
+                  className="flex items-center justify-center gap-2 text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
+                >
+                  <FlaskConical className="h-3.5 w-3.5" />
+                  Try the demo — no account needed
                 </Link>
               </div>
             </div>

@@ -378,8 +378,23 @@ export default function Customers() {
                 ))}
                 {!customers.length && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
-                      {search ? "No customers match your search" : "No customers yet. Click \"Sync Orders\" to import from existing orders."}
+                    <TableCell colSpan={9}>
+                      {search ? (
+                        <div className="text-center py-10 text-sm text-muted-foreground">
+                          No customers match your search.
+                        </div>
+                      ) : (
+                        <div className="text-center py-14 space-y-3">
+                          <Users className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                          <div>
+                            <p className="font-medium text-foreground">No customers yet</p>
+                            <p className="text-sm text-muted-foreground mt-1">Adding your first customer takes less than 30 seconds.</p>
+                          </div>
+                          <Button size="sm" onClick={() => setShowCreate(true)}>
+                            Add Your First Customer
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 )}

@@ -1,0 +1,236 @@
+CLEANTRACK CUSTOMER ACTIVATION WORKFLOW AUDIT + IMPROVEMENT
+
+IMPORTANT:
+
+The goal now is to make CleanTrack ready for the first 100 real users.
+
+Do not build payment gateway yet.
+
+Before Paystack integration, optimize the complete customer journey:
+
+SIGNUP → SETUP → FIRST ORDER → DAILY USAGE → RETENTION
+
+Perform a complete audit of the new owner experience.
+
+Do not assume anything works.
+
+Test as a brand new laundry owner.
+
+Create a fresh account and document every step.
+
+Audit:
+
+1. Signup Experience
+
+Check:
+
+* Is signup simple?
+* Does the owner know what happens next?
+* Are there unnecessary steps?
+* Is the first dashboard experience clear?
+
+After signup:
+
+The owner should immediately understand:
+
+"Here are the next steps to start managing my laundry."
+
+2. First-Time Setup Flow
+
+Audit whether a new owner can easily complete:
+
+Create branch
+↓
+Add services
+↓
+Add workers
+↓
+Add first customer
+↓
+Create first order
+
+Identify:
+
+* hidden setup requirements
+* confusing navigation
+* empty states
+* missing guidance
+
+Implement a Getting Started checklist.
+
+Example:
+
+Welcome to CleanTrack 👋
+
+Complete your setup:
+
+✅ Create your first branch
+
+⬜ Add your laundry services
+
+⬜ Add your first worker
+
+⬜ Add your first customer
+
+⬜ Create your first order
+
+Each item should link directly to the required action.
+
+3. Default Branch Creation
+
+Audit signup flow.
+
+Determine:
+
+Does every new owner automatically get a default branch?
+
+If not:
+
+Implement automatic creation of:
+
+"Main Branch"
+
+during signup.
+
+Reason:
+
+A new owner should not hit an empty system after registration.
+
+4. Default Services Experience
+
+Audit:
+
+Can a new owner create an order immediately?
+
+Check:
+
+* Is the service list empty?
+* Does the owner need manual setup before seeing value?
+
+Implement one of these:
+
+Option A:
+Seed common laundry services automatically.
+
+Example:
+
+Shirt Wash
+Trouser Wash
+Suit Cleaning
+Dry Cleaning
+Express Wash
+
+OR
+
+Option B:
+Show a guided "Add your first services" flow.
+
+Choose the option that creates the fastest time-to-value.
+
+5. Empty States
+
+Audit every major page:
+
+Dashboard
+Orders
+Customers
+Workers
+Services
+Reports
+
+Replace empty screens with helpful guidance.
+
+Example:
+
+"No customers yet"
+
+Instead:
+
+"Your first customer takes less than 30 seconds.
+
+[Add Customer]"
+
+6. First Order Experience
+
+Test:
+
+Create customer
+Create order
+Add services
+Add payment
+Generate receipt
+Complete workflow
+
+Check:
+
+* number of clicks
+* confusing steps
+* errors
+* mobile experience
+
+Goal:
+
+A new owner should create their first order within 5 minutes of signup.
+
+7. Demo Experience
+
+Improve demo access:
+
+Add:
+
+* Demo button on login page
+* Visible Demo Mode banner
+* Explanation that data is sample data
+
+8. Mobile Testing
+
+Because many African businesses use phones.
+
+Test:
+
+* signup
+* dashboard
+* creating orders
+* adding customers
+* worker management
+
+Verify:
+
+* buttons are visible
+* forms work
+* no horizontal scrolling
+
+9. Analytics
+
+Track activation events:
+
+Record:
+
+* signup completed
+* branch created
+* first service added
+* first customer created
+* first order created
+* first payment recorded
+
+This will help measure onboarding success.
+
+Provide final report:
+
+1. Current activation score /100
+
+2. Biggest user friction points
+
+3. Changes implemented
+
+4. Screenshots before and after
+
+5. Time-to-first-order before and after
+
+6. Remaining onboarding risks
+
+7. Confirm readiness for first 100 users
+
+Do not implement Paystack yet.
+
+The goal is reducing customer confusion and making CleanTrack addictive through a smooth daily workflow.

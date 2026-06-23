@@ -2,6 +2,8 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   laundries,
+  branches,
+  services,
   workers,
   workerPermissions,
   expenseCategories,
@@ -78,6 +80,27 @@ function hashToken(raw: string): string {
 }
 
 async function seedLaundryDefaults(laundryId: number) {
+  // Auto-create a default "Main Branch" so new owners are never on an empty system
+  await db
+    .insert(branches)
+    .values({ laundryId, name: "Main Branch" })
+    .onConflictDoNothing();
+
+  // Seed common Nigerian laundry services with NGN pricing
+  await db
+    .insert(services)
+    .values([
+      { laundryId, name: "Shirt Wash & Iron", category: "Washing", standardPrice: "800", expressPrice: "1200", premiumPrice: "1500" },
+      { laundryId, name: "Trouser Wash & Iron", category: "Washing", standardPrice: "1000", expressPrice: "1500", premiumPrice: "2000" },
+      { laundryId, name: "Suit Cleaning", category: "Dry Cleaning", standardPrice: "3500", expressPrice: "5000", premiumPrice: "6500" },
+      { laundryId, name: "Dress / Gown Cleaning", category: "Washing", standardPrice: "2000", expressPrice: "3000", premiumPrice: "4000" },
+      { laundryId, name: "Duvet / Bedsheet Wash", category: "Heavy Items", standardPrice: "3000", expressPrice: "4500", premiumPrice: "6000" },
+      { laundryId, name: "Shoe Cleaning", category: "Specialty", standardPrice: "1500", expressPrice: "2500", premiumPrice: "3500" },
+      { laundryId, name: "Dry Cleaning", category: "Dry Cleaning", standardPrice: "2500", expressPrice: "4000", premiumPrice: "5500" },
+      { laundryId, name: "Express Wash", category: "Washing", standardPrice: "1200", expressPrice: "2000", premiumPrice: "2500" },
+    ])
+    .onConflictDoNothing();
+
   await db
     .insert(expenseCategories)
     .values(

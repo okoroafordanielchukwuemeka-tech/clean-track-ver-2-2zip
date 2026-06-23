@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type AnalyticsPeriod } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
+import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
   FlaskConical, XCircle, AlertCircle, Hourglass,
 } from "lucide-react";
 import { type SubscriptionStatus } from "@/lib/api";
+import { GettingStartedChecklist } from "@/components/getting-started-checklist";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
@@ -213,6 +215,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function Dashboard() {
   const [period, setPeriod] = useState<AnalyticsPeriod>("7d");
   const { activeBranchId, activeBranch } = useBranch();
+  const { user } = useAuth();
+  const isDemo = user?.email === "demo@cleantrack.ng";
 
   const { data: full, isLoading } = useQuery({
     queryKey: ["analytics", "full", period, activeBranchId],
@@ -260,7 +264,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {isDemo && (
+        <div className="flex items-center gap-3 rounded-lg px-4 py-3 border bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-sm">
+          <FlaskConical className="h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Demo Mode — </span>
+            You are viewing sample data. No real orders or customers here.{" "}
+            <a href="/signup" className="underline font-medium hover:no-underline">Create your own free workspace →</a>
+          </div>
+        </div>
+      )}
       <SubscriptionBanner sub={subStatus ?? null} />
+      {!isDemo && <GettingStartedChecklist />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
-import { Plus, Search, Eye, AlertTriangle, ArrowUpDown } from "lucide-react";
+import { Plus, Search, Eye, AlertTriangle, ArrowUpDown, ShoppingCart } from "lucide-react";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
@@ -271,10 +271,23 @@ export default function Orders() {
                   })}
                   {!sorted.length && (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
-                        {orders.length === 0
-                          ? "No orders yet. Create your first order using the button above."
-                          : "No orders match the current filters. Try adjusting or clearing the filters."}
+                      <TableCell colSpan={10}>
+                        {orders.length === 0 ? (
+                          <div className="text-center py-14 space-y-3">
+                            <ShoppingCart className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                            <div>
+                              <p className="font-medium text-foreground">No orders yet</p>
+                              <p className="text-sm text-muted-foreground mt-1">Your first order takes less than 2 minutes to create.</p>
+                            </div>
+                            <Button size="sm" onClick={() => setShowCreate(true)}>
+                              Create Your First Order
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="text-center py-10 text-muted-foreground text-sm">
+                            No orders match the current filters. Try adjusting or clearing the filters.
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   )}

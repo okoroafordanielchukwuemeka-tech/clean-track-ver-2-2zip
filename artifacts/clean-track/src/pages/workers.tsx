@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, GitBranch } from "lucide-react";
+import { Plus, Pencil, Trash2, GitBranch, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const emptyForm: Partial<WorkerInput> = {
@@ -183,8 +183,17 @@ export default function Workers() {
                 ))}
                 {!workers.length && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                      No workers yet
+                    <TableCell colSpan={7}>
+                      <div className="text-center py-14 space-y-3">
+                        <UserCheck className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                        <div>
+                          <p className="font-medium text-foreground">No workers yet</p>
+                          <p className="text-sm text-muted-foreground mt-1">Add your first worker so they can log in and process orders.</p>
+                        </div>
+                        <Button size="sm" onClick={() => setShowDialog(true)}>
+                          Add Your First Worker
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

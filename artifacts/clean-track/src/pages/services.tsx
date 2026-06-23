@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
 
 function formatCurrency(v: number | null | undefined) {
@@ -171,8 +171,17 @@ export default function Services() {
                 ))}
                 {!services.length && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                      No services configured
+                    <TableCell colSpan={7}>
+                      <div className="text-center py-14 space-y-3">
+                        <Package className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                        <div>
+                          <p className="font-medium text-foreground">No services yet</p>
+                          <p className="text-sm text-muted-foreground mt-1">Add your laundry services so you can attach them to orders.</p>
+                        </div>
+                        <Button size="sm" onClick={() => setShowDialog(true)}>
+                          Add Your First Service
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
