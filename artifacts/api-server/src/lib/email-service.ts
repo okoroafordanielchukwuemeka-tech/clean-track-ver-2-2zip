@@ -26,7 +26,7 @@ interface MailOptions {
 
 function getSmtpPass(): string | undefined {
   // Support Resend integration: RESEND_API_KEY doubles as the SMTP password
-  return process.env.SMTP_PASS || process.env.RESEND_API_KEY;
+  return process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.RESEND_API_KEY;
 }
 
 function isSmtpConfigured(): boolean {
