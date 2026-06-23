@@ -1,0 +1,335 @@
+# Founder Admin Access Final Verification Audit
+
+Before moving to Paystack integration, perform a complete founder admin access verification.
+
+The goal:
+
+Ensure the founder has a clean, secure, and usable admin workflow separate from laundry owners and workers.
+
+DO NOT build new features yet.
+
+First audit the current implementation.
+
+---
+
+## PHASE 1 — Admin Account Creation
+
+Verify:
+
+1. How are founder admin accounts created?
+
+Check:
+
+* Is there a signup page?
+* Is it database seeded?
+* Is it created manually?
+* Is there a CLI/script?
+
+Document the exact current process.
+
+If no safe creation method exists:
+
+Create a secure founder admin seed script.
+
+Requirements:
+
+Create:
+
+Founder Admin
+
+Fields:
+
+* name
+* email
+* password hash
+* role = super_admin
+
+DO NOT expose admin creation publicly.
+
+---
+
+# PHASE 2 — Admin Login Flow
+
+Verify:
+
+Can the founder:
+
+Open the application
+
+↓
+
+Navigate to admin login
+
+↓
+
+Enter credentials
+
+↓
+
+Access admin dashboard
+
+Test:
+
+Correct credentials:
+
+Expected:
+
+200 success
+Admin JWT created
+Redirect to admin dashboard
+
+Wrong password:
+
+Expected:
+
+401 response
+
+Owner account attempting admin login:
+
+Expected:
+
+403
+
+Worker account attempting admin login:
+
+Expected:
+
+403
+
+---
+
+# PHASE 3 — Admin URL and Navigation
+
+Verify:
+
+1. What is the admin login URL?
+
+Example:
+
+/admin/login
+
+or
+
+/admin
+
+2. Is there a visible way for founder to access it?
+
+Check:
+
+* Login page
+* Footer
+* Hidden route
+* Environment variable
+
+Do NOT expose admin access to normal customers.
+
+Recommendation:
+
+Keep admin route separate:
+
+/admin/login
+
+/admin/dashboard
+
+---
+
+# PHASE 4 — Admin Dashboard Verification
+
+Test founder access to:
+
+## Tenant Management
+
+Verify:
+
+Founder can:
+
+* View all laundry accounts
+* Search laundries
+* View owner details
+* View subscription status
+* View activation score
+* View stuck onboarding users
+
+## Customer Support
+
+Verify:
+
+Founder can:
+
+* Login as customer when needed
+* See impersonation banner
+* Exit impersonation safely
+* Return to admin dashboard
+
+## Subscription Management
+
+Verify:
+
+Founder can:
+
+* View plans
+* Extend trials
+* Suspend accounts
+* Change plans
+
+## Growth Analytics
+
+Verify:
+
+Founder can see:
+
+* New signups
+* Activation funnel
+* Stuck users
+* Email nudges
+* Customer success metrics
+
+---
+
+# PHASE 5 — Security Testing
+
+Attempt:
+
+Owner token:
+
+GET /api/admin/tenants
+
+Expected:
+
+403
+
+Worker token:
+
+GET /api/admin/tenants
+
+Expected:
+
+403
+
+Admin token:
+
+GET /api/admin/tenants
+
+Expected:
+
+200
+
+Attempt:
+
+Normal user guessing admin URL.
+
+Expected:
+
+No access.
+
+---
+
+# PHASE 6 — Founder Experience Improvements
+
+Check if missing:
+
+## Admin Login Page
+
+Should contain:
+
+CleanTrack Founder Portal
+
+Fields:
+
+Email
+
+Password
+
+Button:
+
+Sign In
+
+Not:
+
+Laundry login
+
+---
+
+## Admin Sidebar
+
+Should show:
+
+Founder:
+
+Name
+
+Role:
+
+SUPER ADMIN
+
+Navigation:
+
+Dashboard
+
+Tenants
+
+Growth
+
+Subscriptions
+
+Feedback
+
+Audit Logs
+
+System Health
+
+---
+
+# PHASE 7 — Admin Data Safety
+
+Verify:
+
+Admin cannot accidentally:
+
+* Delete all laundries
+* Change customer data incorrectly
+* Modify production settings without confirmation
+
+For destructive actions add:
+
+Confirmation modal
+
+Audit log entry
+
+---
+
+# PHASE 8 — Production Requirements Before Paystack
+
+Confirm:
+
+Remaining admin gaps:
+
+1. Admin URL confirmed
+2. Founder account creation confirmed
+3. Founder login tested
+4. Admin dashboard tested
+5. Audit logs visible
+6. Impersonation tested
+7. MFA requirement documented for future
+
+---
+
+# Final Report
+
+Provide:
+
+1. Current admin access method
+
+2. Founder login URL
+
+3. Founder account creation process
+
+4. Test results
+
+5. Security test results
+
+6. Missing admin features
+
+7. Recommended next steps before Paystack
+
+Do not move to Paystack until the founder admin workflow is confirmed working end-to-end.
