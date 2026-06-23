@@ -9,8 +9,8 @@
 
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { activationEvents, laundries } from "@workspace/db/schema";
-import { eq, desc, gte, and, sql } from "drizzle-orm";
+import { activationEvents, laundries, nudgeLog } from "@workspace/db/schema";
+import { eq, desc, gte, sql } from "drizzle-orm";
 import {
   FUNNEL_STEPS,
   EVENT_SCORES,
@@ -238,5 +238,102 @@ adminActivationRouter.get("/scores", async (_req, res) => {
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to load activation scores" });
+  }
+});
+
+// ── GET /nudges — Customer success nudge analytics ────────────────────────────
+
+adminActivationRouter.get("/nudges", async (_req, res) => {
+  try {
+    // Total nudges sent
+    const totalSent = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(nudgeLog)
+      .then((r) => r[0]?.count ?? 0);
+
+    // Users rescued (activated after receiving a nudge)
+    const usersRescued = await db
+      .select({ count: sql<number>`cast(count(distinct ${nudgeLog.laundryId}) as int)` })
+      .from(nudgeLog)
+      .where(eq(nudgeLog.activatedAfter, true))
+      .then((r) => r[0]?.count ?? 0);
+
+    // Distinct laundries that received at least one nudge
+    const laundiesNudged = await db
+      .select({ count: sql<number>`cast(count(distinct ${nudgeLog.laundryId}) as int)` })
+      .from(nudgeLog)
+      .then((r) => r[0]?.count ?? 0);
+
+    const activationRateAfterNudge = laundiesNudged > 0
+      ? Math.round((usersRescued / laundiesNudged) * 100)
+      : 0;
+
+    // Open rate
+    const openedCount = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(nudgeLog)
+      .where(sql`${nudgeLog.openedAt} is not null`)
+      .then((r) => r[0]?.count ?? 0);
+
+    // Click rate
+    const clickedCount = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(nudgeLog)
+      .where(sql`${nudgeLog.clickedAt} is not null`)
+      .then((r) => r[0]?.count ?? 0);
+
+    // Most common stuck stage
+    const stageBreakdown = await db
+      .select({
+        stuckStage: nudgeLog.stuckStage,
+        count: sql<number>`cast(count(distinct ${nudgeLog.laundryId}) as int)`,
+      })
+      .from(nudgeLog)
+      .groupBy(nudgeLog.stuckStage)
+      .orderBy(desc(sql`count(distinct ${nudgeLog.laundryId})`));
+
+    const mostCommonStuckStage = stageBreakdown[0]?.stuckStage ?? null;
+
+    // Breakdown by nudge type
+    const byType = await db
+      .select({
+        nudgeType: nudgeLog.nudgeType,
+        sent: sql<number>`cast(count(*) as int)`,
+        rescued: sql<number>`cast(count(*) filter (where ${nudgeLog.activatedAfter} = true) as int)`,
+      })
+      .from(nudgeLog)
+      .groupBy(nudgeLog.nudgeType);
+
+    // Recent nudges (last 20)
+    const recentNudges = await db
+      .select({
+        id: nudgeLog.id,
+        ownerEmail: nudgeLog.ownerEmail,
+        businessName: nudgeLog.businessName,
+        stuckStage: nudgeLog.stuckStage,
+        nudgeType: nudgeLog.nudgeType,
+        sentAt: nudgeLog.sentAt,
+        openedAt: nudgeLog.openedAt,
+        clickedAt: nudgeLog.clickedAt,
+        activatedAfter: nudgeLog.activatedAfter,
+      })
+      .from(nudgeLog)
+      .orderBy(desc(nudgeLog.sentAt))
+      .limit(20);
+
+    res.json({
+      totalSent,
+      laundiesNudged,
+      usersRescued,
+      activationRateAfterNudge,
+      openRate: totalSent > 0 ? Math.round((openedCount / totalSent) * 100) : 0,
+      clickRate: totalSent > 0 ? Math.round((clickedCount / totalSent) * 100) : 0,
+      mostCommonStuckStage,
+      stageBreakdown,
+      byType,
+      recentNudges,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load nudge analytics" });
   }
 });

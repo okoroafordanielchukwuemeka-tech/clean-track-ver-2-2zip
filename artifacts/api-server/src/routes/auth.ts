@@ -9,6 +9,7 @@ import {
   expenseCategories,
   messageTemplates,
   passwordResetTokens,
+  nudgeLog,
   DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_MESSAGE_TEMPLATES,
   ADMIN_DEFAULT_PERMISSIONS,
@@ -756,6 +757,72 @@ authRouter.get("/email-track", async (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.end(pixel);
+  } catch {
+    res.status(204).end();
+  }
+});
+
+// ── GET /auth/nudge-track — Nudge email open/click tracking ──────────────────
+// Used by the 1×1 pixel (open) and CTA links (click) embedded in nudge emails.
+// Public — no auth required (email clients must be able to load the pixel).
+
+authRouter.get("/nudge-track", async (req, res) => {
+  const pixel = Buffer.from(
+    "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+    "base64"
+  );
+
+  const sendPixel = () => {
+    res.setHeader("Content-Type", "image/gif");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.end(pixel);
+  };
+
+  try {
+    const { e, nlid, t, url } = req.query as Record<string, string | undefined>;
+    const nudgeLogId = nlid ? parseInt(nlid, 10) : NaN;
+
+    if (!t || isNaN(nudgeLogId) || !e) return sendPixel();
+
+    // Verify HMAC token
+    const secret = process.env.JWT_SECRET ?? "fallback-secret";
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(`nudge-track:${nudgeLogId}`)
+      .digest("hex")
+      .slice(0, 32);
+
+    let valid = false;
+    try {
+      valid = crypto.timingSafeEqual(Buffer.from(t), Buffer.from(expected));
+    } catch { valid = false; }
+
+    if (!valid) return sendPixel();
+
+    const now = new Date();
+
+    // Fetch the laundry ID for this nudge entry once
+    const nudgeRow = await db
+      .select({ laundryId: nudgeLog.laundryId })
+      .from(nudgeLog)
+      .where(eq(nudgeLog.id, nudgeLogId))
+      .then((r) => r[0]);
+
+    if (e === "opened") {
+      await db.update(nudgeLog).set({ openedAt: now }).where(eq(nudgeLog.id, nudgeLogId));
+      if (nudgeRow) trackActivationEvent(nudgeRow.laundryId, "nudge_email_opened");
+      return sendPixel();
+    }
+
+    if (e === "clicked") {
+      await db.update(nudgeLog).set({ clickedAt: now }).where(eq(nudgeLog.id, nudgeLogId));
+      if (nudgeRow) trackActivationEvent(nudgeRow.laundryId, "nudge_email_clicked");
+      if (url) return res.redirect(302, decodeURIComponent(url));
+      return sendPixel();
+    }
+
+    sendPixel();
   } catch {
     res.status(204).end();
   }

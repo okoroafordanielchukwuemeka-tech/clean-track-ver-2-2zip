@@ -39,6 +39,10 @@ export const ACTIVATION_EVENTS = [
   "welcome_email_sent",
   "welcome_email_opened",
   "welcome_email_clicked",
+  "nudge_email_sent",
+  "nudge_email_opened",
+  "nudge_email_clicked",
+  "activation_after_nudge",
 ] as const;
 
 export type ActivationEventName = typeof ACTIVATION_EVENTS[number];

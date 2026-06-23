@@ -11,6 +11,7 @@ import { runAlertChecks } from "./lib/alert-engine.js";
 import { startBackupScheduler } from "./lib/backup-scheduler.js";
 import { startMessageQueueWorker } from "./lib/message-queue-worker.js";
 import { startSubscriptionLifecycleScheduler } from "./lib/subscription-lifecycle.js";
+import { startNudgeScheduler } from "./lib/nudge-engine.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
@@ -31,6 +32,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   startMessageQueueWorker();
   // Subscription lifecycle: trial expiry + grace period automation
   startSubscriptionLifecycleScheduler();
+  // Customer success: detect stuck users and send nudge emails hourly
+  startNudgeScheduler();
 });
 
 function scheduleIdempotencyCleanup() {

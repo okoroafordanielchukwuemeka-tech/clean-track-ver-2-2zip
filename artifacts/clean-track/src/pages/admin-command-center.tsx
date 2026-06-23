@@ -138,6 +138,20 @@ function FunnelBar({ label, count, pct, dropOff, isFirst }: {
   );
 }
 
+const STUCK_STAGE_LABELS: Record<string, string> = {
+  no_branch: "No branch created",
+  no_services: "No services added",
+  no_customer: "No customer created",
+  no_order: "No order created",
+  no_completion: "No completed order",
+};
+
+const NUDGE_TYPE_LABELS: Record<string, string> = {
+  "24h": "24-hour",
+  "48h": "48-hour",
+  "7d": "7-day",
+};
+
 function GrowthTab({ token }: { token: string }) {
   const { data: funnel, isLoading: funnelLoading } = useQuery({
     queryKey: ["admin", "activation", "funnel"],
@@ -163,6 +177,13 @@ function GrowthTab({ token }: { token: string }) {
   const { data: scores, isLoading: scoresLoading } = useQuery({
     queryKey: ["admin", "activation", "scores"],
     queryFn: () => adminFetch("/admin/activation/scores", token),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  const { data: nudges, isLoading: nudgesLoading } = useQuery({
+    queryKey: ["admin", "activation", "nudges"],
+    queryFn: () => adminFetch("/admin/activation/nudges", token),
     refetchInterval: 120_000,
     staleTime: 60_000,
   });
@@ -383,6 +404,191 @@ function GrowthTab({ token }: { token: string }) {
             </div>
           ) : (
             <div className="text-slate-500 text-sm py-8 text-center">No new signups in the last 7 days</div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Customer Success — Nudge Analytics ── */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="w-8 h-8 rounded-lg bg-emerald-900/50 border border-emerald-700/40 flex items-center justify-center">
+          <Mail className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div>
+          <h2 className="text-white font-semibold text-lg">Customer Success — Email Nudges</h2>
+          <p className="text-slate-500 text-sm">Automated stuck-user detection and rescue emails</p>
+        </div>
+      </div>
+
+      {/* Nudge KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="text-slate-400 text-xs">Users Rescued</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {nudgesLoading ? "—" : nudges?.usersRescued ?? 0}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">
+              activated after a nudge
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="w-4 h-4 text-blue-400" />
+              <span className="text-slate-400 text-xs">Nudge Activation Rate</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {nudgesLoading ? "—" : `${nudges?.activationRateAfterNudge ?? 0}%`}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">
+              {nudgesLoading ? "" : `${nudges?.laundiesNudged ?? 0} workspaces nudged`}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Mail className="w-4 h-4 text-violet-400" />
+              <span className="text-slate-400 text-xs">Email Open Rate</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {nudgesLoading ? "—" : `${nudges?.openRate ?? 0}%`}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">
+              {nudgesLoading ? "" : `${nudges?.totalSent ?? 0} nudges sent`}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span className="text-slate-400 text-xs">Click Rate</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {nudgesLoading ? "—" : `${nudges?.clickRate ?? 0}%`}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">
+              {nudgesLoading ? "" : nudges?.mostCommonStuckStage
+                ? `Top stuck: ${STUCK_STAGE_LABELS[nudges.mostCommonStuckStage] ?? nudges.mostCommonStuckStage}`
+                : "No stuck users yet"}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Nudge Breakdown by Stage */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-slate-200 text-sm font-medium flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-emerald-400" />
+              Stuck Stage Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {nudgesLoading ? (
+              <div className="text-slate-500 text-sm py-8 text-center">Loading…</div>
+            ) : nudges?.stageBreakdown?.length ? (
+              <div className="space-y-3">
+                {nudges.stageBreakdown.map((s: any) => (
+                  <div key={s.stuckStage} className="flex items-center justify-between py-1.5 border-b border-slate-800/60">
+                    <span className="text-slate-300 text-sm">{STUCK_STAGE_LABELS[s.stuckStage] ?? s.stuckStage}</span>
+                    <span className="text-white font-semibold text-sm tabular-nums">{s.count} users</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm py-8 text-center">No nudges sent yet — engine runs hourly after 24h</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Nudge Type Performance */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-slate-200 text-sm font-medium flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              Nudge Sequence Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {nudgesLoading ? (
+              <div className="text-slate-500 text-sm py-8 text-center">Loading…</div>
+            ) : nudges?.byType?.length ? (
+              <div className="space-y-3">
+                {nudges.byType.map((t: any) => (
+                  <div key={t.nudgeType} className="flex items-center justify-between py-1.5 border-b border-slate-800/60">
+                    <span className="text-slate-300 text-sm">{NUDGE_TYPE_LABELS[t.nudgeType] ?? t.nudgeType} nudge</span>
+                    <div className="flex items-center gap-4 text-sm tabular-nums">
+                      <span className="text-slate-400">{t.sent} sent</span>
+                      <span className="text-emerald-400 font-semibold">{t.rescued} rescued</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm py-8 text-center">No data yet</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Nudges Log */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-slate-200 text-sm font-medium flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" />
+            Recent Nudge Log
+            {nudges?.totalSent > 0 && (
+              <span className="text-slate-500 font-normal text-xs">(last 20 of {nudges.totalSent})</span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {nudgesLoading ? (
+            <div className="text-slate-500 text-sm py-8 text-center">Loading…</div>
+          ) : nudges?.recentNudges?.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-800">
+                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Workspace</th>
+                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Stage</th>
+                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Type</th>
+                    <th className="text-center text-slate-500 font-medium pb-2 pr-2">Opened</th>
+                    <th className="text-center text-slate-500 font-medium pb-2 pr-2">Clicked</th>
+                    <th className="text-center text-slate-500 font-medium pb-2">Rescued</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {nudges.recentNudges.map((n: any) => (
+                    <tr key={n.id}>
+                      <td className="py-2 pr-4">
+                        <div className="text-slate-200 text-sm font-medium truncate max-w-32">{n.businessName}</div>
+                        <div className="text-slate-500 text-xs truncate max-w-32">{n.ownerEmail}</div>
+                      </td>
+                      <td className="py-2 pr-4 text-xs text-amber-300">{STUCK_STAGE_LABELS[n.stuckStage] ?? n.stuckStage}</td>
+                      <td className="py-2 pr-4 text-xs text-slate-400">{NUDGE_TYPE_LABELS[n.nudgeType] ?? n.nudgeType}</td>
+                      <td className="py-2 pr-2 text-center">{n.openedAt ? <span className="text-emerald-400">✓</span> : <span className="text-slate-700">—</span>}</td>
+                      <td className="py-2 pr-2 text-center">{n.clickedAt ? <span className="text-blue-400">✓</span> : <span className="text-slate-700">—</span>}</td>
+                      <td className="py-2 text-center">{n.activatedAfter ? <span className="text-emerald-400 font-semibold">✓</span> : <span className="text-slate-700">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-slate-500 text-sm py-8 text-center">
+              No nudges sent yet — the engine checks every hour and sends nudges after 24h of being stuck
+            </div>
           )}
         </CardContent>
       </Card>
