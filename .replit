@@ -45,9 +45,3 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-JWT_SECRET = "f81da9318010f898ec416a0f4f620808ac6d4fae38601dc0a6b8d1e3aae9061da0f4907b1cc4143c9f934895e10c8557"
-BACKUP_SECRET = "1e9f797e8acd29e679c123784739cd9e22a1fbbfd33cfd3fb3f2c1e5cff23de225ada8d36f32c6bd08bfa1e33fa18460"
-SMTP_HOST = "smtp.resend.com"
-SMTP_PORT = "587"
-SMTP_USER = "resend"
-SMTP_FROM = "CleanTrack <onboarding@resend.dev>"
