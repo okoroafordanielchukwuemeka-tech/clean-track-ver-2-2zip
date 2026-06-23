@@ -4,6 +4,7 @@ export interface AdminUser {
   id: number;
   name: string;
   email: string;
+  role?: "super_admin" | "support_admin" | "finance_admin";
 }
 
 interface AdminContextType {

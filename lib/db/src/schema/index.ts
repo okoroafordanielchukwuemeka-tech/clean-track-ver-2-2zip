@@ -33,3 +33,4 @@ export * from "./password-reset-tokens.js";
 export * from "./error-log.js";
 export * from "./activation-events.js";
 export * from "./nudge-log.js";
+export * from "./admin-audit-log.js";

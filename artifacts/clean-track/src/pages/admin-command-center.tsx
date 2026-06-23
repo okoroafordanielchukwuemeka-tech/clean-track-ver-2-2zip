@@ -9,7 +9,8 @@ import {
   ChevronRight, Server, Users, ShoppingCart, Layers,
   TrendingUp, BarChart3, Archive, Package, FlaskConical,
   CreditCard, Ban, Hourglass, CheckCircle, ChevronDown,
-  Rocket, Target, Mail, Zap, AlertCircle,
+  Rocket, Target, Mail, Zap, AlertCircle, Search, LogIn,
+  ShieldCheck as ShieldRole,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { startImpersonation } from "@/components/impersonation-banner";
 
 const API_BASE = "/api";
 
@@ -751,11 +753,33 @@ function TenantUsageRow({ usage }: { usage: any }) {
 function TenantsTab({ token }: { token: string }) {
   const [selected, setSelected] = useState<any | null>(null);
   const [sort, setSort] = useState<TenantSort>("default");
+  const [search, setSearch] = useState("");
+  const [loginAsLoading, setLoginAsLoading] = useState(false);
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["admin", "tenants"],
-    queryFn: () => adminFetch("/admin/tenants", token),
+    queryKey: ["admin", "tenants", search],
+    queryFn: () => adminFetch(`/admin/tenants${search ? `?search=${encodeURIComponent(search)}` : ""}`, token),
     staleTime: 30_000,
   });
+
+  async function handleLoginAs(tenant: any) {
+    if (!window.confirm(`You are about to impersonate "${tenant.businessName}". This action is fully audited. Continue?`)) return;
+    setLoginAsLoading(true);
+    try {
+      const resp = await fetch(`/api/admin/tenants/${tenant.id}/impersonate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error ?? "Failed");
+      const { impersonationToken, businessName } = await resp.json();
+      toast.success(`Entering ${businessName}'s workspace…`);
+      setTimeout(() => startImpersonation(impersonationToken), 600);
+    } catch (err: any) {
+      toast.error(err.message ?? "Impersonation failed");
+    } finally {
+      setLoginAsLoading(false);
+    }
+  }
 
   if (isLoading) return <LoadingSpinner />;
   if (!data) return <ErrorState />;
@@ -789,12 +813,22 @@ function TenantsTab({ token }: { token: string }) {
           className="flex items-center gap-1 text-slate-400 hover:text-white text-sm transition-colors">
           ← Back to all tenants
         </button>
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-xl font-bold text-white">{t.businessName}</h2>
             <p className="text-slate-400 text-sm">{t.ownerEmail}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap items-center">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={loginAsLoading}
+              onClick={() => handleLoginAs(t)}
+              className="border-amber-700/50 text-amber-300 hover:bg-amber-900/30 hover:border-amber-600 text-xs"
+            >
+              <LogIn className="w-3.5 h-3.5 mr-1.5" />
+              {loginAsLoading ? "Opening…" : "Login as Customer"}
+            </Button>
             <Badge className={t.isActive ? "bg-emerald-900/50 text-emerald-300 border-emerald-700" : "bg-red-900/50 text-red-300 border-red-700"}>
               {t.isActive ? "Active" : "Inactive"}
             </Badge>
@@ -892,7 +926,17 @@ function TenantsTab({ token }: { token: string }) {
         <h2 className="text-xl font-bold text-white">
           Tenant Health <span className="text-slate-500 font-normal text-sm ml-1">({rawTenants.length})</span>
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search name or email…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded pl-7 pr-3 py-1.5 focus:outline-none focus:border-violet-600 w-44"
+            />
+          </div>
           <select
             value={sort}
             onChange={e => setSort(e.target.value as TenantSort)}
@@ -1547,8 +1591,15 @@ export default function AdminCommandCenter() {
               </button>
             ))}
           </nav>
-          <div className="pt-4 border-t border-slate-800 px-3">
-            <div className="text-slate-600 text-xs">admin@cleantrack</div>
+          <div className="pt-4 border-t border-slate-800 px-3 space-y-1">
+            <div className="text-slate-300 text-xs font-medium truncate">{admin?.name ?? "Admin"}</div>
+            <div className="text-slate-600 text-xs truncate">{admin?.email ?? ""}</div>
+            {admin?.role && (
+              <div className="inline-flex items-center gap-1 text-xs bg-violet-900/30 border border-violet-700/30 text-violet-400 rounded px-1.5 py-0.5">
+                <ShieldRole className="w-3 h-3" />
+                {admin.role === "super_admin" ? "Super Admin" : admin.role === "support_admin" ? "Support" : "Finance"}
+              </div>
+            )}
           </div>
         </aside>
 

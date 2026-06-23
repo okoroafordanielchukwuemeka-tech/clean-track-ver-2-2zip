@@ -32,6 +32,7 @@ import { NetworkStatusBadge } from "@/components/network-status-badge";
 import { OfflineBanner } from "@/components/offline-banner";
 import { SyncFailedPanel } from "@/components/sync-failed-panel";
 import { OutdatedClientBanner } from "@/components/outdated-client-banner";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { SyncProgressBar } from "@/components/sync-progress-bar";
 import { FeedbackButton } from "@/components/feedback-button";
 import { api } from "@/lib/api";
@@ -220,6 +221,7 @@ export function Layout() {
           </div>
         </header>
 
+        <ImpersonationBanner />
         <OutdatedClientBanner />
         <SyncProgressBar />
         <OfflineBanner />

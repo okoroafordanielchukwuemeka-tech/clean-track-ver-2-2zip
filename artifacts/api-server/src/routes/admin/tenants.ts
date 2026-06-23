@@ -1,9 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { laundries, branches, workers, orders, deviceHeartbeats, alerts, schemaSnapshots } from "@workspace/db/schema";
-import { eq, and, gte, sql, count, desc, isNull } from "drizzle-orm";
+import { eq, and, gte, sql, count, desc, isNull, ilike, or } from "drizzle-orm";
 import { getPlanLimits, PLAN_DISPLAY_NAMES } from "../../lib/entitlements.js";
 import { MAX_STORAGE_MB_BY_PLAN } from "../../lib/usage-service.js";
+import { signImpersonationToken } from "../../middleware/admin-auth.js";
+import { logAdminAction } from "../../lib/admin-audit.js";
+import { ADMIN_ACTIONS } from "@workspace/db/schema";
+import type { AdminRequest } from "../../middleware/admin-auth.js";
 
 export const adminTenantsRouter = Router();
 
@@ -12,14 +16,25 @@ function calcPct(used: number, limit: number): number {
   return Math.round((used / limit) * 100);
 }
 
-adminTenantsRouter.get("/", async (_req, res) => {
+adminTenantsRouter.get("/", async (req: AdminRequest, res) => {
   try {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const allLaundries = await db.select().from(laundries).orderBy(desc(laundries.createdAt));
+    const baseQuery = db.select().from(laundries);
+    const allLaundries = search
+      ? await baseQuery
+          .where(
+            or(
+              ilike(laundries.businessName, `%${search}%`),
+              ilike(laundries.ownerEmail, `%${search}%`)
+            )
+          )
+          .orderBy(desc(laundries.createdAt))
+      : await baseQuery.orderBy(desc(laundries.createdAt));
 
     const tenantData = await Promise.all(allLaundries.map(async (l) => {
       const plan = l.subscriptionTier;
@@ -112,7 +127,7 @@ adminTenantsRouter.get("/", async (_req, res) => {
       };
     }));
 
-    res.json({ tenants: tenantData, total: tenantData.length });
+    res.json({ tenants: tenantData, total: tenantData.length, searchActive: !!search });
   } catch (err) {
     console.error("Admin tenants error:", err);
     res.status(500).json({ error: "Failed to fetch tenant data" });
@@ -190,5 +205,68 @@ adminTenantsRouter.get("/:id", async (req, res) => {
   } catch (err) {
     console.error("Admin tenant detail error:", err);
     res.status(500).json({ error: "Failed to fetch tenant" });
+  }
+});
+
+// ── POST /:id/impersonate — Generate a short-lived owner token for support ────
+adminTenantsRouter.post("/:id/impersonate", async (req: AdminRequest, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid tenant ID" });
+
+    const admin = req.admin!;
+
+    const [laundry] = await db
+      .select({
+        id: laundries.id,
+        businessName: laundries.businessName,
+        ownerEmail: laundries.ownerEmail,
+        passwordChangedAt: laundries.passwordChangedAt,
+        subscriptionStatus: laundries.subscriptionStatus,
+      })
+      .from(laundries)
+      .where(eq(laundries.id, id));
+
+    if (!laundry) return res.status(404).json({ error: "Tenant not found" });
+
+    const ownerPayload = {
+      laundryId: laundry.id,
+      type: "owner" as const,
+      ownerId: laundry.id,
+      email: laundry.ownerEmail,
+      name: laundry.businessName,
+      passwordChangedAt: laundry.passwordChangedAt?.toISOString(),
+    };
+
+    const impersonationToken = signImpersonationToken(ownerPayload, {
+      adminId: admin.adminId,
+      adminName: admin.name,
+      adminEmail: admin.email,
+    });
+
+    // Audit: every impersonation is logged
+    await logAdminAction({
+      admin,
+      action: ADMIN_ACTIONS.IMPERSONATE,
+      targetLaundryId: laundry.id,
+      targetLaundryName: laundry.businessName,
+      metadata: {
+        targetEmail: laundry.ownerEmail,
+        subscriptionStatus: laundry.subscriptionStatus,
+        tokenExpiresIn: "2h",
+      },
+      req,
+    });
+
+    res.json({
+      impersonationToken,
+      businessName: laundry.businessName,
+      ownerEmail: laundry.ownerEmail,
+      expiresIn: "2h",
+      warning: "This session is fully audited. All actions are traceable to your admin account.",
+    });
+  } catch (err) {
+    console.error("Admin impersonation error:", err);
+    res.status(500).json({ error: "Failed to generate impersonation token" });
   }
 });
