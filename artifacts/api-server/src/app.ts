@@ -6,6 +6,7 @@ import { router } from "./routes/index.js";
 import { versionMiddleware } from "./middleware/version.js";
 import {
   authLimiter,
+  demoLimiter,
   apiLimiter,
   webhookLimiter,
   adminLimiter,
@@ -83,7 +84,10 @@ app.use(versionMiddleware);
 // ── Per-route rate limiters ───────────────────────────────────────────────
 // Applied before the router so limits cover all matching paths.
 
-// Auth endpoints: strict brute-force protection
+// Demo login: generous limit — must be registered BEFORE authLimiter
+app.use("/api/auth/demo-login", demoLimiter);
+
+// Auth endpoints: strict brute-force protection (skips /demo-login path internally)
 app.use("/api/auth", authLimiter);
 
 // Password reset: separate stricter limiter to protect email budget

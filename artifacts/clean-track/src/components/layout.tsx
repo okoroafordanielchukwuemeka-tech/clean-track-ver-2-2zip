@@ -19,6 +19,7 @@ import {
   Activity,
   MessageSquare,
   ShieldCheck,
+  ChevronDown,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,7 @@ import { OfflineBanner } from "@/components/offline-banner";
 import { SyncFailedPanel } from "@/components/sync-failed-panel";
 import { OutdatedClientBanner } from "@/components/outdated-client-banner";
 import { SyncProgressBar } from "@/components/sync-progress-bar";
+import { FeedbackButton } from "@/components/feedback-button";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -47,6 +49,10 @@ export function Layout() {
   const { user, isOwner, logout } = useAuth();
   const { activeBranch } = useBranch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(() => {
+    const advancedPaths = ["/operations", "/communications", "/platform-health"];
+    return advancedPaths.some((p) => location.pathname.startsWith(p));
+  });
 
   const { data: pendingCount } = useQuery({
     queryKey: ["discount-approvals", "pending-count"],
@@ -69,10 +75,13 @@ export function Layout() {
     { to: "/workers", label: "Workers", icon: Users },
     { to: "/branches", label: "Branches", icon: GitBranch },
     { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+    { to: "/settings", label: "Settings", icon: Settings },
+  ];
+
+  const advancedNavItems = [
     { to: "/operations", label: "Operations", icon: Activity },
     { to: "/communications", label: "Communications", icon: MessageSquare },
     { to: "/platform-health", label: "Platform Health", icon: ShieldCheck },
-    { to: "/settings", label: "Settings", icon: Settings },
   ];
 
   const navItems = isOwner ? ownerNavItems : workerNavItems;
@@ -135,11 +144,43 @@ export function Layout() {
               )}
             </Link>
           ))}
+
+          {isOwner && (
+            <div className="pt-1">
+              <button
+                onClick={() => setAdvancedOpen((v) => !v)}
+                className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors"
+              >
+                <span className="flex-1 text-left">Advanced</span>
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", advancedOpen && "rotate-180")} />
+              </button>
+              {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    location.pathname === to || location.pathname.startsWith(to + "/")
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="flex-1">{label}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </nav>
 
         <NetworkStatusBadge />
 
-        <div className="px-3 py-4 border-t border-sidebar-border">
+        <div className="px-3 pb-1 border-t border-sidebar-border pt-3">
+          <FeedbackButton />
+        </div>
+
+        <div className="px-3 py-3 border-t border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">{user?.name}</p>

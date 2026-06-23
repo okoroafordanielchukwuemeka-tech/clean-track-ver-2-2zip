@@ -23,7 +23,7 @@ export const authLimiter = rateLimit({
   standardHeaders: RATE_LIMIT_HEADERS,
   legacyHeaders: false,
   skipSuccessfulRequests: SKIP_SUCCESSFUL_REQUESTS,
-  skip: (req) => req.path === "/me",
+  skip: (req) => req.path === "/me" || req.path === "/demo-login",
   message: {
     error: "Too many login attempts. Please wait 15 minutes before trying again.",
     retryAfter: 15 * 60,
@@ -31,6 +31,22 @@ export const authLimiter = rateLimit({
   handler: (req, res, _next, options) => {
     console.warn(`[rate-limit] Auth limit hit: ${req.ip} → ${req.path}`);
     res.status(429).json(options.message);
+  },
+});
+
+/**
+ * Demo login endpoint: generous limit so the demo is always accessible.
+ * 60 requests per minute per IP — a single user refreshing the demo
+ * repeatedly should never be blocked.
+ */
+export const demoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: RATE_LIMIT_HEADERS,
+  legacyHeaders: false,
+  message: {
+    error: "Too many demo requests. Please wait a moment.",
+    retryAfter: 60,
   },
 });
 

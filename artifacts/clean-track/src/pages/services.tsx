@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -22,6 +23,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
+
+const SERVICE_CATEGORIES = [
+  "Washing",
+  "Dry Cleaning",
+  "Ironing",
+  "Wash & Fold",
+  "Household Items",
+  "Shoes & Bags",
+  "Bedding & Linen",
+  "Specialty Items",
+  "Other",
+];
 
 function formatCurrency(v: number | null | undefined) {
   if (v == null) return "—";
@@ -203,7 +216,33 @@ export default function Services() {
             </div>
             <div>
               <Label>Category *</Label>
-              <Input value={form.category ?? ""} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Shirts" />
+              <Select
+                value={SERVICE_CATEGORIES.includes(form.category ?? "") ? (form.category ?? "") : form.category ? "Other" : ""}
+                onValueChange={(val) => {
+                  if (val === "Other") {
+                    setForm({ ...form, category: "" });
+                  } else {
+                    setForm({ ...form, category: val });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVICE_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(form.category !== undefined && !SERVICE_CATEGORIES.includes(form.category ?? "")) && (
+                <Input
+                  className="mt-2"
+                  value={form.category ?? ""}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  placeholder="Enter custom category"
+                />
+              )}
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>

@@ -29,3 +29,4 @@
 - [Worker Operational Messaging](worker-operational-messaging.md) — 3 worker-accessible endpoints on /orders router; messages query JOINs notificationEvents to filter by orderId; Order.status type lacks "cancelled" so never compare against it
 - [Pre-launch Hardening](pre-launch-hardening.md) — express-rate-limit v8 requires app.set("trust proxy",1) before limiters; SESSION_SECRET is a Replit Secret (not env var); BACKUP_SECRET stored as shared env var; api.health.production() added to api.ts
 - [Worker Token Invalidation](worker-token-invalidation.md) — DB lookup required in requireAuth (async); pure-JWT iat vs pinChangedAt comparison is circular; authLimiter skips /me endpoint
+- [First 100 Users Readiness Fixes](readiness-audit.md) — 6 friction fixes: signup password checklist; sidebar 15→12+Advanced; checklist worker step optional; feedback button; services category Select; demo /demo-login endpoint with demoLimiter

@@ -102,6 +102,7 @@ export const api = {
   auth: {
     signup: (data: SignupInput) => request<AuthResponse>("POST", "/auth/signup", data),
     ownerLogin: (data: OwnerLoginInput) => request<AuthResponse>("POST", "/auth/owner-login", data),
+    demoLogin: () => request<AuthResponse>("POST", "/auth/demo-login"),
     workerLogin: (data: WorkerLoginInput) => request<WorkerAuthResponse>("POST", "/auth/worker-login", data),
     me: () => request<AuthUser>("GET", "/auth/me"),
     forgotPassword: (email: string) =>

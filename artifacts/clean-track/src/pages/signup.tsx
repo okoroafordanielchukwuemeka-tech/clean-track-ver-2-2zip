@@ -128,6 +128,20 @@ export default function Signup() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                {form.password.length > 0 && (
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    {[
+                      { ok: form.password.length >= 8, label: "8+ chars" },
+                      { ok: /[A-Z]/.test(form.password), label: "Uppercase" },
+                      { ok: /[0-9]/.test(form.password), label: "Number" },
+                    ].map(({ ok, label }) => (
+                      <div key={label} className={`flex items-center gap-1 text-xs rounded px-2 py-1 ${ok ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-700 text-slate-400"}`}>
+                        <span className="text-[10px]">{ok ? "✓" : "○"}</span>
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-slate-300">Confirm Password <span className="text-red-400">*</span></Label>

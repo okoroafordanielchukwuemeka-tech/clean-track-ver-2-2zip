@@ -199,6 +199,52 @@ authRouter.post("/signup", async (req, res) => {
   }
 });
 
+// ── POST /auth/demo-login ──────────────────────────────────────────────────
+// Dedicated low-rate-limited endpoint for the public demo account.
+// Uses hardcoded demo credentials so the auth limiter never blocks public demos.
+
+const DEMO_EMAIL = "demo@cleantrack.ng";
+
+authRouter.post("/demo-login", async (req, res) => {
+  try {
+    const [laundry] = await db
+      .select()
+      .from(laundries)
+      .where(eq(laundries.ownerEmail, DEMO_EMAIL));
+
+    if (!laundry || !laundry.isActive || !laundry.passwordHash) {
+      return res.status(503).json({ error: "Demo account not available" });
+    }
+
+    const DEMO_PASSWORD = "Demo@1234";
+    const valid = await bcrypt.compare(DEMO_PASSWORD, laundry.passwordHash);
+    if (!valid) {
+      return res.status(503).json({ error: "Demo account not configured" });
+    }
+
+    const token = signToken({
+      laundryId: laundry.id,
+      type: "owner",
+      ownerId: laundry.id,
+      email: laundry.ownerEmail,
+      name: laundry.businessName,
+      passwordChangedAt: laundry.passwordChangedAt?.toISOString(),
+    });
+
+    res.json({
+      token,
+      user: {
+        type: "owner",
+        id: laundry.id,
+        name: laundry.businessName,
+        email: laundry.ownerEmail,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Demo login failed" });
+  }
+});
+
 // ── POST /auth/owner-login ─────────────────────────────────────────────────
 
 authRouter.post("/owner-login", async (req, res) => {

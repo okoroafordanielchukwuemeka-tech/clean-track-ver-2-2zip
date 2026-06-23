@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Circle, ArrowRight, X, Rocket } from "lucide-react";
+import { CheckCircle2, Circle, ArrowRight, X, Rocket, Gift } from "lucide-react";
 
 interface Step {
   id: string;
@@ -12,6 +12,7 @@ interface Step {
   description: string;
   href: string;
   done: boolean;
+  optional?: boolean;
 }
 
 const DISMISS_KEY = "ct_onboarding_dismissed";
@@ -33,12 +34,6 @@ export function GettingStartedChecklist() {
     staleTime: 60_000,
   });
 
-  const { data: workers } = useQuery({
-    queryKey: ["workers"],
-    queryFn: () => api.workers.list(),
-    staleTime: 60_000,
-  });
-
   const { data: customers } = useQuery({
     queryKey: ["customers", "checklist"],
     queryFn: () => api.customers.list(),
@@ -51,29 +46,28 @@ export function GettingStartedChecklist() {
     staleTime: 60_000,
   });
 
+  const { data: workers } = useQuery({
+    queryKey: ["workers"],
+    queryFn: () => api.workers.list(),
+    staleTime: 60_000,
+  });
+
   if (dismissed) return null;
 
-  const steps: Step[] = [
+  const coreSteps: Step[] = [
     {
       id: "branch",
       label: "Create your first branch",
-      description: "Set up your laundry location",
+      description: "Set up your laundry location so orders are organised by outlet",
       href: "/branches",
       done: (branches?.length ?? 0) > 0,
     },
     {
       id: "services",
       label: "Add your laundry services",
-      description: "Define what you offer and at what price",
+      description: "Define what you offer and the price — takes about 2 minutes",
       href: "/services",
       done: (services?.length ?? 0) > 0,
-    },
-    {
-      id: "workers",
-      label: "Add your first worker",
-      description: "Give your team access to process orders",
-      href: "/workers",
-      done: (workers?.length ?? 0) > 0,
     },
     {
       id: "customer",
@@ -91,13 +85,22 @@ export function GettingStartedChecklist() {
     },
   ];
 
-  const doneCount = steps.filter((s) => s.done).length;
-  const allDone = doneCount === steps.length;
-  const pct = Math.round((doneCount / steps.length) * 100);
+  const bonusSteps: Step[] = [
+    {
+      id: "workers",
+      label: "Add a worker",
+      description: "Give your team their own PIN login to process orders",
+      href: "/workers",
+      done: (workers?.length ?? 0) > 0,
+      optional: true,
+    },
+  ];
 
-  if (allDone) {
-    return null;
-  }
+  const coreDone = coreSteps.filter((s) => s.done).length;
+  const allCoreDone = coreDone === coreSteps.length;
+  const pct = Math.round((coreDone / coreSteps.length) * 100);
+
+  if (allCoreDone && bonusSteps.every((s) => s.done)) return null;
 
   return (
     <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20">
@@ -110,7 +113,7 @@ export function GettingStartedChecklist() {
             <div>
               <CardTitle className="text-base">Welcome to CleanTrack 👋</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {doneCount} of {steps.length} setup steps complete
+                {allCoreDone ? "All set! Ready for your first order." : `${coreDone} of ${coreSteps.length} steps complete`}
               </p>
             </div>
           </div>
@@ -133,9 +136,9 @@ export function GettingStartedChecklist() {
           />
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 space-y-4">
         <div className="space-y-1.5">
-          {steps.map((step) => (
+          {coreSteps.map((step) => (
             <Link
               key={step.id}
               to={step.done ? "#" : step.href}
@@ -164,6 +167,29 @@ export function GettingStartedChecklist() {
             </Link>
           ))}
         </div>
+
+        {!bonusSteps.every((s) => s.done) && (
+          <div className="border-t border-blue-200 dark:border-blue-800 pt-3">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 px-3 mb-1.5">
+              <Gift className="h-3.5 w-3.5" />
+              Optional — unlock more
+            </p>
+            {bonusSteps.filter((s) => !s.done).map((step) => (
+              <Link
+                key={step.id}
+                to={step.href}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors group hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer"
+              >
+                <Circle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-muted-foreground leading-tight">{step.label}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">{step.description}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+              </Link>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

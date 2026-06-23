@@ -1,0 +1,230 @@
+CLEANTRACK FIRST 100 USERS READINESS AUDIT
+
+IMPORTANT:
+
+Do not build new features yet.
+
+Do not integrate Paystack yet.
+
+The goal is to simulate a real customer using CleanTrack for the first time and remove every possible friction point before onboarding real laundries.
+
+Act as a brand new laundry business owner who has never seen CleanTrack before.
+
+Perform a complete user journey test:
+
+SIGNUP
+→ FIRST LOGIN
+→ SETUP
+→ FIRST ORDER
+→ PAYMENT
+→ RECEIPT
+→ DAILY WORKFLOW
+
+Find every point where a new customer can get confused, stuck, or abandon the product.
+
+PHASE 1 — NEW USER EXPERIENCE TEST
+
+Create a fresh owner account.
+
+Document:
+
+1. How long it takes to understand the dashboard.
+
+2. What is the first thing the user sees.
+
+3. Whether the user knows what action to take next.
+
+4. Whether the Getting Started checklist is clear.
+
+5. Whether every checklist item links correctly.
+
+Measure:
+
+Time from signup → first completed order.
+
+Target:
+
+A new laundry owner should complete their first order within 5 minutes.
+
+PHASE 2 — COMPLETE FIRST ORDER SIMULATION
+
+Perform:
+
+Create branch
+
+Add services
+
+Create customer
+
+Create order
+
+Select services
+
+Add payment
+
+Generate receipt
+
+Complete order workflow
+
+Audit:
+
+* Number of clicks
+* Confusing screens
+* Missing guidance
+* Empty states
+* Error messages
+* Mobile usability
+
+PHASE 3 — LAUNDRY OWNER DAILY WORKFLOW
+
+Simulate a normal business day.
+
+Create:
+
+20 customers
+
+30 orders
+
+Different order statuses:
+
+* Received
+* Processing
+* Ready
+* Picked up
+* Completed
+
+Test:
+
+Can the owner quickly find:
+
+* Today's orders
+* Pending pickups
+* Customer history
+* Payment records
+* Revenue information
+
+Identify unnecessary steps.
+
+PHASE 4 — WORKER EXPERIENCE TEST
+
+Create a worker account.
+
+Test:
+
+Worker login
+
+View assigned work
+
+Update order status
+
+Record pickup
+
+Process daily tasks
+
+Verify:
+
+* Worker understands the interface
+* Permissions are correct
+* No unnecessary complexity
+
+PHASE 5 — MOBILE-FIRST AUDIT
+
+Because many African businesses operate mainly from phones.
+
+Test every important workflow on mobile:
+
+Signup
+
+Dashboard
+
+Create customer
+
+Create order
+
+Payment
+
+Receipt
+
+Worker station
+
+Check:
+
+* Buttons are visible
+* Forms are easy
+* No horizontal scrolling
+* Tables work properly
+* Touch targets are large enough
+
+PHASE 6 — CUSTOMER RETENTION AUDIT
+
+Determine what makes a user return daily.
+
+Audit:
+
+Does CleanTrack clearly help owners with:
+
+* knowing what clothes are pending
+* knowing what customers owe
+* tracking revenue
+* managing workers
+* reducing mistakes
+
+Identify missing "daily habit" features.
+
+PHASE 7 — FIRST 100 USERS PREPARATION
+
+Audit whether the product is ready for external users.
+
+Check:
+
+Demo account
+
+Error handling
+
+Loading states
+
+Empty states
+
+Support contact
+
+Feedback collection
+
+User onboarding
+
+Add if missing:
+
+Simple feedback button:
+
+"Report issue"
+"Request feature"
+"Send feedback"
+
+FINAL REPORT
+
+Provide:
+
+1. Activation score /100
+
+2. Time-to-first-order
+
+3. Biggest customer friction points
+
+4. Screenshots of problems found
+
+5. Changes recommended
+
+6. Changes implemented
+
+7. Remaining risks
+
+8. Final recommendation:
+
+READY FOR FIRST 100 USERS
+
+OR
+
+NEEDS MORE WORK
+
+Do not add unrelated features.
+
+Focus only on making CleanTrack easy enough that a real laundry owner can sign up and succeed without assistance.

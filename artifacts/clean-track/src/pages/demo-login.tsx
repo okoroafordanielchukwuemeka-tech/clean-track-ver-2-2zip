@@ -20,7 +20,7 @@ export default function DemoLogin() {
     if (attempted.current) return;
     attempted.current = true;
 
-    api.auth.ownerLogin({ email: DEMO_EMAIL, password: DEMO_PASSWORD })
+    api.auth.demoLogin()
       .then((res) => {
         login(res.token, res.user);
         navigate("/dashboard", { replace: true });
