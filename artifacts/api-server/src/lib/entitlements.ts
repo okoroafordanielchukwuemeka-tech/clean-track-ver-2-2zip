@@ -1,10 +1,12 @@
+import { getPlanPricing, getPricingList } from "./pricing.js";
+
 export const SUBSCRIPTION_PLANS = ["free", "starter", "pro", "business"] as const;
 export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
 
 export const PLAN_DISPLAY_NAMES: Record<SubscriptionPlan, string> = {
   free: "Free",
   starter: "Starter",
-  pro: "Professional",
+  pro: "Growth",
   business: "Business",
 };
 
@@ -21,10 +23,10 @@ export const PLAN_FEATURES = {
     HAS_MULTI_BRANCH: false,
     HAS_MARKETING_TOOLS: false,
     HAS_ANALYTICS: true,
-    HAS_BATCH_PROCESSING: true,
+    HAS_BATCH_PROCESSING: false,
   },
   pro: {
-    HAS_WHATSAPP: true,
+    HAS_WHATSAPP: false,
     HAS_MULTI_BRANCH: true,
     HAS_MARKETING_TOOLS: false,
     HAS_ANALYTICS: true,
@@ -46,13 +48,14 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, {
   maxWorkers: number;
   maxOrdersPerMonth: number;
 }> = {
-  free: { maxBranches: 1, maxWorkers: 3, maxOrdersPerMonth: 100 },
-  starter: { maxBranches: 1, maxWorkers: 10, maxOrdersPerMonth: 500 },
-  pro: { maxBranches: 5, maxWorkers: 50, maxOrdersPerMonth: Infinity },
+  free:     { maxBranches: 1,        maxWorkers: 3,        maxOrdersPerMonth: 100 },
+  starter:  { maxBranches: 1,        maxWorkers: 5,        maxOrdersPerMonth: Infinity },
+  pro:      { maxBranches: 3,        maxWorkers: 20,       maxOrdersPerMonth: Infinity },
   business: { maxBranches: Infinity, maxWorkers: Infinity, maxOrdersPerMonth: Infinity },
 };
 
 export const DEFAULT_TRIAL_DAYS = 14;
+export const GRACE_PERIOD_DAYS = 7;
 
 export function getPlanFeatures(plan: string): typeof PLAN_FEATURES.free {
   return (PLAN_FEATURES as any)[plan] ?? PLAN_FEATURES.free;
@@ -73,6 +76,7 @@ export function getEntitlementReport(): {
     displayName: string;
     features: Record<string, boolean>;
     limits: { maxBranches: number; maxWorkers: number; maxOrdersPerMonth: number };
+    pricing: ReturnType<typeof getPlanPricing>;
   }>;
   enforcement: string[];
   futureCompatible: string[];
@@ -83,6 +87,7 @@ export function getEntitlementReport(): {
       displayName: PLAN_DISPLAY_NAMES[plan],
       features: getPlanFeatures(plan) as Record<string, boolean>,
       limits: getPlanLimits(plan),
+      pricing: getPlanPricing(plan),
     })),
     enforcement: [
       "HAS_WHATSAPP — checked before sending WhatsApp messages via communication routes",
@@ -96,6 +101,7 @@ export function getEntitlementReport(): {
       "Add new plans by extending SUBSCRIPTION_PLANS and PLAN_FEATURES",
       "hasFeature() is the single check point — no redesign needed for new features",
       "getPlanLimits() provides numeric enforcement separate from feature flags",
+      "Pricing config in pricing.ts is payment-gateway-ready (paystackPlanCode field)",
     ],
   };
 }

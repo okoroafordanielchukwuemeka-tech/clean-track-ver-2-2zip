@@ -392,6 +392,12 @@ export const api = {
   subscription: {
     getStatus: () => request<SubscriptionStatus>("GET", "/subscription/status"),
     getUsage: () => request<SubscriptionUsage>("GET", "/subscription/usage"),
+    getPricing: () => request<SubscriptionPricing>("GET", "/subscription/pricing"),
+    logUpgradeIntent: (targetPlan: string, source?: string) =>
+      request<{ logged: boolean; message: string }>("POST", "/subscription/upgrade-intent", {
+        targetPlan,
+        source: source ?? "billing_settings",
+      }),
   },
   health: {
     production: () => request<unknown>("GET", "/health/production"),
@@ -1510,6 +1516,7 @@ export interface SubscriptionStatus {
   trialStartedAt: string | null;
   trialEndsAt: string | null;
   trialDaysRemaining: number | null;
+  graceDaysRemaining: number | null;
   convertedAt: string | null;
   subscriptionRenewsAt: string | null;
   features: {
@@ -1524,6 +1531,32 @@ export interface SubscriptionStatus {
     maxWorkers: number;
     maxOrdersPerMonth: number;
   };
+}
+
+export interface PlanPricingConfig {
+  tier: string;
+  displayName: string;
+  tagline: string;
+  price: {
+    monthly: number;
+    annual: number;
+    annualSavingsPct: number;
+    currency: string;
+  };
+  features: string[];
+  highlighted: boolean;
+  paystackPlanCode?: string;
+}
+
+export interface SubscriptionPricing {
+  plans: PlanPricingConfig[];
+  paymentInstructions: {
+    bankName: string;
+    contactWhatsApp: string;
+    contactEmail: string;
+    instructions: string[];
+  };
+  currency: string;
 }
 
 export type UsageWarningLevel = "safe" | "warning_70" | "warning_85" | "critical_100";

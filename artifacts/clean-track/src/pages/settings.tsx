@@ -15,6 +15,8 @@ import {
   type MessageTemplate,
   type SubscriptionUsage,
   type SubscriptionStatus,
+  type PlanPricingConfig,
+  type SubscriptionPricing,
 } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,8 +42,16 @@ import { toast } from "sonner";
 import {
   Building2, Palette, Clock, Shield, Bell, MessageSquare, Tag,
   LayoutDashboard, Save, ImageIcon, Plus, Trash2, AlertCircle,
-  RefreshCw, ChevronRight, Percent, CreditCard,
+  RefreshCw, ChevronRight, Percent, CreditCard, Check, Zap,
+  MessageCircle, Mail, X,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = [
@@ -1191,7 +1201,157 @@ function WarnBadge({ level }: { level: string }) {
   return <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-xs border font-medium", c.cls)}>{c.label}</span>;
 }
 
+function UpgradeModal({
+  plan,
+  pricing,
+  onClose,
+}: {
+  plan: PlanPricingConfig;
+  pricing: SubscriptionPricing;
+  onClose: () => void;
+}) {
+  const upgradeIntent = useMutation({
+    mutationFn: () => api.subscription.logUpgradeIntent(plan.tier, "billing_settings"),
+  });
+
+  function handleOpen() {
+    upgradeIntent.mutate();
+  }
+
+  const { paymentInstructions } = pricing;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-blue-500" />
+            Upgrade to {plan.displayName}
+          </DialogTitle>
+          <DialogDescription>
+            ₦{plan.price.monthly.toLocaleString("en-NG")}/month — contact us to activate your plan.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          <div className="rounded-lg bg-muted/50 px-4 py-3 space-y-2 text-sm">
+            <p className="font-semibold text-foreground">How to upgrade:</p>
+            <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground">
+              {paymentInstructions.instructions.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="space-y-2">
+            {paymentInstructions.contactWhatsApp && (
+              <a
+                href={`https://wa.me/${paymentInstructions.contactWhatsApp.replace(/\D/g, "")}?text=Hi, I'd like to upgrade to the ${plan.displayName} plan (₦${plan.price.monthly.toLocaleString("en-NG")}/month).`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleOpen}
+                className="flex items-center justify-center gap-2 w-full rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 px-4 transition-colors"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Contact via WhatsApp
+              </a>
+            )}
+            <a
+              href={`mailto:${paymentInstructions.contactEmail}?subject=Upgrade to ${plan.displayName} Plan&body=Hi, I'd like to upgrade to the ${plan.displayName} plan (₦${plan.price.monthly.toLocaleString("en-NG")}/month).`}
+              onClick={handleOpen}
+              className="flex items-center justify-center gap-2 w-full rounded-lg border border-input bg-background hover:bg-muted text-sm font-medium py-2.5 px-4 transition-colors"
+            >
+              <Mail className="h-4 w-4" />
+              Email {paymentInstructions.contactEmail}
+            </a>
+          </div>
+
+          <p className="text-xs text-center text-muted-foreground">
+            Your plan will be activated within 24 hours of payment confirmation.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PlanCard({
+  plan,
+  currentTier,
+  onUpgrade,
+}: {
+  plan: PlanPricingConfig;
+  currentTier: string;
+  onUpgrade: (plan: PlanPricingConfig) => void;
+}) {
+  const isCurrent = plan.tier === currentTier;
+  const isHigher = ["starter", "pro", "business"].indexOf(plan.tier) >
+    ["free", "starter", "pro", "business"].indexOf(currentTier);
+
+  return (
+    <div className={cn(
+      "relative rounded-xl border p-5 flex flex-col gap-4 transition-shadow",
+      plan.highlighted
+        ? "border-blue-500 dark:border-blue-400 shadow-md shadow-blue-100 dark:shadow-blue-900/20"
+        : "border-border",
+      isCurrent && "ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-background"
+    )}>
+      {plan.highlighted && !isCurrent && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="bg-blue-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider">
+            Most Popular
+          </span>
+        </div>
+      )}
+      {isCurrent && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="bg-emerald-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider">
+            Current Plan
+          </span>
+        </div>
+      )}
+
+      <div>
+        <h3 className="font-bold text-base">{plan.displayName}</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">{plan.tagline}</p>
+      </div>
+
+      <div className="flex items-baseline gap-1">
+        <span className="text-2xl font-extrabold">
+          ₦{plan.price.monthly.toLocaleString("en-NG")}
+        </span>
+        <span className="text-sm text-muted-foreground">/month</span>
+      </div>
+
+      <ul className="space-y-1.5 flex-1">
+        {plan.features.map((f) => (
+          <li key={f} className="flex items-start gap-2 text-sm">
+            <Check className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0" />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+
+      <Button
+        className={cn(
+          "w-full mt-2",
+          plan.highlighted && !isCurrent
+            ? "bg-blue-600 hover:bg-blue-700 text-white"
+            : ""
+        )}
+        variant={isCurrent ? "outline" : "default"}
+        disabled={isCurrent}
+        onClick={() => !isCurrent && isHigher && onUpgrade(plan)}
+      >
+        {isCurrent ? "Current Plan" : isHigher ? "Upgrade" : "Downgrade"}
+      </Button>
+    </div>
+  );
+}
+
 function BillingSection() {
+  const [upgradeTarget, setUpgradeTarget] = useState<PlanPricingConfig | null>(null);
+
   const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
     queryKey: ["subscription", "status"],
     queryFn: () => api.subscription.getStatus(),
@@ -1202,6 +1362,12 @@ function BillingSection() {
     queryKey: ["subscription", "usage"],
     queryFn: () => api.subscription.getUsage(),
     staleTime: 30_000,
+  });
+
+  const { data: pricing } = useQuery({
+    queryKey: ["subscription", "pricing"],
+    queryFn: () => api.subscription.getPricing(),
+    staleTime: 60_000 * 30,
   });
 
   const isLoading = statusLoading || usageLoading;
@@ -1228,8 +1394,9 @@ function BillingSection() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Billing & Usage" description="View your plan details and resource usage for this month." />
+      <SectionHeader title="Billing & Subscription" description="Manage your plan, view usage, and upgrade your account." />
 
+      {/* Status bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           {status && (
@@ -1249,139 +1416,125 @@ function BillingSection() {
         </Button>
       </div>
 
+      {/* Trial banner */}
       {status?.status === "trial" && status.trialEndsAt && (
         <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
           <span className="font-semibold">Trial Period — </span>
           {(status.trialDaysRemaining ?? 0) <= 0
-            ? "Your trial has expired. Contact support to upgrade."
+            ? "Your trial has expired. Upgrade below to continue using CleanTrack."
             : `${status.trialDaysRemaining} day${status.trialDaysRemaining === 1 ? "" : "s"} remaining.`}
           {" "}Ends {new Date(status.trialEndsAt).toLocaleDateString("en-NG", { month: "long", day: "numeric", year: "numeric" })}.
         </div>
       )}
 
+      {/* Past due grace period banner */}
+      {status?.status === "past_due" && (
+        <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4 inline mr-1.5" />
+          <span className="font-semibold">Payment Required — </span>
+          {status.graceDaysRemaining != null && status.graceDaysRemaining > 0
+            ? `${status.graceDaysRemaining} day${status.graceDaysRemaining === 1 ? "" : "s"} remaining in your grace period before account suspension.`
+            : "Your grace period has ended. Upgrade immediately to restore access."}
+          {" "}Choose a plan below to continue.
+        </div>
+      )}
+
+      {/* Suspended banner */}
       {status?.status === "suspended" && (
         <div className="rounded-lg border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           <AlertCircle className="h-4 w-4 inline mr-1.5" />
           <span className="font-semibold">Account Suspended — </span>
-          New orders, workers, and branches are blocked. Contact support to resume.
+          New orders, workers, and branches are blocked. Choose a plan below or contact support to resume.
         </div>
       )}
 
+      {/* Usage bars */}
       {isLoading && !usage && (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-8">
           <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
 
       {usage && (
-        <div className="space-y-6">
-          <div className="rounded-lg border divide-y">
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Monthly Orders</h3>
-                <WarnBadge level={usage.warnings.orders} />
-              </div>
-              <UsageBar
-                label={`This month (resets on the 1st)`}
-                used={usage.monthlyOrderCount}
-                limit={usage.limits.maxOrdersPerMonth}
-                pct={usage.percentages.orders}
-                warnLevel={usage.warnings.orders}
-              />
-              {usage.warnings.orders === "critical_100" && (
-                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                  Limit reached — new orders are blocked until next month or you upgrade.
-                </p>
-              )}
-            </div>
-
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Active Workers</h3>
-                <WarnBadge level={usage.warnings.workers} />
-              </div>
-              <UsageBar
-                label="Currently active workers"
-                used={usage.activeWorkerCount}
-                limit={usage.limits.maxWorkers}
-                pct={usage.percentages.workers}
-                warnLevel={usage.warnings.workers}
-              />
-              {usage.warnings.workers === "critical_100" && (
-                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                  Limit reached — deactivate a worker or upgrade to add more.
-                </p>
-              )}
-            </div>
-
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Branches</h3>
-                <WarnBadge level={usage.warnings.branches} />
-              </div>
-              <UsageBar
-                label="Active branches"
-                used={usage.activeBranchCount}
-                limit={usage.limits.maxBranches}
-                pct={usage.percentages.branches}
-                warnLevel={usage.warnings.branches}
-              />
-              {usage.warnings.branches === "critical_100" && (
-                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                  Limit reached — delete a branch or upgrade to create more.
-                </p>
-              )}
-            </div>
-
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Storage</h3>
-                <WarnBadge level={usage.warnings.storage} />
-              </div>
-              <UsageBar
-                label="Estimated usage (order records)"
-                used={usage.storageUsedMb}
-                limit={usage.limits.maxStorageMb}
-                pct={usage.percentages.storage}
-                warnLevel={usage.warnings.storage}
-                suffix=" MB"
-              />
-              <p className="text-xs text-muted-foreground mt-1.5">Based on ~2 KB per order record.</p>
-            </div>
+        <div className="rounded-lg border divide-y">
+          <div className="px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">This Month's Usage</p>
           </div>
-
-          {status && (
-            <div className="rounded-lg border px-4 py-3 space-y-2 text-sm">
-              <h3 className="font-semibold text-sm mb-3">Plan Limits</h3>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Orders / month</span>
-                  <span className="font-medium">{isFinite(usage.limits.maxOrdersPerMonth) ? usage.limits.maxOrdersPerMonth.toLocaleString() : "Unlimited"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Workers</span>
-                  <span className="font-medium">{isFinite(usage.limits.maxWorkers) ? usage.limits.maxWorkers : "Unlimited"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Branches</span>
-                  <span className="font-medium">{isFinite(usage.limits.maxBranches) ? usage.limits.maxBranches : "Unlimited"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Storage</span>
-                  <span className="font-medium">{usage.limits.maxStorageMb >= 1024 ? `${(usage.limits.maxStorageMb / 1024).toFixed(0)} GB` : `${usage.limits.maxStorageMb} MB`}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">WhatsApp</span>
-                  <span className="font-medium">{status.features.HAS_WHATSAPP ? "✓ Included" : "Not included"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Multi-branch</span>
-                  <span className="font-medium">{status.features.HAS_MULTI_BRANCH ? "✓ Included" : "Not included"}</span>
-                </div>
-              </div>
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium">Orders</h3>
+              <WarnBadge level={usage.warnings.orders} />
             </div>
-          )}
+            <UsageBar
+              label="This month (resets on the 1st)"
+              used={usage.monthlyOrderCount}
+              limit={usage.limits.maxOrdersPerMonth}
+              pct={usage.percentages.orders}
+              warnLevel={usage.warnings.orders}
+            />
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium">Workers</h3>
+              <WarnBadge level={usage.warnings.workers} />
+            </div>
+            <UsageBar
+              label="Active workers"
+              used={usage.activeWorkerCount}
+              limit={usage.limits.maxWorkers}
+              pct={usage.percentages.workers}
+              warnLevel={usage.warnings.workers}
+            />
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium">Branches</h3>
+              <WarnBadge level={usage.warnings.branches} />
+            </div>
+            <UsageBar
+              label="Active branches"
+              used={usage.activeBranchCount}
+              limit={usage.limits.maxBranches}
+              pct={usage.percentages.branches}
+              warnLevel={usage.warnings.branches}
+            />
+          </div>
         </div>
+      )}
+
+      {/* Pricing cards */}
+      <div>
+        <h3 className="text-sm font-semibold mb-1">Available Plans</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          All prices in Nigerian Naira (NGN). Contact us to upgrade.
+        </p>
+        {pricing ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {pricing.plans.map((plan) => (
+              <PlanCard
+                key={plan.tier}
+                plan={plan}
+                currentTier={status?.plan ?? "free"}
+                onUpgrade={setUpgradeTarget}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {["Starter", "Growth", "Business"].map((name) => (
+              <div key={name} className="rounded-xl border p-5 animate-pulse h-64 bg-muted/30" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Upgrade modal */}
+      {upgradeTarget && pricing && (
+        <UpgradeModal
+          plan={upgradeTarget}
+          pricing={pricing}
+          onClose={() => setUpgradeTarget(null)}
+        />
       )}
     </div>
   );

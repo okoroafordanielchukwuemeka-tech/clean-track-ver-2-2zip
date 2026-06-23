@@ -1,0 +1,315 @@
+# CleanTrack Billing Foundation & Trial Conversion Implementation
+
+IMPORTANT:
+
+Before implementing anything:
+
+Perform a full audit of the existing subscription system.
+
+DO NOT rebuild existing billing logic.
+
+DO NOT add payment gateway integration yet.
+
+The goal of this phase is:
+
+Prepare CleanTrack for first paying customers by creating a clear pricing model, fixing trial lifecycle problems, and creating a professional upgrade experience.
+
+No Paystack/Flutterwave integration yet.
+
+---
+
+# PHASE 1 — Subscription Pricing Configuration
+
+Create a centralized pricing configuration.
+
+Do not hardcode prices throughout the application.
+
+Create a single source of truth.
+
+Initial pricing model:
+
+## Starter Plan
+
+Price:
+₦5,000/month
+
+Limits:
+
+* 1 branch
+* 5 workers
+* Unlimited customers
+* Unlimited orders
+* Basic dashboard analytics
+
+## Growth Plan
+
+Price:
+₦10,000/month
+
+Limits:
+
+* 3 branches
+* 20 workers
+* Unlimited customers
+* Unlimited orders
+* Advanced analytics
+* Expenses tracking
+
+## Business Plan
+
+Price:
+₦20,000/month
+
+Limits:
+
+* Unlimited branches
+* Unlimited workers
+* Unlimited customers
+* Unlimited orders
+* Full analytics
+* Priority support
+
+Requirements:
+
+* Store pricing in configuration.
+* Make pricing accessible to backend and frontend.
+* Prepare structure for future monthly/yearly billing.
+* Do not modify payment processing yet.
+
+---
+
+# PHASE 2 — Trial Expiration Automation Audit + Implementation
+
+Current problem:
+
+Users can remain on trial indefinitely.
+
+Fix the subscription lifecycle.
+
+Required flow:
+
+New signup:
+
+trial
+↓
+14 days active
+↓
+trial expiration
+↓
+past_due
+↓
+grace period
+↓
+suspended
+
+Implement:
+
+A scheduled background job.
+
+Requirements:
+
+Daily check:
+
+Find laundries where:
+
+subscriptionStatus = trial
+
+AND
+
+trialEndsAt < current date
+
+Action:
+
+Change:
+
+subscriptionStatus:
+trial → past_due
+
+Create subscription_logs entry:
+
+fromStatus:
+trial
+
+toStatus:
+past_due
+
+reason:
+trial_expired
+
+---
+
+# PHASE 3 — Past Due Enforcement
+
+Audit current requireOperational middleware.
+
+Determine:
+
+Does past_due users still create:
+
+* orders
+* workers
+* branches
+* payments
+
+Implement correct behavior.
+
+Recommended:
+
+Past_due accounts should have:
+
+Grace period:
+7 days
+
+During grace period:
+
+Allow normal usage.
+
+After 7 days:
+
+Change:
+
+past_due → suspended
+
+Suspended accounts:
+
+Can:
+
+* login
+* view data
+* upgrade plan
+
+Cannot:
+
+* create new orders
+* create workers
+* create branches
+
+Every transition must create subscription_logs entry.
+
+---
+
+# PHASE 4 — Billing Settings UX
+
+Improve:
+
+Settings → Billing
+
+Do not connect payment yet.
+
+Create professional upgrade experience.
+
+Show:
+
+Current Plan:
+
+Trial / Starter / Growth / Business
+
+Usage:
+
+Branches:
+X / limit
+
+Workers:
+X / limit
+
+Orders:
+X / limit
+
+Show pricing cards:
+
+Starter
+₦5,000/month
+
+Growth
+₦10,000/month
+
+Business
+₦20,000/month
+
+Each plan should have:
+
+Features list
+
+Button:
+
+"Upgrade"
+
+For now:
+
+Upgrade button can open:
+
+"Contact CleanTrack Support"
+
+or
+
+show manual payment instructions.
+
+Prepare the UI structure for future Paystack integration.
+
+---
+
+# PHASE 5 — Subscription Analytics Preparation
+
+Add tracking events for:
+
+* trial_started
+* trial_expiring
+* trial_expired
+* upgrade_clicked
+* plan_changed
+
+Use existing subscription_logs where possible.
+
+Do not create unnecessary tables.
+
+---
+
+# PHASE 6 — Production Safety Audit
+
+Before finishing:
+
+Verify:
+
+1. Existing customers are not affected.
+
+2. Existing trial accounts remain valid.
+
+3. Subscription logs are created correctly.
+
+4. Plan limits still work.
+
+5. Suspended accounts cannot modify business data.
+
+6. No authentication regression.
+
+7. No multi-tenant isolation regression.
+
+---
+
+# Final Report Required
+
+Provide:
+
+1. Current subscription architecture status.
+
+2. Files changed.
+
+3. Database changes.
+
+4. Trial lifecycle status.
+
+5. Billing UI improvements.
+
+6. Remaining blockers before payment gateway.
+
+7. Updated production readiness score.
+
+8. Recommended next phase after this.
+
+IMPORTANT:
+
+Do not implement Paystack or Flutterwave yet.
+
+The goal is:
+
+CleanTrack should be ready to onboard and convert the first paying customers manually before automating payments.

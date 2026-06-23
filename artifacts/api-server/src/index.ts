@@ -10,6 +10,7 @@ import { lt } from "drizzle-orm";
 import { runAlertChecks } from "./lib/alert-engine.js";
 import { startBackupScheduler } from "./lib/backup-scheduler.js";
 import { startMessageQueueWorker } from "./lib/message-queue-worker.js";
+import { startSubscriptionLifecycleScheduler } from "./lib/subscription-lifecycle.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
@@ -28,6 +29,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   startBackupScheduler();
   // Task #3: start durable WhatsApp message queue worker
   startMessageQueueWorker();
+  // Subscription lifecycle: trial expiry + grace period automation
+  startSubscriptionLifecycleScheduler();
 });
 
 function scheduleIdempotencyCleanup() {

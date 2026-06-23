@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { laundries } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import type { AuthRequest } from "./auth.js";
-import { hasFeature, type PlanFeature } from "../lib/entitlements.js";
+import { hasFeature, type PlanFeature, GRACE_PERIOD_DAYS } from "../lib/entitlements.js";
 import { checkLimit } from "../lib/usage-service.js";
 
 async function getLaundrySubscription(laundryId: number) {
@@ -11,10 +11,21 @@ async function getLaundrySubscription(laundryId: number) {
     .select({
       subscriptionStatus: laundries.subscriptionStatus,
       subscriptionTier: laundries.subscriptionTier,
+      subscriptionRenewsAt: laundries.subscriptionRenewsAt,
     })
     .from(laundries)
     .where(eq(laundries.id, laundryId));
   return row ?? null;
+}
+
+/**
+ * Returns true if a past_due account is still within its grace period.
+ * Grace deadline is stored in subscriptionRenewsAt when the trial expires.
+ * If renewsAt is null (manually set past_due), allow access for GRACE_PERIOD_DAYS.
+ */
+function isWithinGracePeriod(renewsAt: Date | null): boolean {
+  if (!renewsAt) return true;
+  return new Date() <= new Date(renewsAt);
 }
 
 export async function requireOperational(
@@ -34,7 +45,7 @@ export async function requireOperational(
         error: "Account suspended",
         code: "SUBSCRIPTION_SUSPENDED",
         message:
-          "Your account is suspended. Please contact support to resume operations.",
+          "Your account is suspended. Please contact support or upgrade your plan to resume operations.",
       });
     }
 
@@ -45,6 +56,16 @@ export async function requireOperational(
         message:
           "Your account has been cancelled. Historical data is still accessible.",
       });
+    }
+
+    if (sub.subscriptionStatus === "past_due") {
+      if (!isWithinGracePeriod(sub.subscriptionRenewsAt)) {
+        return res.status(403).json({
+          error: "Account suspended — grace period expired",
+          code: "SUBSCRIPTION_SUSPENDED",
+          message: `Your ${GRACE_PERIOD_DAYS}-day grace period has ended. Please contact support or upgrade your plan to resume operations.`,
+        });
+      }
     }
 
     next();
