@@ -45,3 +45,7 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
+SMTP_HOST = "smtp.resend.com"
+SMTP_PORT = "587"
+SMTP_USER = "resend"
+SMTP_FROM = "CleanTrack <onboarding@resend.dev>"

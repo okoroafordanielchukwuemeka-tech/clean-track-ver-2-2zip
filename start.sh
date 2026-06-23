@@ -1,4 +1,6 @@
 #!/bin/bash
+export PATH="$PWD/node_modules/.bin:$PATH"
+
 # Start API server in background
 pnpm --filter @workspace/api-server dev &
 API_PID=$!
