@@ -8,6 +8,7 @@ import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { workerPermissionsRouter } from "./worker-permissions.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction } from "../lib/audit.js";
+import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const workersRouter = Router();
 
@@ -90,6 +91,7 @@ workersRouter.post("/", requireOwner, requireOperational, requirePlanLimit("work
     await db.insert(workerPermissions).values({ workerId: worker.id, laundryId, ...defaults });
 
     const { pin: _pin, ...safeWorker } = worker;
+    trackActivationEvent(laundryId, "worker_created");
     res.status(201).json(safeWorker);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });

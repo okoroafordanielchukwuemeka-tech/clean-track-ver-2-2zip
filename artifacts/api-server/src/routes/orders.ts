@@ -10,6 +10,7 @@ import { requireOperational, requirePlanLimit } from "../middleware/subscription
 import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 import { dispatchNotification, buildOrderVariables } from "../lib/notification-dispatcher.js";
+import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const ordersRouter = Router();
 
@@ -416,6 +417,8 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       relatedOrderId: order.id,
     }).catch(() => {});
 
+    trackActivationEvent(laundryId, "order_created");
+
     logAction({
       auth: req.auth!,
       laundryId,
@@ -525,6 +528,10 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
           severity: "success",
           relatedOrderId: order.id,
         }).catch(() => {});
+      }
+
+      if (data.status === "completed" && beforeOrder.status !== "completed") {
+        trackActivationEvent(laundryId, "order_completed");
       }
 
       if (data.assignedWorkerId && data.assignedWorkerId !== beforeOrder.assignedWorkerId) {
@@ -701,6 +708,8 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
       severity: remainingBalance <= 0 ? "success" : "info",
       relatedOrderId: oId,
     }).catch(() => {});
+
+    trackActivationEvent(laundryId, "payment_recorded");
 
     logAction({
       auth: req.auth!,

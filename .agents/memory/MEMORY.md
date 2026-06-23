@@ -30,3 +30,4 @@
 - [Pre-launch Hardening](pre-launch-hardening.md) — express-rate-limit v8 requires app.set("trust proxy",1) before limiters; SESSION_SECRET is a Replit Secret (not env var); BACKUP_SECRET stored as shared env var; api.health.production() added to api.ts
 - [Worker Token Invalidation](worker-token-invalidation.md) — DB lookup required in requireAuth (async); pure-JWT iat vs pinChangedAt comparison is circular; authLimiter skips /me endpoint
 - [First 100 Users Readiness Fixes](readiness-audit.md) — 6 friction fixes: signup password checklist; sidebar 15→12+Advanced; checklist worker step optional; feedback button; services category Select; demo /demo-login endpoint with demoLimiter
+- [Activation Analytics System](activation-analytics.md) — activation_events table (unique on laundry_id+event_name); 9 event types; scoring 0-100; 4 admin API endpoints; Growth tab in admin-command-center; email tracking pixel via GET /auth/email-track

@@ -4,17 +4,17 @@
  * Sends transactional emails using Nodemailer over configurable SMTP.
  *
  * Required env vars (set as Replit Secrets):
- *   SMTP_HOST     — e.g. smtp.gmail.com
+ *   SMTP_HOST     — e.g. smtp.resend.com
  *   SMTP_PORT     — e.g. 587
- *   SMTP_USER     — your SMTP username / email address
- *   SMTP_PASS     — your SMTP password or app password
+ *   SMTP_USER     — your SMTP username
+ *   SMTP_PASS / SMTP_PASSWORD / RESEND_API_KEY — SMTP password or API key
  *   SMTP_FROM     — display name + address, e.g. "CleanTrack <no-reply@yourdomain.com>"
  *
- * When SMTP is not configured, the reset URL is logged to the console
- * (development fallback only). In production, always configure SMTP.
+ * When SMTP is not configured, URLs are logged to the console (dev fallback only).
  */
 
 import nodemailer from "nodemailer";
+import crypto from "crypto";
 import { logError, log, warn } from "./logger.js";
 
 interface MailOptions {
@@ -25,11 +25,10 @@ interface MailOptions {
 }
 
 function getSmtpPass(): string | undefined {
-  // Support Resend integration: RESEND_API_KEY doubles as the SMTP password
   return process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.RESEND_API_KEY;
 }
 
-function isSmtpConfigured(): boolean {
+export function isSmtpConfigured(): boolean {
   return !!(
     process.env.SMTP_HOST &&
     process.env.SMTP_USER &&
@@ -75,6 +74,30 @@ async function sendMail(options: MailOptions): Promise<void> {
     throw new Error("Email delivery failed. Please try again later.");
   }
 }
+
+// ── Email engagement tracking token ──────────────────────────────────────────
+// Signs laundryId with JWT_SECRET so tracking endpoints can verify the token
+// without storing it — no extra DB table needed.
+
+export function generateEmailTrackingToken(laundryId: number): string {
+  const secret = process.env.JWT_SECRET ?? "fallback-secret";
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`email-track:${laundryId}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+export function verifyEmailTrackingToken(token: string, laundryId: number): boolean {
+  const expected = generateEmailTrackingToken(laundryId);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
+// ── Password Reset Email ──────────────────────────────────────────────────────
 
 export async function sendPasswordResetEmail(
   to: string,
@@ -135,4 +158,150 @@ Your password will not change until you click the link above and create a new on
   await sendMail({ to, subject, html, text });
 }
 
-export { isSmtpConfigured };
+// ── Welcome Email ─────────────────────────────────────────────────────────────
+
+export async function sendWelcomeEmail(
+  to: string,
+  businessName: string,
+  laundryId: number,
+  baseUrl: string
+): Promise<void> {
+  const loginUrl = `${baseUrl}/`;
+  const trackingToken = generateEmailTrackingToken(laundryId);
+  const trackBase = `${baseUrl}/api/auth/email-track`;
+  const pixelUrl = `${trackBase}?t=${trackingToken}&lid=${laundryId}&e=opened`;
+  const trackedLoginUrl = `${trackBase}?t=${trackingToken}&lid=${laundryId}&e=clicked&url=${encodeURIComponent(loginUrl)}`;
+
+  const subject = "Welcome to CleanTrack 🎉 — Let's set up your laundry";
+
+  const text = `
+Welcome to CleanTrack, ${businessName}!
+
+Your laundry workspace is ready. Here's how to get started:
+
+Step 1 — Create your first customer
+Go to Customers → Add Customer and enter their name and phone number.
+
+Step 2 — Add your laundry services
+Go to Services → Add Service to set your pricing for shirts, trousers, dry cleaning, etc.
+
+Step 3 — Create your first order
+Go to Orders → New Order, pick the customer, select services, and save.
+
+Step 4 — Record payment
+On the order page, tap Record Payment to mark it as paid.
+
+Once you've completed your first order, you're fully set up!
+
+Login to your dashboard: ${loginUrl}
+
+Need help? Reply to this email — we're here for you.
+
+— The CleanTrack Team
+`.trim();
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%);padding:32px 32px 24px;">
+      <div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;">CleanTrack</div>
+      <div style="color:#bfdbfe;font-size:14px;margin-top:4px;">Laundry Operations Management</div>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">
+        Welcome, ${businessName}! 🎉
+      </h1>
+      <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.6;">
+        Your CleanTrack workspace is live. Follow these 4 steps to create your first order and see the full power of the system.
+      </p>
+
+      <!-- Steps -->
+      <div style="background:#f8fafc;border-radius:10px;padding:20px;margin-bottom:24px;">
+
+        <div style="display:flex;align-items:flex-start;margin-bottom:16px;">
+          <div style="background:#1d4ed8;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;shrink:0;margin-right:14px;min-width:28px;">1</div>
+          <div>
+            <div style="font-weight:600;color:#0f172a;font-size:14px;">Create your first customer</div>
+            <div style="color:#64748b;font-size:13px;margin-top:2px;">Go to Customers → Add Customer. Enter their name and phone number.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;margin-bottom:16px;">
+          <div style="background:#1d4ed8;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;shrink:0;margin-right:14px;min-width:28px;">2</div>
+          <div>
+            <div style="font-weight:600;color:#0f172a;font-size:14px;">Review your services &amp; pricing</div>
+            <div style="color:#64748b;font-size:13px;margin-top:2px;">We've added common laundry services. Go to Services to adjust prices for your business.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;margin-bottom:16px;">
+          <div style="background:#1d4ed8;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;shrink:0;margin-right:14px;min-width:28px;">3</div>
+          <div>
+            <div style="font-weight:600;color:#0f172a;font-size:14px;">Create your first order</div>
+            <div style="color:#64748b;font-size:13px;margin-top:2px;">Go to Orders → New Order. Pick the customer, add garments, and confirm.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;">
+          <div style="background:#059669;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;shrink:0;margin-right:14px;min-width:28px;">4</div>
+          <div>
+            <div style="font-weight:600;color:#0f172a;font-size:14px;">Record payment &amp; complete</div>
+            <div style="color:#64748b;font-size:13px;margin-top:2px;">On the order, tap Record Payment. Once clothes are collected, mark it Complete.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CTA -->
+      <div style="text-align:center;margin-bottom:28px;">
+        <a href="${trackedLoginUrl}"
+           style="background:#1d4ed8;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;letter-spacing:0.2px;">
+          Go to My Dashboard →
+        </a>
+      </div>
+
+      <!-- Why this matters -->
+      <div style="background:#eff6ff;border-left:4px solid #1d4ed8;border-radius:4px;padding:14px 16px;margin-bottom:24px;">
+        <div style="font-weight:600;color:#1e3a8a;font-size:13px;margin-bottom:4px;">Why completing your first order matters</div>
+        <div style="color:#3b5bdb;font-size:13px;line-height:1.5;">
+          Once you've processed your first real order, CleanTrack starts tracking revenue, outstanding balances, and customer history automatically — saving you hours of manual bookkeeping every week.
+        </div>
+      </div>
+
+      <!-- Support -->
+      <div style="border-top:1px solid #e2e8f0;padding-top:20px;">
+        <div style="color:#64748b;font-size:13px;line-height:1.6;">
+          Need help getting started? Reply to this email — our team will personally help you set up.
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f1f5f9;padding:16px 32px;text-align:center;">
+      <div style="color:#94a3b8;font-size:12px;">
+        © ${new Date().getFullYear()} CleanTrack · You're receiving this because you created a workspace.
+      </div>
+    </div>
+  </div>
+
+  <!-- 1×1 tracking pixel -->
+  <img src="${pixelUrl}" width="1" height="1" style="display:none;" alt="" />
+</body>
+</html>
+`;
+
+  if (!isSmtpConfigured()) {
+    warn("[email-service] SMTP not configured — welcome email not sent.", { to });
+    console.warn(`\n  [DEV] Welcome email would be sent to: ${to}\n`);
+    return;
+  }
+
+  await sendMail({ to, subject, html, text });
+}

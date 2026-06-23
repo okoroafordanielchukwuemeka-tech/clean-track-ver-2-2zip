@@ -19,7 +19,8 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { signToken, requireAuth, AuthRequest } from "../middleware/auth.js";
-import { sendPasswordResetEmail } from "../lib/email-service.js";
+import { sendPasswordResetEmail, sendWelcomeEmail, generateEmailTrackingToken, verifyEmailTrackingToken } from "../lib/email-service.js";
+import { trackActivationEvent } from "../lib/activation-tracker.js";
 import { warn } from "../lib/logger.js";
 
 export const authRouter = Router();
@@ -172,6 +173,16 @@ authRouter.post("/signup", async (req, res) => {
 
     await seedLaundryDefaults(laundry.id);
 
+    // Activation tracking — fire-and-forget, never delays signup response
+    trackActivationEvent(laundry.id, "workspace_created");
+    trackActivationEvent(laundry.id, "branch_created"); // auto-seeded in seedLaundryDefaults
+    trackActivationEvent(laundry.id, "service_created"); // auto-seeded in seedLaundryDefaults
+
+    // Welcome email — non-blocking
+    sendWelcomeEmail(laundry.ownerEmail, laundry.businessName, laundry.id, getAppBaseUrl())
+      .then(() => trackActivationEvent(laundry.id, "welcome_email_sent"))
+      .catch(() => {});
+
     const token = signToken({
       laundryId: laundry.id,
       type: "owner",
@@ -308,6 +319,14 @@ authRouter.post("/owner-login", async (req, res) => {
       .update(laundries)
       .set({ failedLoginAttempts: 0, lockedUntil: null, updatedAt: new Date() })
       .where(eq(laundries.id, laundry.id));
+
+    // Track return login (7+ days after signup)
+    if (laundry.createdAt) {
+      const daysSinceCreation = (Date.now() - new Date(laundry.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceCreation >= 7) {
+        trackActivationEvent(laundry.id, "first_return_login");
+      }
+    }
 
     const token = signToken({
       laundryId: laundry.id,
@@ -705,5 +724,39 @@ authRouter.post("/change-password", requireAuth, async (req: AuthRequest, res) =
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Password change failed" });
+  }
+});
+
+// ── GET /auth/email-track — Welcome email open/click tracking ──────────────
+// Used by the 1×1 pixel in the welcome email (open) and tracked login links (click).
+// Public — no auth required (email clients must be able to load the pixel).
+
+authRouter.get("/email-track", async (req, res) => {
+  try {
+    const { t, lid, e, url } = req.query as Record<string, string | undefined>;
+    const laundryId = lid ? parseInt(lid, 10) : NaN;
+
+    if (t && !isNaN(laundryId) && e) {
+      if (verifyEmailTrackingToken(t, laundryId)) {
+        if (e === "opened") trackActivationEvent(laundryId, "welcome_email_opened");
+        if (e === "clicked") trackActivationEvent(laundryId, "welcome_email_clicked");
+      }
+    }
+
+    if (e === "clicked" && url) {
+      return res.redirect(302, decodeURIComponent(url));
+    }
+
+    // 1×1 transparent GIF pixel
+    const pixel = Buffer.from(
+      "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+      "base64"
+    );
+    res.setHeader("Content-Type", "image/gif");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.end(pixel);
+  } catch {
+    res.status(204).end();
   }
 });

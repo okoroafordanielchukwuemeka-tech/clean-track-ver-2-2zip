@@ -31,3 +31,4 @@ export * from "./subscription-logs.js";
 export * from "./message-queue.js";
 export * from "./password-reset-tokens.js";
 export * from "./error-log.js";
+export * from "./activation-events.js";

@@ -9,6 +9,7 @@ import {
   ChevronRight, Server, Users, ShoppingCart, Layers,
   TrendingUp, BarChart3, Archive, Package, FlaskConical,
   CreditCard, Ban, Hourglass, CheckCircle, ChevronDown,
+  Rocket, Target, Mail, Zap, AlertCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,306 @@ function SeverityBadge({ severity }: { severity: string }) {
     <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-xs border font-medium", cls)}>
       {severity}
     </span>
+  );
+}
+
+// ─── Growth Analytics ──────────────────────────────────────────────────────
+
+const FUNNEL_LABELS: Record<string, string> = {
+  workspace_created: "Signed Up",
+  branch_created: "Branch Created",
+  service_created: "Services Added",
+  customer_created: "Customer Created",
+  order_created: "First Order",
+  payment_recorded: "Payment Recorded",
+  order_completed: "Order Completed",
+  worker_created: "Worker Added",
+  first_return_login: "Return Login (7d+)",
+};
+
+const ACTIVATION_STATE_COLORS = {
+  new: "text-slate-400 bg-slate-800 border-slate-700",
+  onboarding: "text-amber-300 bg-amber-900/30 border-amber-700",
+  activated: "text-emerald-300 bg-emerald-900/30 border-emerald-700",
+};
+
+function FunnelBar({ label, count, pct, dropOff, isFirst }: {
+  label: string; count: number; pct: number; dropOff: number; isFirst: boolean;
+}) {
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-slate-300 text-sm font-medium">{label}</span>
+        <div className="flex items-center gap-3">
+          {!isFirst && dropOff > 0 && (
+            <span className="text-red-400 text-xs">−{dropOff}% drop</span>
+          )}
+          <span className="text-white text-sm font-semibold tabular-nums">{count.toLocaleString()}</span>
+        </div>
+      </div>
+      <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${Math.max(pct, pct > 0 ? 2 : 0)}%`,
+            background: pct > 60 ? "#10b981" : pct > 30 ? "#f59e0b" : "#ef4444",
+          }}
+        />
+      </div>
+      <div className="text-slate-500 text-xs mt-1">{pct}% of signups</div>
+    </div>
+  );
+}
+
+function GrowthTab({ token }: { token: string }) {
+  const { data: funnel, isLoading: funnelLoading } = useQuery({
+    queryKey: ["admin", "activation", "funnel"],
+    queryFn: () => adminFetch("/admin/activation/funnel", token),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  const { data: metrics, isLoading: metricsLoading } = useQuery({
+    queryKey: ["admin", "activation", "metrics"],
+    queryFn: () => adminFetch("/admin/activation/metrics", token),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  const { data: health, isLoading: healthLoading } = useQuery({
+    queryKey: ["admin", "activation", "health"],
+    queryFn: () => adminFetch("/admin/activation/health", token),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  const { data: scores, isLoading: scoresLoading } = useQuery({
+    queryKey: ["admin", "activation", "scores"],
+    queryFn: () => adminFetch("/admin/activation/scores", token),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  const isLoading = funnelLoading || metricsLoading || healthLoading || scoresLoading;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-violet-900/50 border border-violet-700/40 flex items-center justify-center">
+          <Rocket className="w-4 h-4 text-violet-400" />
+        </div>
+        <div>
+          <h2 className="text-white font-semibold text-lg">Growth Analytics</h2>
+          <p className="text-slate-500 text-sm">Activation funnel, scoring, and onboarding health</p>
+        </div>
+      </div>
+
+      {/* ── Key Metrics ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="w-4 h-4 text-emerald-400" />
+              <span className="text-slate-400 text-xs">Activation Rate</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {metricsLoading ? "—" : `${metrics?.activationRate ?? 0}%`}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">
+              {metricsLoading ? "" : `${metrics?.activatedCount ?? 0} of ${metrics?.totalLaundries ?? 0} workspaces`}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span className="text-slate-400 text-xs">Avg. to First Order</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {metricsLoading ? "—" : metrics?.timeToFirstOrderHours != null
+                ? `${metrics.timeToFirstOrderHours}h`
+                : "N/A"}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">from signup to order</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle2 className="w-4 h-4 text-blue-400" />
+              <span className="text-slate-400 text-xs">Avg. to Completed</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {metricsLoading ? "—" : metrics?.timeToFirstCompletedHours != null
+                ? `${metrics.timeToFirstCompletedHours}h`
+                : "N/A"}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">from signup to completion</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Mail className="w-4 h-4 text-violet-400" />
+              <span className="text-slate-400 text-xs">Email Open Rate</span>
+            </div>
+            <div className="text-2xl font-bold text-white">
+              {metricsLoading ? "—" : `${metrics?.emailEngagement?.openRate ?? 0}%`}
+            </div>
+            <div className="text-slate-500 text-xs mt-1">
+              {metricsLoading ? "" : `${metrics?.emailEngagement?.sent ?? 0} sent · ${metrics?.emailEngagement?.clicked ?? 0} clicked`}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ── Activation Funnel ── */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-slate-200 text-sm font-medium flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-violet-400" />
+              Activation Funnel
+              {funnel && <span className="text-slate-500 font-normal">({funnel.total} total signups)</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {funnelLoading ? (
+              <div className="text-slate-500 text-sm py-8 text-center">Loading…</div>
+            ) : funnel?.funnel?.length ? (
+              <div className="divide-y divide-slate-800/60">
+                {funnel.funnel.map((step: any, idx: number) => (
+                  <FunnelBar
+                    key={step.step}
+                    label={FUNNEL_LABELS[step.step] ?? step.step}
+                    count={step.count}
+                    pct={step.pct}
+                    dropOff={step.dropOff}
+                    isFirst={idx === 0}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm py-8 text-center">No activation data yet</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Activation Score Distribution ── */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-slate-200 text-sm font-medium flex items-center gap-2">
+              <Target className="w-4 h-4 text-violet-400" />
+              Workspace Scores
+              <span className="text-slate-500 font-normal text-xs">(most recent 100)</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {scoresLoading ? (
+              <div className="text-slate-500 text-sm py-8 text-center">Loading…</div>
+            ) : scores?.length ? (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {scores.map((ws: any) => (
+                  <div key={ws.id} className="flex items-center gap-3 py-2 border-b border-slate-800/60">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-slate-200 text-sm font-medium truncate">{ws.businessName}</div>
+                      <div className="text-slate-500 text-xs truncate">{ws.ownerEmail}</div>
+                      {ws.stuck && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
+                          <span className="text-amber-400 text-xs truncate">{ws.stuck}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <div className="text-white text-sm font-bold">{ws.score}</div>
+                        <div className="text-slate-500 text-xs">/ 100</div>
+                      </div>
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-xs border font-medium capitalize",
+                        ACTIVATION_STATE_COLORS[ws.state as keyof typeof ACTIVATION_STATE_COLORS] ?? ACTIVATION_STATE_COLORS.new
+                      )}>
+                        {ws.state}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm py-8 text-center">No workspaces yet</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Last 7 Days Health ── */}
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-slate-200 text-sm font-medium flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-violet-400" />
+              Onboarding Health — Last 7 Days
+            </span>
+            {health?.summary && (
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-emerald-400">{health.summary.activated} activated</span>
+                <span className="text-amber-400">{health.summary.onboarding} onboarding</span>
+                <span className="text-slate-400">{health.summary.nonActivated} new</span>
+              </div>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {healthLoading ? (
+            <div className="text-slate-500 text-sm py-8 text-center">Loading…</div>
+          ) : health?.daily?.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-800">
+                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Workspace</th>
+                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">Email</th>
+                    <th className="text-right text-slate-500 font-medium pb-2 pr-4">Score</th>
+                    <th className="text-left text-slate-500 font-medium pb-2 pr-4">State</th>
+                    <th className="text-left text-slate-500 font-medium pb-2">Stuck At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {health.daily.map((row: any) => (
+                    <tr key={row.id}>
+                      <td className="py-2 pr-4 text-slate-200 font-medium max-w-36 truncate">{row.businessName}</td>
+                      <td className="py-2 pr-4 text-slate-400 text-xs max-w-40 truncate">{row.ownerEmail}</td>
+                      <td className="py-2 pr-4 text-right">
+                        <span className="text-white font-semibold">{row.score}</span>
+                        <span className="text-slate-500 text-xs">/100</span>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded text-xs border font-medium capitalize",
+                          ACTIVATION_STATE_COLORS[row.state as keyof typeof ACTIVATION_STATE_COLORS] ?? ACTIVATION_STATE_COLORS.new
+                        )}>
+                          {row.state}
+                        </span>
+                      </td>
+                      <td className="py-2 text-xs text-amber-400 max-w-48">
+                        {row.stuck ?? <span className="text-emerald-400">✓ Fully activated</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-slate-500 text-sm py-8 text-center">No new signups in the last 7 days</div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -997,6 +1298,7 @@ export default function AdminCommandCenter() {
     { id: "devices", label: "Devices", icon: MonitorSmartphone },
     { id: "storage", label: "Storage", icon: HardDrive },
     { id: "backups", label: "Backups", icon: Archive },
+    { id: "growth", label: "Growth", icon: Rocket },
   ];
 
   return (
@@ -1066,6 +1368,7 @@ export default function AdminCommandCenter() {
             {tab === "devices" && <DevicesTab token={token} />}
             {tab === "storage" && <StorageTab token={token} />}
             {tab === "backups" && <BackupsTab token={token} />}
+            {tab === "growth" && <GrowthTab token={token} />}
           </div>
         </main>
       </div>

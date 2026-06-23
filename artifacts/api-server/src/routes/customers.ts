@@ -7,6 +7,7 @@ import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { logAction } from "../lib/audit.js";
+import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const customersRouter = Router();
 
@@ -249,6 +250,7 @@ customersRouter.post("/", checkPermission("create:customers"), idempotencyMiddle
       branchId: req.auth!.branchId ?? undefined,
       ...data,
     }).returning();
+    trackActivationEvent(laundryId, "customer_created");
     res.status(201).json({ ...customer, ...computeMetrics([]) });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });

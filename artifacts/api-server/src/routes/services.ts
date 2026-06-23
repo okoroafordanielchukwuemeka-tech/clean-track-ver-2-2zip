@@ -4,6 +4,7 @@ import { services } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const servicesRouter = Router();
 
@@ -65,6 +66,7 @@ servicesRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
       expressPrice: data.expressPrice?.toString(),
       premiumPrice: data.premiumPrice?.toString(),
     }).returning();
+    trackActivationEvent(laundryId, "service_created");
     res.status(201).json(service);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });

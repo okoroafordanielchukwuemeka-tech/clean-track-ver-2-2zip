@@ -1,0 +1,171 @@
+PHASE: USER ACTIVATION ANALYTICS + WELCOME EMAIL SYSTEM
+
+IMPORTANT
+
+Do NOT build Paystack yet.
+
+Do NOT add unrelated features.
+
+Focus only on:
+
+1. Measuring onboarding success
+2. Helping new users reach their first order faster
+
+GOAL
+
+Before onboarding the first 100 customers, we need visibility into where users succeed or drop off.
+
+We also need a professional welcome experience that guides users toward activation.
+
+PART 1 — ACTIVATION ANALYTICS
+
+Audit the complete owner journey:
+
+Signup
+↓
+Dashboard
+↓
+Create Branch
+↓
+Create Service
+↓
+Create Customer
+↓
+Create First Order
+↓
+Record Payment
+↓
+Complete Order
+↓
+Return Within 7 Days
+
+Implement analytics tracking for:
+
+* workspace_created
+* branch_created
+* service_created
+* customer_created
+* order_created
+* payment_recorded
+* order_completed
+* worker_created
+* first_return_login
+
+Requirements:
+
+* Store events securely
+* Attach laundryId
+* Attach userId
+* No customer-sensitive data
+* No payment-sensitive data
+
+Create an internal analytics dashboard showing:
+
+Activation Funnel
+
+Workspace Created
+↓
+
+Branch Created
+↓
+
+Service Created
+↓
+
+Customer Created
+↓
+
+First Order Created
+↓
+
+First Order Completed
+↓
+
+Returned After 7 Days
+
+Metrics required:
+
+* Activation rate
+* Time to first order
+* Time to first completed order
+* Drop-off percentages
+* Average onboarding completion time
+
+PART 2 — WELCOME EMAIL SYSTEM
+
+Audit current signup flow.
+
+Immediately after successful workspace creation:
+
+Send a welcome email.
+
+Email objectives:
+
+1. Welcome the owner
+2. Explain what CleanTrack does
+3. Give clear next steps
+4. Drive first-order creation
+
+Suggested structure:
+
+Subject:
+
+Welcome to CleanTrack 🎉
+
+Body:
+
+Welcome message
+
+Step 1:
+Create your branch
+
+Step 2:
+Add your laundry services
+
+Step 3:
+Create your first customer
+
+Step 4:
+Create your first order
+
+Short explanation of why completing the first order is important.
+
+Include:
+
+* Login link
+* Support email
+* WhatsApp support (if configured)
+
+PART 3 — ONBOARDING HEALTH CHECK
+
+Create a daily report showing:
+
+* New signups
+* Activated accounts
+* Non-activated accounts
+* Accounts stuck before first order
+* Accounts stuck before first completed order
+
+PART 4 — VALIDATION
+
+Create a fresh test account.
+
+Verify:
+
+* Welcome email is delivered
+* Analytics events are recorded
+* Funnel data updates correctly
+* First order event is tracked
+* First completed order event is tracked
+
+Provide:
+
+1. Analytics implementation status
+2. Welcome email status
+3. Funnel screenshots
+4. Remaining onboarding risks
+5. Activation readiness score
+
+Do NOT start Paystack integration yet.
+
+The objective is understanding and improving activation before acquiring the first 100 customers.

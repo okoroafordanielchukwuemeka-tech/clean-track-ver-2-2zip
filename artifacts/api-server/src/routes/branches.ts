@@ -6,6 +6,7 @@ import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { logAction } from "../lib/audit.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
+import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const branchesRouter = Router();
 
@@ -36,6 +37,7 @@ branchesRouter.post("/", requireOwner, requireOperational, requirePlanLimit("bra
       .insert(branches)
       .values({ laundryId, ...data })
       .returning();
+    trackActivationEvent(laundryId, "branch_created");
     res.status(201).json(branch);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
