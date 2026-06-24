@@ -1,24 +1,24 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { WashingMachine } from "lucide-react";
 
-const DEMO_EMAIL = "demo@cleantrack.ng";
-const DEMO_PASSWORD = "Demo@1234";
-
 export default function DemoLogin() {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const { login } = useAuth();
   const attempted = useRef(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/dashboard", { replace: true });
-      return;
-    }
     if (attempted.current) return;
     attempted.current = true;
+
+    // Always do a fresh demo login — never rely on existing auth state.
+    // Clear the React Query cache first so the dashboard always shows
+    // up-to-date subscription/usage/analytics data (not stale IDB data).
+    queryClient.clear();
 
     api.auth.demoLogin()
       .then((res) => {

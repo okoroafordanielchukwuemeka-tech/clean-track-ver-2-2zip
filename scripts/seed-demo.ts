@@ -171,8 +171,15 @@ async function main() {
 
   const laundryId = laundry.id;
 
-  // Update discount settings regardless (ensure threshold = 500)
+  // Ensure demo account always has an active pro subscription (never expires)
+  // and correct discount settings, regardless of whether it was freshly created.
+  const tenYearsFromNow = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000);
   await db.update(laundries).set({
+    subscriptionStatus: "active",
+    subscriptionTier: "business",
+    subscriptionRenewsAt: tenYearsFromNow,
+    trialStartedAt: null,
+    trialEndsAt: null,
     discountSettings: {
       autoApprovalThreshold: 500,
       maxDiscountPerOrder: 5000,

@@ -97,7 +97,8 @@ function SubscriptionBanner({ sub }: { sub: SubscriptionStatus | null }) {
     queryKey: ["subscription", "usage"],
     queryFn: () => api.subscription.getUsage(),
     enabled: !!sub && (sub.status === "active" || sub.status === "trial"),
-    staleTime: 5 * 60_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   if (!sub) return null;
@@ -253,7 +254,8 @@ export default function Dashboard() {
   const { data: subStatus } = useQuery({
     queryKey: ["subscription", "status"],
     queryFn: () => api.subscription.getStatus(),
-    staleTime: 5 * 60_000,
+    staleTime: 0,
+    refetchOnMount: "always",
     refetchInterval: 10 * 60_000,
   });
 
