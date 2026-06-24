@@ -111,6 +111,11 @@ export default function Login() {
                   Create your workspace
                 </Link>
               </p>
+              <p className="text-slate-500 text-xs">
+                <Link to="/pricing" className="hover:text-slate-400 underline transition-colors">
+                  View pricing plans
+                </Link>
+              </p>
               <div className="border-t border-slate-700 pt-3 space-y-2">
                 <Link
                   to="/worker-login"

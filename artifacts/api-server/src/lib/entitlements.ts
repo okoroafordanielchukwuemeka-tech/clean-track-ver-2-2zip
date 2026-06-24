@@ -57,12 +57,36 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, {
 export const DEFAULT_TRIAL_DAYS = 14;
 export const GRACE_PERIOD_DAYS = 7;
 
+/**
+ * During the 14-day trial, users get Growth (pro) level features and limits.
+ * This lets them experience the full product before paying.
+ */
+export const TRIAL_FEATURE_TIER = "pro" as const;
+
 export function getPlanFeatures(plan: string): typeof PLAN_FEATURES.free {
   return (PLAN_FEATURES as any)[plan] ?? PLAN_FEATURES.free;
 }
 
 export function getPlanLimits(plan: string): typeof PLAN_LIMITS.free {
   return (PLAN_LIMITS as any)[plan] ?? PLAN_LIMITS.free;
+}
+
+/**
+ * Returns the effective feature set for a subscription, accounting for trial.
+ * Trial users receive Growth-level features regardless of their underlying tier.
+ */
+export function getEffectivePlanFeatures(tier: string, status?: string | null): typeof PLAN_FEATURES.free {
+  const effectiveTier = status === "trial" ? TRIAL_FEATURE_TIER : tier;
+  return (PLAN_FEATURES as any)[effectiveTier] ?? PLAN_FEATURES.free;
+}
+
+/**
+ * Returns the effective plan limits, accounting for trial.
+ * Trial users receive Growth-level limits (3 branches, 20 workers, unlimited orders).
+ */
+export function getEffectivePlanLimits(tier: string, status?: string | null): typeof PLAN_LIMITS.free {
+  const effectiveTier = status === "trial" ? TRIAL_FEATURE_TIER : tier;
+  return (PLAN_LIMITS as any)[effectiveTier] ?? PLAN_LIMITS.free;
 }
 
 export function hasFeature(plan: string, feature: PlanFeature): boolean {

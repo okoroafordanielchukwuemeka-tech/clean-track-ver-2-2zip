@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { laundries } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import type { AuthRequest } from "./auth.js";
-import { hasFeature, type PlanFeature, GRACE_PERIOD_DAYS } from "../lib/entitlements.js";
+import { hasFeature, type PlanFeature, GRACE_PERIOD_DAYS, TRIAL_FEATURE_TIER } from "../lib/entitlements.js";
 import { checkLimit } from "../lib/usage-service.js";
 
 async function getLaundrySubscription(laundryId: number) {
@@ -83,7 +83,10 @@ export function requireEntitlement(feature: PlanFeature) {
       const sub = await getLaundrySubscription(laundryId);
       if (!sub) return next();
 
-      if (!hasFeature(sub.subscriptionTier, feature)) {
+      // During trial, users get Growth-level features
+      const effectiveTier = sub.subscriptionStatus === "trial" ? TRIAL_FEATURE_TIER : sub.subscriptionTier;
+
+      if (!hasFeature(effectiveTier, feature)) {
         return res.status(403).json({
           error: "Feature not available",
           code: "ENTITLEMENT_DENIED",
@@ -103,6 +106,7 @@ export function requireEntitlement(feature: PlanFeature) {
  * Hard plan limit enforcement middleware.
  * Call AFTER requireOperational so suspended/cancelled accounts are caught first.
  * Returns HTTP 403 with a machine-readable code if the plan limit is exceeded.
+ * Trial accounts use Growth-level limits.
  */
 export function requirePlanLimit(limitType: "orders" | "workers" | "branches") {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -113,7 +117,10 @@ export function requirePlanLimit(limitType: "orders" | "workers" | "branches") {
       const sub = await getLaundrySubscription(laundryId);
       if (!sub) return next();
 
-      const limitError = await checkLimit(laundryId, sub.subscriptionTier, limitType);
+      // During trial, enforce Growth (pro) limits instead of free limits
+      const effectiveTier = sub.subscriptionStatus === "trial" ? TRIAL_FEATURE_TIER : sub.subscriptionTier;
+
+      const limitError = await checkLimit(laundryId, effectiveTier, limitType);
       if (limitError) {
         return res.status(403).json({
           error: limitError.message,

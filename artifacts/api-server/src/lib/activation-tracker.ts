@@ -25,7 +25,8 @@ export type ActivationEventName =
   | "first_return_login"
   | "welcome_email_sent"
   | "welcome_email_opened"
-  | "welcome_email_clicked";
+  | "welcome_email_clicked"
+  | "welcome_screen_viewed";
 
 /**
  * Record an activation milestone event for a laundry.

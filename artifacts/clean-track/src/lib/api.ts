@@ -114,6 +114,8 @@ export const api = {
         currentPassword,
         newPassword,
       }),
+    welcomeViewed: () =>
+      request<{ ok: boolean }>("POST", "/auth/welcome-viewed"),
   },
   branches: {
     list: () => request<import("@/context/branch-context").Branch[]>("GET", "/branches"),

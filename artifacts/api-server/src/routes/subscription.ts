@@ -4,7 +4,7 @@ import { laundries, subscriptionLogs } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
-import { getPlanFeatures, getPlanLimits, PLAN_DISPLAY_NAMES, getEntitlementReport } from "../lib/entitlements.js";
+import { getEffectivePlanFeatures, getEffectivePlanLimits, PLAN_DISPLAY_NAMES, getEntitlementReport } from "../lib/entitlements.js";
 import { computeUsageWithLimits } from "../lib/usage-service.js";
 import { getPricingList, MANUAL_PAYMENT_INSTRUCTIONS } from "../lib/pricing.js";
 import type { SubscriptionStatus } from "@workspace/db/schema";
@@ -30,8 +30,8 @@ subscriptionRouter.get("/status", requireOwner, async (req: AuthRequest, res) =>
 
     if (!laundry) return res.status(404).json({ error: "Not found" });
 
-    const features = getPlanFeatures(laundry.subscriptionTier);
-    const limits = getPlanLimits(laundry.subscriptionTier);
+    const features = getEffectivePlanFeatures(laundry.subscriptionTier, laundry.subscriptionStatus);
+    const limits = getEffectivePlanLimits(laundry.subscriptionTier, laundry.subscriptionStatus);
     const planDisplayName = (PLAN_DISPLAY_NAMES as any)[laundry.subscriptionTier] ?? laundry.subscriptionTier;
 
     let trialDaysRemaining: number | null = null;
@@ -77,13 +77,16 @@ subscriptionRouter.get("/usage", requireOwner, async (req: AuthRequest, res) => 
     const laundryId = req.auth!.laundryId;
 
     const [laundry] = await db
-      .select({ subscriptionTier: laundries.subscriptionTier })
+      .select({ subscriptionTier: laundries.subscriptionTier, subscriptionStatus: laundries.subscriptionStatus })
       .from(laundries)
       .where(eq(laundries.id, laundryId));
 
     if (!laundry) return res.status(404).json({ error: "Not found" });
 
-    const usage = await computeUsageWithLimits(laundryId, laundry.subscriptionTier);
+    // During trial, report usage against Growth limits so new accounts
+    // don't see a false "branch limit reached" warning immediately.
+    const effectiveTier = laundry.subscriptionStatus === "trial" ? "pro" : laundry.subscriptionTier;
+    const usage = await computeUsageWithLimits(laundryId, effectiveTier);
     res.json(usage);
   } catch {
     res.status(500).json({ error: "Failed to fetch usage" });

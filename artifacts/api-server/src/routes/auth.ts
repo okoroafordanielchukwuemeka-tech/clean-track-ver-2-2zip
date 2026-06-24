@@ -728,6 +728,19 @@ authRouter.post("/change-password", requireAuth, async (req: AuthRequest, res) =
   }
 });
 
+// ── POST /auth/welcome-viewed — Track that the new owner saw the welcome screen ──
+authRouter.post("/welcome-viewed", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const auth = req.auth!;
+    if (auth.type === "owner") {
+      trackActivationEvent(auth.laundryId, "welcome_screen_viewed");
+    }
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true }); // never fail the caller
+  }
+});
+
 // ── GET /auth/email-track — Welcome email open/click tracking ──────────────
 // Used by the 1×1 pixel in the welcome email (open) and tracked login links (click).
 // Public — no auth required (email clients must be able to load the pixel).

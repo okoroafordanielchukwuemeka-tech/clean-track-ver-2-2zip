@@ -1,0 +1,331 @@
+CLEANTRACK — FIRST 100 USERS CONVERSION READINESS IMPLEMENTATION
+
+IMPORTANT:
+
+Do NOT build Paystack.
+Do NOT build WhatsApp integration yet.
+Do NOT add unrelated features.
+
+The goal of this phase is to optimize the first paying customer journey.
+
+CleanTrack already has strong security, multi-tenant architecture, admin controls, activation tracking, and customer success systems.
+
+Now improve the onboarding and trial experience so a new laundry owner can sign up, understand the value, reach their first order quickly, and be motivated to upgrade.
+
+Before coding:
+
+Perform a complete audit of:
+
+1. Signup flow
+2. First login experience
+3. Trial experience
+4. Dashboard experience
+5. Pricing visibility
+6. Billing upgrade journey
+7. Customer creation flow
+8. First order flow
+
+Identify any friction points.
+
+Then implement the following improvements.
+
+---
+
+## 1. Change Trial Experience To Growth Trial
+
+Current problem:
+
+New users are evaluating a limited Free plan.
+
+This reduces conversion because users cannot experience the full value of CleanTrack.
+
+Change the 14-day trial experience.
+
+During trial:
+
+Users should receive Growth-level features.
+
+Trial should include:
+
+* Analytics
+* Reports
+* Multiple workers
+* Advanced dashboard features
+* All important workflow features
+
+Do NOT change paid plan limits.
+
+After trial expires:
+
+Move user to their selected paid plan or free limitations.
+
+Verify:
+
+Trial users can experience the complete value of CleanTrack.
+
+---
+
+## 2. Fix Trial Messaging
+
+Current issue:
+
+Users discover the trial after signup.
+
+Improve signup page.
+
+Add clear messaging:
+
+"Start your 14-day free trial. No payment required."
+
+Explain:
+
+* What they get
+* When trial ends
+* How upgrading works
+
+Make it Nigerian-market friendly.
+
+Avoid complicated SaaS language.
+
+---
+
+## 3. Fix First Login Experience
+
+Current issue:
+
+Users land directly on dashboard and feel overwhelmed.
+
+Create a simple welcome experience.
+
+After signup show:
+
+"Welcome to CleanTrack 👋"
+
+Explain:
+
+"You are ready to manage your laundry business."
+
+Show first steps:
+
+1. Review your services
+2. Add your first customer
+3. Create your first order
+4. Record payment
+
+Include:
+
+[Start Setup]
+
+Button should take them directly to the next action.
+
+---
+
+## 4. Fix Branch Limit Warning
+
+Critical UX issue:
+
+New accounts see:
+
+"Plan limit reached"
+
+immediately after signup because their default branch consumes the limit.
+
+This should NOT happen during trial.
+
+During trial:
+
+Show:
+
+"Your trial includes your first branch."
+
+No red warning.
+
+After trial:
+
+Show upgrade message only when relevant.
+
+---
+
+## 5. Verify Customer Creation Workflow
+
+Audit:
+
+Customer creation frontend and backend.
+
+Confirm:
+
+Frontend field names match backend requirements.
+
+Specifically verify:
+
+fullName vs name
+
+Run:
+
+Create customer
+Create order
+Record payment
+
+Confirm no errors.
+
+---
+
+## 6. Improve Pricing Visibility
+
+Create a simple public pricing section.
+
+Users should see pricing before signup.
+
+Display clearly:
+
+Example:
+
+Starter
+
+₦5,000/month
+
+For small laundry businesses
+
+Growth
+
+₦10,000/month
+
+For growing laundry businesses
+
+Business
+
+₦20,000/month
+
+For multi-location laundry businesses
+
+Keep pricing simple.
+
+Do not add complex enterprise pricing yet.
+
+---
+
+## 7. Improve Billing Page
+
+Current upgrade flow is manual.
+
+Do not add Paystack yet.
+
+But improve preparation.
+
+Billing page should show:
+
+Current plan
+
+Trial remaining days
+
+Available plans
+
+Benefits of upgrading
+
+Upgrade button
+
+For now:
+
+Keep WhatsApp/email contact option.
+
+Prepare structure for future Paystack checkout.
+
+---
+
+## 8. Add Post-Signup Activation Tracking Improvements
+
+Connect onboarding actions:
+
+Track:
+
+* signup completed
+* welcome screen viewed
+* first customer created
+* first order created
+* first payment recorded
+
+Use existing activation system.
+
+Do not duplicate tracking logic.
+
+---
+
+## 9. Mobile Check
+
+Test complete journey on mobile:
+
+Signup
+
+↓
+
+Welcome screen
+
+↓
+
+Dashboard
+
+↓
+
+Create customer
+
+↓
+
+Create order
+
+↓
+
+Record payment
+
+Confirm:
+
+* Buttons are visible
+* Text is readable
+* Forms work correctly
+
+---
+
+## 10. Final Validation
+
+Create a completely new test laundry account.
+
+Simulate:
+
+Day 1:
+
+Signup
+
+Create customer
+
+Create order
+
+Receive payment
+
+Day 3:
+
+Use analytics
+
+Manage workers
+
+Day 10:
+
+See upgrade prompts
+
+Day 14:
+
+Trial expiration behavior
+
+Report:
+
+1. Problems found
+
+2. Changes implemented
+
+3. Screenshots before and after
+
+4. Conversion improvements
+
+5. Remaining blockers before Paystack
+
+6. Updated First 100 Users Readiness Score
+
+Do not start Paystack until this customer journey is clean.

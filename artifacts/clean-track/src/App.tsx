@@ -35,6 +35,8 @@ import DemoLogin from "@/pages/demo-login";
 import OperationsPage from "@/pages/operations";
 import CommunicationsPage from "@/pages/communications";
 import PlatformHealthPage from "@/pages/platform-health";
+import Welcome from "@/pages/welcome";
+import Pricing from "@/pages/pricing";
 
 const STALE_TIME = 5 * 60 * 1000;       // 5 minutes
 const GC_TIME   = 24 * 60 * 60 * 1000;  // 24 hours
@@ -82,6 +84,8 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/welcome" element={<Welcome />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/worker-login" element={<WorkerLogin />} />

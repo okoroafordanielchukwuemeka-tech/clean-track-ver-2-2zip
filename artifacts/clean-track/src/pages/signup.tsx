@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { WashingMachine, Eye, EyeOff } from "lucide-react";
+import { WashingMachine, Eye, EyeOff, CheckCircle2, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Signup() {
@@ -48,8 +48,8 @@ export default function Signup() {
         password: form.password,
       });
       login(res.token, res.user);
-      toast.success(`Welcome to Clean Track, ${res.user.name}!`);
-      navigate("/dashboard", { replace: true });
+      toast.success(`Welcome to CleanTrack, ${res.user.name}!`);
+      navigate("/welcome", { replace: true });
     } catch (err: any) {
       toast.error(err.message || "Signup failed");
     } finally {
@@ -66,6 +66,21 @@ export default function Signup() {
           </div>
           <h1 className="text-3xl font-bold text-white">Clean Track</h1>
           <p className="text-slate-400 mt-1">Create your laundry workspace</p>
+        </div>
+
+        <div className="bg-blue-600/20 border border-blue-500/40 rounded-xl px-4 py-3 flex items-start gap-3">
+          <FlaskConical className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-blue-200 text-sm font-semibold">14-day free trial — no payment required</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1.5">
+              {["Analytics & reports", "Up to 20 workers", "Multiple branches", "Unlimited orders"].map((f) => (
+                <div key={f} className="flex items-center gap-1.5 text-xs text-blue-300">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                  {f}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <Card className="border-slate-700 bg-slate-800/50 backdrop-blur">
@@ -167,6 +182,12 @@ export default function Signup() {
               Already have an account?{" "}
               <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium">
                 Sign in
+              </Link>
+            </p>
+            <p className="mt-2 text-center text-xs text-slate-500">
+              Want to see pricing first?{" "}
+              <Link to="/pricing" className="text-slate-400 hover:text-slate-300 underline">
+                View plans
               </Link>
             </p>
           </CardContent>

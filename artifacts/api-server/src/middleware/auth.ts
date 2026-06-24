@@ -74,9 +74,13 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   // change — if not, the session is expired.
   if (payload.type === "owner" && payload.passwordChangedAt) {
     if (iat) {
-      const tokenIssuedAt = iat * 1000;
-      const pwChangedAt = new Date(payload.passwordChangedAt).getTime();
-      if (tokenIssuedAt < pwChangedAt) {
+      // Compare at second-level precision: iat is a whole Unix second,
+      // passwordChangedAt has sub-second milliseconds. Without flooring,
+      // a token issued during signup (same second as passwordChangedAt)
+      // would be incorrectly rejected because iat*1000 < pwChangedAt.getTime().
+      const tokenIssuedAtSec = iat;
+      const pwChangedAtSec = Math.floor(new Date(payload.passwordChangedAt).getTime() / 1000);
+      if (tokenIssuedAtSec < pwChangedAtSec) {
         return res.status(401).json({
           error: "Your session has expired because your password was changed. Please log in again.",
           code: "PASSWORD_CHANGED",

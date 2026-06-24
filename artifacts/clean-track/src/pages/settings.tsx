@@ -1418,12 +1418,22 @@ function BillingSection() {
 
       {/* Trial banner */}
       {status?.status === "trial" && status.trialEndsAt && (
-        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
-          <span className="font-semibold">Trial Period — </span>
-          {(status.trialDaysRemaining ?? 0) <= 0
-            ? "Your trial has expired. Upgrade below to continue using CleanTrack."
-            : `${status.trialDaysRemaining} day${status.trialDaysRemaining === 1 ? "" : "s"} remaining.`}
-          {" "}Ends {new Date(status.trialEndsAt).toLocaleDateString("en-NG", { month: "long", day: "numeric", year: "numeric" })}.
+        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 px-4 py-4 text-sm text-blue-700 dark:text-blue-300 space-y-2">
+          <div>
+            <span className="font-semibold">Growth Trial — </span>
+            {(status.trialDaysRemaining ?? 0) <= 0
+              ? "Your trial has expired. Upgrade below to continue using CleanTrack."
+              : (status.trialDaysRemaining ?? 0) <= 3
+              ? <span className="text-amber-600 dark:text-amber-400 font-semibold">{status.trialDaysRemaining} day{status.trialDaysRemaining === 1 ? "" : "s"} remaining — upgrade soon to keep your data and access.</span>
+              : `${status.trialDaysRemaining} day${status.trialDaysRemaining === 1 ? "" : "s"} remaining.`}
+            {" "}Ends {new Date(status.trialEndsAt).toLocaleDateString("en-NG", { month: "long", day: "numeric", year: "numeric" })}.
+          </div>
+          {(status.trialDaysRemaining ?? 0) > 0 && (
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              During your trial you have full access to Growth plan features — analytics, multiple branches, batch processing, and up to 20 workers.
+              Choose a paid plan below to keep these features after your trial ends.
+            </p>
+          )}
         </div>
       )}
 
