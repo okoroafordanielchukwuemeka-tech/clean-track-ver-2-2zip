@@ -26,7 +26,8 @@ export type ActivationEventName =
   | "welcome_email_sent"
   | "welcome_email_opened"
   | "welcome_email_clicked"
-  | "welcome_screen_viewed";
+  | "welcome_screen_viewed"
+  | "whatsapp_connected";
 
 /**
  * Record an activation milestone event for a laundry.

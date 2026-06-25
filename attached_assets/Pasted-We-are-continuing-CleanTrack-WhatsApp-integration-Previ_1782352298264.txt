@@ -1,0 +1,288 @@
+We are continuing CleanTrack WhatsApp integration.
+
+Previous phase completed:
+
+✅ whatsapp_connections table created
+✅ Secure token encryption implemented
+✅ Owner-only WhatsApp connection settings created
+✅ Tenant isolation verified
+✅ Manual credential connection works
+
+Now implement Phase 2: Meta WhatsApp Embedded Signup Integration.
+
+Main Goal
+
+Replace the manual WhatsApp credential entry experience with a simple one-click onboarding flow.
+
+The laundry owner should experience:
+
+CleanTrack Settings
+→ WhatsApp Business
+→ Click "Connect WhatsApp"
+→ Complete Meta signup
+→ WhatsApp connected automatically
+
+The owner should NEVER see:
+
+Access tokens
+Phone Number IDs
+Business Account IDs
+API configuration
+Step 1 — Audit Before Coding
+
+First inspect:
+
+Existing whatsapp_connections implementation
+Current WhatsApp routes
+Existing provider_configs synchronization
+Existing webhook architecture
+Existing frontend WhatsApp settings page
+Existing environment variables
+
+Report:
+
+What can be reused
+What needs modification
+Required Meta configuration
+Security considerations
+
+Do not rewrite existing working systems unnecessarily.
+
+Step 2 — Meta Embedded Signup Preparation
+
+Create the architecture for Meta Embedded Signup.
+
+Requirements:
+
+Add configuration support for:
+
+META_APP_ID
+
+META_APP_SECRET
+
+META_CONFIG_ID
+
+META_REDIRECT_URI
+
+Store only environment references.
+
+Never expose:
+
+META_APP_SECRET
+
+to frontend.
+
+Step 3 — Backend OAuth Flow
+
+Create backend endpoints:
+
+Start Signup
+
+POST:
+
+/api/whatsapp/meta/start
+
+Purpose:
+
+Generate Meta signup URL/configuration
+Create temporary connection session
+Track laundry initiating signup
+Callback Handler
+
+GET:
+
+/api/whatsapp/meta/callback
+
+Purpose:
+
+Receive Meta authorization response
+Exchange temporary code server-side
+Retrieve WhatsApp Business Account information
+Retrieve phone number information
+Encrypt access token
+Save connection
+
+Update:
+
+whatsapp_connections
+
+with:
+
+whatsappBusinessAccountId
+phoneNumberId
+businessName
+displayPhoneNumber
+encryptedAccessToken
+status = connected
+connectedAt
+Step 4 — Frontend Experience
+
+Replace manual credential form.
+
+New flow:
+
+Settings
+→ WhatsApp Business
+
+Disconnected:
+
+Show:
+
+"Connect your business WhatsApp"
+
+Explanation:
+
+"Manage customer messages with your team directly from CleanTrack."
+
+Button:
+
+[ Connect WhatsApp ]
+
+Click:
+
+Open Meta Embedded Signup.
+
+Connected:
+
+Show:
+
+WhatsApp Connected ✅
+
+Business:
+Bright Wash Laundry
+
+Number:
++234 xxx xxx
+
+Connected:
+Date
+
+Buttons:
+
+[Disconnect WhatsApp]
+
+Step 5 — Security Requirements
+
+Verify:
+
+Owner A:
+
+Can connect WhatsApp A.
+
+Owner B:
+
+Can connect WhatsApp B.
+
+Confirm:
+
+Laundry A cannot:
+
+view Laundry B WhatsApp details
+access Laundry B token
+modify Laundry B connection
+
+Workers:
+
+Cannot:
+
+connect WhatsApp
+disconnect WhatsApp
+view credentials
+Step 6 — Audit Logging
+
+Every WhatsApp connection action must create logs:
+
+Events:
+
+whatsapp_connection_started
+
+whatsapp_connected
+
+whatsapp_disconnected
+
+whatsapp_connection_failed
+
+Include:
+
+laundryId
+userId
+timestamp
+metadata
+Step 7 — Error Handling
+
+Handle:
+
+User cancels Meta signup
+
+Meta rejects permission
+
+Invalid configuration
+
+Expired authorization code
+
+Connection failure
+
+Show friendly messages.
+
+Example:
+
+"Your WhatsApp connection was not completed. Please try again."
+
+Step 8 — Testing
+
+Create:
+
+Laundry A
+
+Laundry B
+
+Test:
+
+Laundry A connects WhatsApp.
+
+Laundry B connects WhatsApp.
+
+Verify:
+
+Separate connections.
+
+No data leakage.
+
+Test:
+
+Owner access.
+
+Worker access.
+
+Failed signup.
+
+Cancelled signup.
+
+Final Report Required
+
+Provide:
+
+Meta Embedded Signup readiness status
+Files changed
+Database changes
+API changes
+Frontend changes
+Security test results
+Current WhatsApp integration status
+Remaining phases:
+
+Phase 3:
+Webhook registration
+
+Phase 4:
+Incoming message handling
+
+Phase 5:
+Shared WhatsApp inbox
+
+Phase 6:
+Worker permissions
+
+Do not build messaging inbox yet.
+
+Only complete the one-click WhatsApp connection experience.

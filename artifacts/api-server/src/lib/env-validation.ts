@@ -61,6 +61,21 @@ const ENV_WARNINGS: EnvRequirement[] = [
     description: "Off-site backup provider (r2|s3|b2). Off-site backups disabled if unset.",
     required: false,
   },
+  {
+    key: "META_APP_ID",
+    description: "Meta App ID for WhatsApp Embedded Signup. Embedded Signup disabled if unset.",
+    required: false,
+  },
+  {
+    key: "META_APP_SECRET",
+    description: "Meta App Secret for WhatsApp OAuth token exchange. Required when META_APP_ID is set.",
+    required: false,
+  },
+  {
+    key: "META_CONFIG_ID",
+    description: "Meta Embedded Signup Configuration ID. Required when META_APP_ID is set.",
+    required: false,
+  },
 ];
 
 // Off-site provider credential requirements (checked only when provider is set)
