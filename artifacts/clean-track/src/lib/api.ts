@@ -290,6 +290,11 @@ export const api = {
       return request<{ events: NotifEvent[]; total: number }>("GET", `/communication/events${qs}`);
     },
   },
+  whatsapp: {
+    status: () => request<WaConnectionStatus>("GET", "/whatsapp/status"),
+    connect: (data: WaConnectInput) => request<{ connected: true; displayPhoneNumber: string | null; businessName: string | null; connectedAt: string }>("POST", "/whatsapp/connect", data),
+    disconnect: () => request<{ connected: false; disconnectedAt: string }>("POST", "/whatsapp/disconnect"),
+  },
   operations: {
     auditLog: (params?: { period?: string; action?: string; actorType?: string; actorName?: string; limit?: number; offset?: number }) => {
       const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
@@ -1563,6 +1568,27 @@ export interface SubscriptionPricing {
 }
 
 export type UsageWarningLevel = "safe" | "warning_70" | "warning_85" | "critical_100";
+
+// ── WhatsApp Connection ────────────────────────────────────────────────────
+
+export type WaConnectionStatus =
+  | { connected: false }
+  | {
+      connected: true;
+      phoneNumberId: string;
+      whatsappBusinessAccountId: string;
+      displayPhoneNumber: string | null;
+      businessName: string | null;
+      connectedAt: string;
+    };
+
+export interface WaConnectInput {
+  whatsappBusinessAccountId: string;
+  phoneNumberId: string;
+  accessToken: string;
+  displayPhoneNumber?: string;
+  businessName?: string;
+}
 
 export interface SubscriptionUsage {
   monthlyOrderCount: number;

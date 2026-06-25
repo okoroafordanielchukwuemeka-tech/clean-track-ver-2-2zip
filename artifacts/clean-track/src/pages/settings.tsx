@@ -17,6 +17,8 @@ import {
   type SubscriptionStatus,
   type PlanPricingConfig,
   type SubscriptionPricing,
+  type WaConnectionStatus,
+  type WaConnectInput,
 } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +45,8 @@ import {
   Building2, Palette, Clock, Shield, Bell, MessageSquare, Tag,
   LayoutDashboard, Save, ImageIcon, Plus, Trash2, AlertCircle,
   RefreshCw, ChevronRight, Percent, CreditCard, Check, Zap,
-  MessageCircle, Mail, X,
+  MessageCircle, Mail, X, Smartphone, CheckCircle2, WifiOff,
+  Loader2, Link, Unlink, Calendar,
 } from "lucide-react";
 import {
   Dialog,
@@ -62,6 +65,7 @@ const SECTIONS = [
   { id: "discounts", label: "Discount Rules", icon: Percent },
   { id: "automation", label: "Automation Alerts", icon: Bell },
   { id: "templates", label: "Message Templates", icon: MessageSquare },
+  { id: "whatsapp", label: "WhatsApp Business", icon: Smartphone },
   { id: "categories", label: "Expense Categories", icon: Tag },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "billing", label: "Billing & Usage", icon: CreditCard },
@@ -1550,6 +1554,256 @@ function BillingSection() {
   );
 }
 
+// ─── WhatsApp Business Section ────────────────────────────────────────────────
+
+function WhatsAppBusinessSection() {
+  const qc = useQueryClient();
+  const [showConnectDialog, setShowConnectDialog] = useState(false);
+  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
+  const [form, setForm] = useState<WaConnectInput>({
+    whatsappBusinessAccountId: "",
+    phoneNumberId: "",
+    accessToken: "",
+    displayPhoneNumber: "",
+    businessName: "",
+  });
+
+  const { data: status, isLoading } = useQuery<WaConnectionStatus>({
+    queryKey: ["whatsapp-status"],
+    queryFn: () => api.whatsapp.status(),
+    staleTime: 30_000,
+  });
+
+  const connect = useMutation({
+    mutationFn: (data: WaConnectInput) => api.whatsapp.connect(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      toast.success("WhatsApp Business connected successfully");
+      setShowConnectDialog(false);
+      setForm({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
+    },
+    onError: () => toast.error("Failed to connect WhatsApp Business"),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: () => api.whatsapp.disconnect(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      toast.success("WhatsApp Business disconnected");
+      setShowDisconnectDialog(false);
+    },
+    onError: () => toast.error("Failed to disconnect"),
+  });
+
+  const isConnected = status?.connected === true;
+  const connectedStatus = isConnected ? (status as Extract<WaConnectionStatus, { connected: true }>) : null;
+
+  const canSubmit =
+    form.whatsappBusinessAccountId.trim() &&
+    form.phoneNumberId.trim() &&
+    form.accessToken.trim();
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="WhatsApp Business"
+        description="Connect your WhatsApp Business account to send automated order notifications to customers."
+      />
+
+      {/* Connection status card */}
+      <div className={cn(
+        "rounded-xl border p-5 transition-colors",
+        isConnected
+          ? "border-green-500/30 bg-green-500/5"
+          : "border-border bg-muted/30"
+      )}>
+        {isLoading ? (
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Checking connection…</span>
+          </div>
+        ) : isConnected && connectedStatus ? (
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Connected</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {connectedStatus.businessName ?? "WhatsApp Business Account"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
+                onClick={() => setShowDisconnectDialog(true)}
+              >
+                <Unlink className="h-3.5 w-3.5" />
+                Disconnect
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground mb-0.5">Business Number</p>
+                <p className="text-sm font-medium">
+                  {connectedStatus.displayPhoneNumber ?? connectedStatus.phoneNumberId}
+                </p>
+              </div>
+              <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground mb-0.5">Connected On</p>
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  {new Date(connectedStatus.connectedAt).toLocaleDateString("en-GB", {
+                    day: "numeric", month: "short", year: "numeric",
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <WifiOff className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Not Connected</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Connect your WhatsApp Business account to enable customer notifications
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => setShowConnectDialog(true)}
+            >
+              <Link className="h-3.5 w-3.5" />
+              Connect WhatsApp
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Info callout */}
+      {!isConnected && (
+        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm text-blue-300 space-y-1">
+          <p className="font-medium text-blue-200">What you'll need</p>
+          <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-300/80">
+            <li>A Meta Business Manager account</li>
+            <li>A verified WhatsApp Business API phone number</li>
+            <li>A permanent (never-expiring) access token</li>
+          </ul>
+        </div>
+      )}
+
+      {/* Connect Dialog */}
+      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connect WhatsApp Business</DialogTitle>
+            <DialogDescription>
+              Enter your Meta WhatsApp Business API credentials. These are stored securely and never displayed again.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Business Account ID (WABA ID)</Label>
+              <Input
+                value={form.whatsappBusinessAccountId}
+                onChange={e => setForm(f => ({ ...f, whatsappBusinessAccountId: e.target.value }))}
+                placeholder="e.g. 123456789012345"
+              />
+              <p className="text-xs text-muted-foreground">Found in Meta Business Manager → WhatsApp Accounts</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Phone Number ID</Label>
+              <Input
+                value={form.phoneNumberId}
+                onChange={e => setForm(f => ({ ...f, phoneNumberId: e.target.value }))}
+                placeholder="e.g. 987654321098765"
+              />
+              <p className="text-xs text-muted-foreground">Found in WhatsApp Manager → Phone Numbers</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Access Token</Label>
+              <Input
+                type="password"
+                value={form.accessToken}
+                onChange={e => setForm(f => ({ ...f, accessToken: e.target.value }))}
+                placeholder="Permanent access token"
+              />
+              <p className="text-xs text-muted-foreground">Use a permanent token — never a temporary one</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Display Number <span className="text-muted-foreground">(optional)</span></Label>
+                <Input
+                  value={form.displayPhoneNumber}
+                  onChange={e => setForm(f => ({ ...f, displayPhoneNumber: e.target.value }))}
+                  placeholder="+234 801 234 5678"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Business Name <span className="text-muted-foreground">(optional)</span></Label>
+                <Input
+                  value={form.businessName}
+                  onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))}
+                  placeholder="My Laundry Co."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowConnectDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => connect.mutate(form)}
+              disabled={!canSubmit || connect.isPending}
+              className="gap-2"
+            >
+              {connect.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {connect.isPending ? "Connecting…" : "Connect"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disconnect confirmation */}
+      <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Customers will no longer receive WhatsApp notifications for their orders. You can reconnect at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => disconnect.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { isOwner } = useAuth();
   const { isOnline } = useNetworkStatus();
@@ -1619,6 +1873,7 @@ export default function SettingsPage() {
               {activeSection === "discounts" && <DiscountSettingsSection />}
               {activeSection === "automation" && <AutomationSection />}
               {activeSection === "templates" && <MessageTemplatesSection />}
+              {activeSection === "whatsapp" && <WhatsAppBusinessSection />}
               {activeSection === "categories" && <ExpenseCategoriesSection />}
               {activeSection === "dashboard" && <DashboardPreferencesSection />}
               {activeSection === "billing" && <BillingSection />}
