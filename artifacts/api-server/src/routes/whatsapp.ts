@@ -321,7 +321,33 @@ whatsappRouter.post("/meta/callback", requireOwner, async (req: AuthRequest, res
     });
   } catch (err) {
     console.error("[whatsapp] POST /meta/callback error:", err);
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "whatsapp_connection_failed",
+      metadata: { method: "embedded_signup", reason: String(err) },
+    });
     return res.status(500).json({ error: "Failed to complete WhatsApp connection" });
+  }
+});
+
+// ── POST /api/whatsapp/meta/start ─────────────────────────────────────────
+// Logs the start of an Embedded Signup attempt. Fire-and-forget from frontend.
+
+whatsappRouter.post("/meta/start", requireOwner, async (req: AuthRequest, res) => {
+  const { laundryId } = req.auth!;
+  try {
+    logAction({
+      auth: req.auth!,
+      laundryId,
+      action: "whatsapp_connection_started",
+      metadata: { method: "embedded_signup" },
+    });
+    return res.json({ started: true });
+  } catch (err) {
+    // Non-fatal — don't block the signup flow
+    console.warn("[whatsapp] POST /meta/start log error:", err);
+    return res.json({ started: true });
   }
 });
 

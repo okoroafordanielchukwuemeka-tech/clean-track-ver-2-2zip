@@ -293,6 +293,7 @@ export const api = {
   whatsapp: {
     status: () => request<WaConnectionStatus>("GET", "/whatsapp/status"),
     metaConfig: () => request<WaMetaConfig>("GET", "/whatsapp/meta/config"),
+    metaStart: () => request<{ started: boolean }>("POST", "/whatsapp/meta/start"),
     metaCallback: (data: WaMetaCallbackInput) =>
       request<{ connected: true; displayPhoneNumber: string | null; businessName: string | null; connectedAt: string }>(
         "POST", "/whatsapp/meta/callback", data
@@ -1593,6 +1594,16 @@ export interface WaConnectInput {
   accessToken: string;
   displayPhoneNumber?: string;
   businessName?: string;
+}
+
+export type WaMetaConfig =
+  | { available: false }
+  | { available: true; appId: string; configId: string };
+
+export interface WaMetaCallbackInput {
+  code: string;
+  wabaId: string;
+  phoneNumberId: string;
 }
 
 export interface SubscriptionUsage {

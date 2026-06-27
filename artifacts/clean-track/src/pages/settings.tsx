@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
@@ -19,6 +19,8 @@ import {
   type SubscriptionPricing,
   type WaConnectionStatus,
   type WaConnectInput,
+  type WaMetaConfig,
+  type WaMetaCallbackInput,
 } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1560,6 +1562,8 @@ function WhatsAppBusinessSection() {
   const qc = useQueryClient();
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const pendingWabaRef = useRef<{ wabaId: string; phoneNumberId: string } | null>(null);
   const [form, setForm] = useState<WaConnectInput>({
     whatsappBusinessAccountId: "",
     phoneNumberId: "",
@@ -1574,6 +1578,83 @@ function WhatsAppBusinessSection() {
     staleTime: 30_000,
   });
 
+  const { data: metaConfig } = useQuery<WaMetaConfig>({
+    queryKey: ["whatsapp-meta-config"],
+    queryFn: () => api.whatsapp.metaConfig(),
+    staleTime: Infinity,
+  });
+
+  const useEmbeddedSignup = metaConfig?.available === true;
+
+  // ── Load Facebook SDK when Embedded Signup is available ──────────────────
+  useEffect(() => {
+    if (!useEmbeddedSignup || !metaConfig) return;
+    if (document.getElementById("facebook-jssdk")) return;
+    const script = document.createElement("script");
+    script.id = "facebook-jssdk";
+    script.src = "https://connect.facebook.net/en_US/sdk.js";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      (window as any).FB?.init({
+        appId: (metaConfig as Extract<WaMetaConfig, { available: true }>).appId,
+        version: "v21.0",
+        cookie: true,
+      });
+    };
+    document.body.appendChild(script);
+  }, [useEmbeddedSignup, metaConfig]);
+
+  // ── Listen for Meta Embedded Signup window messages ───────────────────────
+  useEffect(() => {
+    if (!useEmbeddedSignup) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== "https://www.facebook.com" &&
+        event.origin !== "https://web.facebook.com"
+      ) return;
+
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
+
+        if (data.event === "FINISH") {
+          pendingWabaRef.current = {
+            wabaId: data.data.waba_id,
+            phoneNumberId: data.data.phone_number_id,
+          };
+        } else if (data.event === "CANCEL") {
+          setIsConnecting(false);
+          toast.info("WhatsApp connection was cancelled.");
+        } else if (data.event === "ERROR") {
+          setIsConnecting(false);
+          toast.error("WhatsApp connection encountered an error. Please try again.");
+        }
+      } catch {
+        // ignore non-JSON messages
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [useEmbeddedSignup]);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const metaCallbackMutation = useMutation({
+    mutationFn: (data: WaMetaCallbackInput) => api.whatsapp.metaCallback(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      setIsConnecting(false);
+      toast.success("WhatsApp Business connected successfully");
+    },
+    onError: () => {
+      setIsConnecting(false);
+      toast.error("Your WhatsApp connection was not completed. Please try again.");
+    },
+  });
+
   const connect = useMutation({
     mutationFn: (data: WaConnectInput) => api.whatsapp.connect(data),
     onSuccess: () => {
@@ -1582,7 +1663,7 @@ function WhatsAppBusinessSection() {
       setShowConnectDialog(false);
       setForm({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
     },
-    onError: () => toast.error("Failed to connect WhatsApp Business"),
+    onError: () => toast.error("Your WhatsApp connection was not completed. Please try again."),
   });
 
   const disconnect = useMutation({
@@ -1595,9 +1676,73 @@ function WhatsAppBusinessSection() {
     onError: () => toast.error("Failed to disconnect"),
   });
 
+  // ── Embedded Signup launcher ──────────────────────────────────────────────
+
+  const launchEmbeddedSignup = () => {
+    const fb = (window as any).FB;
+    if (!fb) {
+      toast.error("WhatsApp signup is still loading. Please try again in a moment.");
+      return;
+    }
+
+    const cfg = metaConfig as Extract<WaMetaConfig, { available: true }>;
+    pendingWabaRef.current = null;
+    setIsConnecting(true);
+    api.whatsapp.metaStart().catch(() => {}); // fire-and-forget audit log
+
+    fb.login(
+      (response: any) => {
+        const code: string | undefined = response?.authResponse?.code;
+
+        if (!code) {
+          // User closed the popup without finishing
+          if (!pendingWabaRef.current) {
+            setIsConnecting(false);
+            if (response?.status !== "connected") {
+              toast.info("WhatsApp connection was not completed. Please try again.");
+            }
+          }
+          return;
+        }
+
+        const waba = pendingWabaRef.current;
+        if (!waba) {
+          setIsConnecting(false);
+          toast.error("Could not retrieve your WhatsApp account details. Please try again.");
+          return;
+        }
+
+        metaCallbackMutation.mutate({
+          code,
+          wabaId: waba.wabaId,
+          phoneNumberId: waba.phoneNumberId,
+        });
+      },
+      {
+        config_id: cfg.configId,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: "",
+          sessionInfoVersion: "3",
+        },
+      }
+    );
+  };
+
+  const handleConnectClick = () => {
+    if (useEmbeddedSignup) {
+      launchEmbeddedSignup();
+    } else {
+      setShowConnectDialog(true);
+    }
+  };
+
+  // ── Derived state ─────────────────────────────────────────────────────────
+
   const isConnected = status?.connected === true;
   const connectedStatus = isConnected ? (status as Extract<WaConnectionStatus, { connected: true }>) : null;
-
   const canSubmit =
     form.whatsappBusinessAccountId.trim() &&
     form.phoneNumberId.trim() &&
@@ -1630,7 +1775,7 @@ function WhatsAppBusinessSection() {
                   <CheckCircle2 className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
-                  <p className="font-semibold text-sm">Connected</p>
+                  <p className="font-semibold text-sm">WhatsApp Connected</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {connectedStatus.businessName ?? "WhatsApp Business Account"}
                   </p>
@@ -1674,35 +1819,56 @@ function WhatsAppBusinessSection() {
               <div>
                 <p className="font-semibold text-sm">Not Connected</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Connect your WhatsApp Business account to enable customer notifications
+                  {useEmbeddedSignup
+                    ? "Connect your business WhatsApp account in one click."
+                    : "Connect your WhatsApp Business account to enable customer notifications."}
                 </p>
               </div>
             </div>
             <Button
               size="sm"
               className="gap-1.5 shrink-0"
-              onClick={() => setShowConnectDialog(true)}
+              onClick={handleConnectClick}
+              disabled={isConnecting || metaCallbackMutation.isPending}
             >
-              <Link className="h-3.5 w-3.5" />
-              Connect WhatsApp
+              {(isConnecting || metaCallbackMutation.isPending) ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Link className="h-3.5 w-3.5" />
+              )}
+              {isConnecting
+                ? "Connecting…"
+                : metaCallbackMutation.isPending
+                ? "Saving…"
+                : "Connect WhatsApp"}
             </Button>
           </div>
         )}
       </div>
 
-      {/* Info callout */}
+      {/* Info callout — adapts based on whether Embedded Signup is available */}
       {!isConnected && (
-        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm text-blue-300 space-y-1">
-          <p className="font-medium text-blue-200">What you'll need</p>
-          <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-300/80">
-            <li>A Meta Business Manager account</li>
-            <li>A verified WhatsApp Business API phone number</li>
-            <li>A permanent (never-expiring) access token</li>
-          </ul>
-        </div>
+        useEmbeddedSignup ? (
+          <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm space-y-1">
+            <p className="font-medium text-green-200">One-click setup via Meta</p>
+            <p className="text-xs text-green-300/80">
+              You'll be guided through a secure Meta signup flow. CleanTrack never sees your Meta
+              password — only the WhatsApp Business access needed to send notifications.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm text-blue-300 space-y-1">
+            <p className="font-medium text-blue-200">What you'll need</p>
+            <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-300/80">
+              <li>A Meta Business Manager account</li>
+              <li>A verified WhatsApp Business API phone number</li>
+              <li>A permanent (never-expiring) access token</li>
+            </ul>
+          </div>
+        )
       )}
 
-      {/* Connect Dialog */}
+      {/* Manual Connect Dialog (fallback when Embedded Signup is not configured) */}
       <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
