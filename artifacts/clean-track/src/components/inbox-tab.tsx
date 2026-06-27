@@ -2,9 +2,9 @@
  * InboxTab — WhatsApp Communication Center
  *
  * Three-panel layout:
- *   Left   — conversation list with filters, unread badges, assignment indicators
- *   Center — message thread with reply input (send via WhatsApp or save locally)
- *   Right  — customer context: orders, balance, quick actions
+ *   Left   — conversation list with search, filters, unread badges, assignment indicators
+ *   Center — message thread with reply/note composer, retry, Create Order
+ *   Right  — customer context: stats, orders, balance, quick actions
  *
  * Mobile: single-panel navigation (list → messages → context)
  */
@@ -20,7 +20,8 @@ import {
   MessageSquare, Phone, User, CheckCircle2, Archive, RefreshCw,
   Loader2, ChevronLeft, RotateCcw, Clock, AlertCircle, ExternalLink,
   Send, AlertTriangle, ShoppingCart, CreditCard, ChevronRight,
-  UserCircle, BadgeCheck, Circle, Users, X,
+  UserCircle, BadgeCheck, Users, X, Search, StickyNote, Plus,
+  TrendingUp, Calendar, MoreHorizontal, RotateCw,
 } from "lucide-react";
 import { formatDistanceToNow, format, differenceInHours, differenceInDays } from "date-fns";
 import type {
@@ -32,6 +33,7 @@ import type {
 
 type ConvStatus = "open" | "resolved" | "archived";
 type MobilePanel = "list" | "messages" | "context";
+type ComposerMode = "reply" | "note";
 
 // ── Time helpers ─────────────────────────────────────────────────────────────
 
@@ -73,6 +75,15 @@ function fmtNaira(n: number): string {
   return "₦" + n.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function getInitials(name: string | null | undefined, phone: string): string {
+  if (name) {
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return phone.slice(-2);
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending:    "bg-yellow-500/15 text-yellow-400 border-yellow-500/20",
   processing: "bg-blue-500/15 text-blue-400 border-blue-500/20",
@@ -97,47 +108,69 @@ function ConvItem({
     ? workers.find(w => w.id === conv.assignedWorkerId)
     : null;
 
+  const initials = getInitials(conv.customerName, conv.customerPhone);
+  const isUnread = conv.unreadCount > 0;
+  const lastMsg = conv.lastMessageBody;
+  const lastMsgDir = conv.lastMessageDirection;
+
   return (
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left px-4 py-3.5 border-b border-border/40 hover:bg-muted/20 transition-colors",
-        selected && "bg-primary/8 border-l-[3px] border-l-primary"
+        "w-full text-left px-3 py-3 border-b border-border/30 hover:bg-muted/20 transition-colors",
+        selected && "bg-primary/8 border-l-2 border-l-primary"
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 w-9 h-9 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mt-0.5">
-          <User className="h-4 w-4 text-green-400" />
+      <div className="flex items-start gap-2.5">
+        {/* Avatar with initials */}
+        <div className={cn(
+          "shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
+          isUnread
+            ? "bg-green-500/20 border border-green-500/40 text-green-400"
+            : "bg-muted/60 border border-border/50 text-muted-foreground"
+        )}>
+          {initials}
         </div>
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
             <span className={cn(
               "text-sm truncate",
-              conv.unreadCount > 0 ? "font-bold text-foreground" : "font-medium text-foreground/90"
+              isUnread ? "font-bold text-foreground" : "font-medium text-foreground/90"
             )}>
               {conv.customerName ?? conv.customerPhone}
             </span>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {conv.unreadCount > 0 && (
-                <span className="bg-green-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+            <div className="flex items-center gap-1 shrink-0">
+              {isUnread && (
+                <span className="bg-green-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
                   {conv.unreadCount}
                 </span>
               )}
-              <span className="text-xs text-muted-foreground tabular-nums">{listTime(conv.lastMessageAt)}</span>
+              <span className="text-[11px] text-muted-foreground/60 tabular-nums">{listTime(conv.lastMessageAt)}</span>
             </div>
           </div>
 
-          {conv.customerName && (
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">{conv.customerPhone}</p>
+          {/* Last message preview */}
+          {lastMsg && (
+            <p className={cn(
+              "text-xs mt-0.5 truncate leading-relaxed",
+              isUnread ? "text-foreground/80" : "text-muted-foreground/60"
+            )}>
+              {lastMsgDir === "outbound" && (
+                <span className="text-primary/60 font-medium mr-0.5">You: </span>
+              )}
+              {lastMsg}
+            </p>
           )}
 
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-xs px-1.5 py-0.5 rounded border bg-green-500/10 text-green-400 border-green-500/20 font-medium">
-              WhatsApp
+          {/* Tags row */}
+          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+            <span className="text-[10px] px-1.5 py-0.5 rounded border bg-green-500/8 text-green-400 border-green-500/20 font-medium">
+              WA
             </span>
             {conv.status !== "open" && (
               <span className={cn(
-                "text-xs px-1.5 py-0.5 rounded border font-medium capitalize",
+                "text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize",
                 conv.status === "resolved"
                   ? "bg-teal-500/10 text-teal-400 border-teal-500/20"
                   : "bg-muted text-muted-foreground border-border"
@@ -146,8 +179,8 @@ function ConvItem({
               </span>
             )}
             {assignedWorker && (
-              <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
-                <UserCircle className="h-3 w-3" />
+              <span className="ml-auto text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
+                <UserCircle className="h-2.5 w-2.5" />
                 {assignedWorker.name.split(" ")[0]}
               </span>
             )}
@@ -160,10 +193,42 @@ function ConvItem({
 
 // ── Chat bubble ──────────────────────────────────────────────────────────────
 
-function ChatBubble({ msg }: { msg: ConversationMessage }) {
+function ChatBubble({
+  msg, onRetry, retrying,
+}: {
+  msg: ConversationMessage;
+  onRetry?: (msgId: number) => void;
+  retrying?: boolean;
+}) {
   const isInbound = msg.direction === "inbound";
+  const isNote = msg.metadata?.note === true;
+  const isFailed = msg.status === "failed";
+  const isQueued = msg.status === "queued";
+
+  // Internal note — amber sticky note style
+  if (isNote) {
+    return (
+      <div className="flex justify-end mb-3">
+        <div className="max-w-[80%]">
+          <div className="rounded-xl px-3.5 py-2.5 text-sm bg-amber-500/10 border border-amber-500/20 text-amber-100">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <StickyNote className="h-3 w-3 text-amber-400 shrink-0" />
+              <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Internal Note</span>
+            </div>
+            <p className="whitespace-pre-wrap break-words text-amber-50/90 leading-relaxed">{msg.body}</p>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1 px-1 justify-end">
+            <span className="text-[11px] text-amber-400/60">{msg.senderName ?? "You"}</span>
+            <span className="text-[11px] text-muted-foreground/30">·</span>
+            <span className="text-[11px] text-muted-foreground/50">{bubbleTime(msg.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex gap-2 mb-4", isInbound ? "justify-start" : "justify-end")}>
+    <div className={cn("flex gap-2 mb-3", isInbound ? "justify-start" : "justify-end")}>
       {isInbound && (
         <div className="shrink-0 w-7 h-7 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mt-1">
           <User className="h-3.5 w-3.5 text-green-400" />
@@ -173,26 +238,42 @@ function ChatBubble({ msg }: { msg: ConversationMessage }) {
         <div className={cn(
           "rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
           isInbound
-            ? "bg-muted/70 text-foreground rounded-tl-sm border border-border/50"
+            ? "bg-muted/60 text-foreground rounded-tl-sm border border-border/40"
+            : isFailed
+            ? "bg-red-500/15 text-red-200 border border-red-500/25 rounded-tr-sm"
             : "bg-primary text-primary-foreground rounded-tr-sm"
         )}>
           <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+          {isFailed && (
+            <p className="text-[11px] text-red-400 mt-1">Failed to send</p>
+          )}
         </div>
         <div className={cn(
           "flex items-center gap-1.5 mt-1 px-1",
           isInbound ? "justify-start" : "justify-end"
         )}>
-          <span className="text-[11px] text-muted-foreground/70">
-            {isInbound ? (msg.senderName ?? "Customer") : (msg.senderName ?? "CleanTrack")}
+          <span className="text-[11px] text-muted-foreground/60">
+            {isInbound ? (msg.senderName ?? "Customer") : (msg.senderName ?? "You")}
           </span>
-          <span className="text-[11px] text-muted-foreground/40">·</span>
-          <span className="text-[11px] text-muted-foreground/70">{bubbleTime(msg.createdAt)}</span>
-          {!isInbound && msg.status && msg.status !== "queued" && (
-            <BadgeCheck className={cn(
-              "h-3 w-3",
-              msg.status === "read" ? "text-blue-400" :
-              msg.status === "delivered" ? "text-green-400" : "text-muted-foreground/50"
-            )} />
+          <span className="text-[11px] text-muted-foreground/30">·</span>
+          <span className="text-[11px] text-muted-foreground/60">{bubbleTime(msg.createdAt)}</span>
+          {!isInbound && msg.status && (
+            <>
+              {isQueued && <Clock className="h-3 w-3 text-muted-foreground/40" />}
+              {msg.status === "sent" && <BadgeCheck className="h-3 w-3 text-muted-foreground/50" />}
+              {msg.status === "delivered" && <BadgeCheck className="h-3 w-3 text-green-400" />}
+              {msg.status === "read" && <BadgeCheck className="h-3 w-3 text-blue-400" />}
+              {isFailed && onRetry && (
+                <button
+                  onClick={() => onRetry(msg.id)}
+                  disabled={retrying}
+                  className="flex items-center gap-0.5 text-[11px] text-red-400 hover:text-red-300 transition-colors"
+                >
+                  <RotateCw className="h-2.5 w-2.5" />
+                  {retrying ? "Retrying…" : "Retry"}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -205,9 +286,9 @@ function ChatBubble({ msg }: { msg: ConversationMessage }) {
 function DaySep({ date }: { date: Date }) {
   return (
     <div className="flex items-center gap-3 my-4 px-2">
-      <div className="flex-1 border-t border-border/40" />
-      <span className="text-xs text-muted-foreground/60 px-2">{separatorLabel(date)}</span>
-      <div className="flex-1 border-t border-border/40" />
+      <div className="flex-1 border-t border-border/30" />
+      <span className="text-xs text-muted-foreground/50 px-2">{separatorLabel(date)}</span>
+      <div className="flex-1 border-t border-border/30" />
     </div>
   );
 }
@@ -215,30 +296,38 @@ function DaySep({ date }: { date: Date }) {
 // ── Customer Context Panel ────────────────────────────────────────────────────
 
 function CustomerContext({
-  detail, convId, onCreateOrder,
+  detail, convId,
 }: {
   detail: ConversationDetail; convId: number;
-  onCreateOrder?: () => void;
 }) {
+  const qc = useQueryClient();
   const { customer, conversation: conv } = detail;
+
+  const addNote = useMutation({
+    mutationFn: (body: string) => api.conversations.addNote(convId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation-detail", convId] });
+      toast.success("Note added");
+    },
+    onError: () => toast.error("Failed to add note"),
+  });
 
   if (!customer) {
     return (
-      <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center">
-          <AlertTriangle className="h-6 w-6 text-amber-400" />
+      <div className="flex flex-col items-center justify-center h-full px-5 text-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
+          <AlertTriangle className="h-5 w-5 text-amber-400" />
         </div>
         <div>
           <p className="font-medium text-sm">Unknown Customer</p>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            No customer profile found for{" "}
-            <span className="font-mono text-foreground">{conv.customerPhone}</span>.
-            They may not have placed an order yet.
+            No profile found for{" "}
+            <span className="font-mono text-foreground">{conv.customerPhone}</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Ask them to mention their name or order number.
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Ask them to mention their name or order number so you can link them.
-        </p>
       </div>
     );
   }
@@ -248,10 +337,10 @@ function CustomerContext({
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Customer card */}
-      <div className="px-4 pt-4 pb-3 border-b border-border/50">
+      <div className="px-4 pt-4 pb-3 border-b border-border/40">
         <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-            <User className="h-5 w-5 text-primary" />
+          <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center shrink-0 text-sm font-bold text-primary">
+            {getInitials(customer.fullName, customer.phone)}
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm leading-tight">{customer.fullName}</p>
@@ -260,86 +349,115 @@ function CustomerContext({
               to={`/customers/${customer.id}`}
               className="text-xs text-primary hover:underline flex items-center gap-0.5 mt-1"
             >
-              View full profile <ExternalLink className="h-2.5 w-2.5" />
+              Full profile <ExternalLink className="h-2.5 w-2.5" />
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-2 px-3 py-3 border-b border-border/50">
-        <div className="bg-muted/30 rounded-lg p-2.5 text-center">
-          <p className="text-lg font-bold">{customer.totalOrders}</p>
-          <p className="text-xs text-muted-foreground">Total Orders</p>
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 gap-2 px-3 py-3 border-b border-border/40">
+        <div className="bg-muted/25 rounded-lg p-2.5 text-center">
+          <p className="text-base font-bold">{customer.totalOrders}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Orders</p>
         </div>
         <div className={cn(
           "rounded-lg p-2.5 text-center",
-          hasBalance ? "bg-red-500/10" : "bg-muted/30"
+          hasBalance ? "bg-red-500/10" : "bg-muted/25"
         )}>
-          <p className={cn("text-lg font-bold", hasBalance ? "text-red-400" : "")}>
+          <p className={cn("text-base font-bold tabular-nums", hasBalance ? "text-red-400" : "")}>
             {fmtNaira(customer.outstandingBalance)}
           </p>
-          <p className="text-xs text-muted-foreground">Outstanding</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Outstanding</p>
         </div>
+        {customer.totalSpent !== undefined && customer.totalSpent > 0 && (
+          <div className="bg-muted/25 rounded-lg p-2.5 text-center col-span-2">
+            <div className="flex items-center justify-center gap-1.5">
+              <TrendingUp className="h-3 w-3 text-emerald-400" />
+              <p className="text-sm font-bold text-emerald-400 tabular-nums">{fmtNaira(customer.totalSpent)}</p>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Total Spent</p>
+          </div>
+        )}
+        {customer.lastOrderAt && (
+          <div className="bg-muted/25 rounded-lg p-2.5 text-center col-span-2">
+            <div className="flex items-center justify-center gap-1.5">
+              <Calendar className="h-3 w-3 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">{relTime(customer.lastOrderAt)}</p>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Last Order</p>
+          </div>
+        )}
       </div>
 
       {/* Quick actions */}
-      <div className="px-3 py-3 border-b border-border/50 space-y-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+      <div className="px-3 py-3 border-b border-border/40 space-y-1.5">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
           Quick Actions
         </p>
         <Link
           to={`/orders/new?customerId=${customer.id}&customerName=${encodeURIComponent(customer.fullName)}&phone=${encodeURIComponent(customer.phone)}`}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
         >
-          <ShoppingCart className="h-4 w-4" />
-          Create New Order
+          <ShoppingCart className="h-3.5 w-3.5" />
+          Create Order
         </Link>
         <Link
           to={`/orders?customerId=${customer.id}`}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted/30 transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted/30 transition-colors"
         >
-          <ChevronRight className="h-4 w-4" />
+          <MoreHorizontal className="h-3.5 w-3.5" />
           View All Orders
         </Link>
         {hasBalance && (
           <Link
             to={`/orders?customerId=${customer.id}&paymentStatus=unpaid`}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/5 transition-colors"
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-red-500/30 text-red-400 text-xs font-medium hover:bg-red-500/5 transition-colors"
           >
-            <CreditCard className="h-4 w-4" />
-            Record Payment
+            <CreditCard className="h-3.5 w-3.5" />
+            Record Payment ({fmtNaira(customer.outstandingBalance)})
           </Link>
         )}
+        <button
+          onClick={() => {
+            const note = window.prompt("Add internal note (only visible to your team):");
+            if (note?.trim()) addNote.mutate(note.trim());
+          }}
+          disabled={addNote.isPending}
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted/30 transition-colors text-left"
+        >
+          <StickyNote className="h-3.5 w-3.5 text-amber-400" />
+          Add Internal Note
+        </button>
       </div>
 
       {/* Active orders */}
       {customer.activeOrders.length > 0 && (
-        <div className="px-3 py-3 border-b border-border/50">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+        <div className="px-3 py-3 border-b border-border/40">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             Active Orders ({customer.activeOrders.length})
           </p>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {customer.activeOrders.map(order => (
               <Link
                 key={order.id}
                 to={`/orders/${order.id}`}
-                className="block bg-muted/20 hover:bg-muted/40 border border-border/50 rounded-lg p-2.5 transition-colors"
+                className="block bg-muted/15 hover:bg-muted/30 border border-border/40 rounded-lg p-2.5 transition-colors"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-mono font-medium">{order.orderId}</span>
                   <div className="flex gap-1">
-                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize", STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground")}>
+                    <span className={cn("text-[9px] px-1.5 py-0.5 rounded border font-medium capitalize", STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground")}>
                       {order.status}
                     </span>
-                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize", PAY_COLORS[order.paymentStatus] ?? "bg-muted text-muted-foreground")}>
+                    <span className={cn("text-[9px] px-1.5 py-0.5 rounded border font-medium capitalize", PAY_COLORS[order.paymentStatus] ?? "bg-muted text-muted-foreground")}>
                       {order.paymentStatus}
                     </span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-xs text-muted-foreground capitalize">{order.serviceType}</span>
-                  <span className="text-xs font-medium">{fmtNaira(parseFloat(order.price || "0"))}</span>
+                  <span className="text-[11px] text-muted-foreground capitalize">{order.serviceType}</span>
+                  <span className="text-[11px] font-medium">{fmtNaira(parseFloat(order.price || "0"))}</span>
                 </div>
               </Link>
             ))}
@@ -350,24 +468,24 @@ function CustomerContext({
       {/* Recent orders */}
       {customer.recentOrders.length > 0 && (
         <div className="px-3 py-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Recent Orders
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Recent History
           </p>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {customer.recentOrders.map(order => (
               <Link
                 key={order.id}
                 to={`/orders/${order.id}`}
-                className="flex items-center gap-2 p-2 hover:bg-muted/20 rounded-lg transition-colors group"
+                className="flex items-center gap-2 p-2 hover:bg-muted/15 rounded-lg transition-colors group"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-mono">{order.orderId}</p>
-                  <p className="text-xs text-muted-foreground">{relTime(order.createdAt)}</p>
+                  <p className="text-[11px] font-mono">{order.orderId}</p>
+                  <p className="text-[10px] text-muted-foreground">{relTime(order.createdAt)}</p>
                 </div>
-                <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">
+                <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
                   {fmtNaira(parseFloat(order.price || "0"))}
                 </span>
-                <ChevronRight className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                <ChevronRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-muted-foreground" />
               </Link>
             ))}
           </div>
@@ -376,9 +494,9 @@ function CustomerContext({
 
       {customer.totalOrders === 0 && (
         <div className="px-4 py-6 text-center text-muted-foreground">
-          <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <ShoppingCart className="h-7 w-7 mx-auto mb-2 opacity-25" />
           <p className="text-sm">No orders yet</p>
-          <p className="text-xs mt-1">Create their first order using the button above</p>
+          <p className="text-xs mt-1 text-muted-foreground/60">Use the button above to create their first</p>
         </div>
       )}
     </div>
@@ -416,7 +534,7 @@ function AssignDropdown({
         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-md hover:bg-muted/40 transition-colors border border-transparent hover:border-border"
       >
         <UserCircle className="h-3.5 w-3.5" />
-        <span>{current ? current.name.split(" ")[0] : "Unassigned"}</span>
+        <span>{current ? current.name.split(" ")[0] : "Assign"}</span>
       </button>
       {open && (
         <>
@@ -463,11 +581,14 @@ function MessagesPanel({
   isOwner: boolean; onBack: () => void;
   onShowContext: () => void; mobile: boolean;
 }) {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const markedRead = useRef(false);
-  const [replyText, setReplyText] = useState("");
+  const [composerText, setComposerText] = useState("");
+  const [composerMode, setComposerMode] = useState<ComposerMode>("reply");
+  const [retryingId, setRetryingId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<ConversationDetail>({
     queryKey: ["conversation-detail", convId],
@@ -488,7 +609,10 @@ function MessagesPanel({
     onSuccess: (_, s) => {
       qc.invalidateQueries({ queryKey: ["conversations"] });
       qc.invalidateQueries({ queryKey: ["conversation-detail", convId] });
-      toast.success(s === "resolved" ? "Conversation resolved" : s === "archived" ? "Archived" : "Reopened");
+      toast.success(
+        s === "resolved" ? "Conversation resolved" :
+        s === "archived" ? "Archived" : "Reopened"
+      );
     },
     onError: () => toast.error("Failed to update conversation"),
   });
@@ -496,7 +620,7 @@ function MessagesPanel({
   const reply = useMutation({
     mutationFn: (body: string) => api.conversations.reply(convId, body),
     onSuccess: (data) => {
-      setReplyText("");
+      setComposerText("");
       qc.invalidateQueries({ queryKey: ["conversation-detail", convId] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
       if (!data.delivered) {
@@ -504,6 +628,16 @@ function MessagesPanel({
       }
     },
     onError: () => toast.error("Failed to send reply"),
+  });
+
+  const addNote = useMutation({
+    mutationFn: (body: string) => api.conversations.addNote(convId, body),
+    onSuccess: () => {
+      setComposerText("");
+      qc.invalidateQueries({ queryKey: ["conversation-detail", convId] });
+      toast.success("Internal note added");
+    },
+    onError: () => toast.error("Failed to add note"),
   });
 
   // Auto-mark read on open
@@ -522,11 +656,25 @@ function MessagesPanel({
     }
   }, [data?.messages?.length]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
+    }
+  }, [composerText]);
+
+  const isSending = composerMode === "reply" ? reply.isPending : addNote.isPending;
+
   const handleSend = useCallback(() => {
-    const body = replyText.trim();
-    if (!body || reply.isPending) return;
-    reply.mutate(body);
-  }, [replyText, reply]);
+    const body = composerText.trim();
+    if (!body || isSending) return;
+    if (composerMode === "reply") {
+      reply.mutate(body);
+    } else {
+      addNote.mutate(body);
+    }
+  }, [composerText, composerMode, isSending, reply, addNote]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -534,6 +682,21 @@ function MessagesPanel({
       handleSend();
     }
   };
+
+  const handleRetry = useCallback(async (msgId: number) => {
+    if (!data) return;
+    const msg = data.messages.find(m => m.id === msgId);
+    if (!msg) return;
+    setRetryingId(msgId);
+    try {
+      await reply.mutateAsync(msg.body);
+      toast.success("Message re-sent");
+    } catch {
+      toast.error("Retry failed");
+    } finally {
+      setRetryingId(null);
+    }
+  }, [data, reply]);
 
   if (isLoading) {
     return (
@@ -545,6 +708,7 @@ function MessagesPanel({
   if (!data) return null;
 
   const { conversation: conv, messages } = data;
+  const isOpen = conv.status === "open";
 
   // Group messages with day separators
   const rendered: Array<{ type: "separator"; date: Date } | { type: "msg"; msg: ConversationMessage }> = [];
@@ -561,21 +725,40 @@ function MessagesPanel({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b bg-card/40 shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-card/40 shrink-0">
         {mobile && (
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
         )}
-        <div className="w-8 h-8 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0">
-          <User className="h-3.5 w-3.5 text-green-400" />
+        <div className="w-8 h-8 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0 text-xs font-bold text-green-400">
+          {getInitials(conv.customerName, conv.customerPhone)}
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm leading-tight truncate">
             {conv.customerName ?? conv.customerPhone}
           </p>
-          <p className="text-xs text-muted-foreground font-mono">{conv.customerPhone}</p>
+          {conv.customerName && (
+            <p className="text-xs text-muted-foreground font-mono leading-tight">{conv.customerPhone}</p>
+          )}
         </div>
+
+        {/* Create Order quick action */}
+        {data.customer && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs hidden sm:flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+            onClick={() =>
+              navigate(
+                `/orders/new?customerId=${data.customer!.id}&customerName=${encodeURIComponent(data.customer!.fullName)}&phone=${encodeURIComponent(data.customer!.phone)}`
+              )
+            }
+          >
+            <Plus className="h-3 w-3" />
+            Order
+          </Button>
+        )}
 
         {/* Assignment (owner only) */}
         {isOwner && (
@@ -589,7 +772,7 @@ function MessagesPanel({
 
         {/* Status actions */}
         <div className="flex items-center gap-1 shrink-0">
-          {conv.status === "open" && (
+          {isOpen && (
             <>
               <Button
                 size="sm" variant="outline"
@@ -618,7 +801,7 @@ function MessagesPanel({
               </Button>
             </>
           )}
-          {conv.status !== "open" && (
+          {!isOpen && (
             <Button
               size="sm" variant="outline" className="h-7 text-xs"
               onClick={() => updateStatus.mutate("open")}
@@ -642,7 +825,7 @@ function MessagesPanel({
 
       {/* Customer context bar */}
       {data.customer ? (
-        <div className="px-4 py-1.5 bg-green-500/5 border-b border-green-500/10 flex items-center gap-3 text-xs text-muted-foreground shrink-0 flex-wrap">
+        <div className="px-3 py-1.5 bg-green-500/5 border-b border-green-500/10 flex items-center gap-3 text-xs text-muted-foreground shrink-0 flex-wrap">
           <span className="flex items-center gap-1">
             <User className="h-3 w-3 text-green-400" />
             <span className="font-medium text-foreground">{data.customer.fullName}</span>
@@ -651,10 +834,16 @@ function MessagesPanel({
             <ShoppingCart className="h-3 w-3" />
             {data.customer.totalOrders} orders
           </span>
+          {data.customer.totalSpent !== undefined && data.customer.totalSpent > 0 && (
+            <span className="hidden md:flex items-center gap-1 text-emerald-400">
+              <TrendingUp className="h-3 w-3" />
+              {fmtNaira(data.customer.totalSpent)} spent
+            </span>
+          )}
           {data.customer.outstandingBalance > 0 && (
             <span className="flex items-center gap-1 text-red-400">
               <CreditCard className="h-3 w-3" />
-              {fmtNaira(data.customer.outstandingBalance)} outstanding
+              {fmtNaira(data.customer.outstandingBalance)} owed
             </span>
           )}
           {data.assignedWorker && (
@@ -665,9 +854,9 @@ function MessagesPanel({
           )}
         </div>
       ) : (
-        <div className="px-4 py-1.5 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs text-amber-400/80 shrink-0">
+        <div className="px-3 py-1.5 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2 text-xs text-amber-400/80 shrink-0">
           <AlertCircle className="h-3 w-3 shrink-0" />
-          Unknown customer · no profile for{" "}
+          Unknown customer ·{" "}
           <span className="font-mono">{conv.customerPhone}</span>
         </div>
       )}
@@ -683,45 +872,105 @@ function MessagesPanel({
           rendered.map((item, i) =>
             item.type === "separator"
               ? <DaySep key={`sep-${i}`} date={item.date} />
-              : <ChatBubble key={item.msg.id} msg={item.msg} />
+              : (
+                <ChatBubble
+                  key={item.msg.id}
+                  msg={item.msg}
+                  onRetry={handleRetry}
+                  retrying={retryingId === item.msg.id}
+                />
+              )
           )
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Reply box */}
-      <div className="border-t bg-card/30 p-3 shrink-0">
+      {/* Composer */}
+      <div className={cn(
+        "border-t p-3 shrink-0 transition-colors",
+        composerMode === "note" ? "bg-amber-500/5 border-amber-500/15" : "bg-card/30"
+      )}>
+        {/* Mode toggle */}
+        {isOpen && (
+          <div className="flex items-center gap-1 mb-2">
+            <button
+              onClick={() => setComposerMode("reply")}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-all",
+                composerMode === "reply"
+                  ? "bg-primary/15 text-primary font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+              )}
+            >
+              <Send className="h-3 w-3" />
+              Reply to customer
+            </button>
+            <button
+              onClick={() => setComposerMode("note")}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-all",
+                composerMode === "note"
+                  ? "bg-amber-500/20 text-amber-400 font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+              )}
+            >
+              <StickyNote className="h-3 w-3" />
+              Internal note
+            </button>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
-            value={replyText}
-            onChange={e => setReplyText(e.target.value)}
+            value={composerText}
+            onChange={e => setComposerText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={conv.status !== "open" ? "Conversation is closed — reopen to reply" : "Type a message… (⌘↩ to send)"}
-            disabled={conv.status !== "open" || reply.isPending}
-            rows={2}
+            placeholder={
+              !isOpen
+                ? "Conversation is closed — reopen to reply"
+                : composerMode === "note"
+                ? "Write an internal note (not sent to customer)… ⌘↩ to save"
+                : "Type a message… ⌘↩ to send"
+            }
+            disabled={!isOpen || isSending}
+            rows={1}
             className={cn(
-              "flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm",
-              "placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30",
-              "disabled:opacity-50 disabled:cursor-not-allowed max-h-32"
+              "flex-1 resize-none rounded-xl border px-3 py-2.5 text-sm",
+              "placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2",
+              "disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden",
+              "transition-colors",
+              composerMode === "note"
+                ? "border-amber-500/30 bg-amber-500/5 focus:ring-amber-500/20"
+                : "border-border bg-background focus:ring-primary/30"
             )}
+            style={{ minHeight: "40px", maxHeight: "120px" }}
           />
           <Button
             size="icon"
-            className="h-10 w-10 rounded-xl shrink-0"
+            className={cn(
+              "h-10 w-10 rounded-xl shrink-0 transition-colors",
+              composerMode === "note" && "bg-amber-500 hover:bg-amber-500/90 text-white"
+            )}
             onClick={handleSend}
-            disabled={!replyText.trim() || reply.isPending || conv.status !== "open"}
+            disabled={!composerText.trim() || isSending || !isOpen}
+            title={composerMode === "note" ? "Save note" : "Send message"}
           >
-            {reply.isPending
+            {isSending
               ? <Loader2 className="h-4 w-4 animate-spin" />
+              : composerMode === "note"
+              ? <StickyNote className="h-4 w-4" />
               : <Send className="h-4 w-4" />}
           </Button>
         </div>
-        {replyText.length > 0 && (
-          <p className="text-xs text-muted-foreground/50 mt-1.5 text-right">
-            {replyText.length}/4096
-          </p>
-        )}
+        <div className="flex items-center justify-between mt-1.5 px-1">
+          {composerMode === "note" && (
+            <span className="text-[10px] text-amber-400/70">Not sent to customer</span>
+          )}
+          {composerText.length > 0 && (
+            <span className="text-[10px] text-muted-foreground/40 ml-auto">{composerText.length}/4096</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -735,6 +984,7 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("list");
   const [isFetchingRefresh, setIsFetchingRefresh] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data, isLoading, isFetching, refetch } = useQuery<ConversationListResponse>({
     queryKey: ["conversations", statusFilter],
@@ -750,8 +1000,19 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
   });
 
   const workers = workersData ?? [];
-  const conversations = data?.conversations ?? [];
+  const allConversations = data?.conversations ?? [];
   const totalUnread = data?.totalUnread ?? 0;
+
+  // Client-side search filter
+  const conversations = searchQuery.trim()
+    ? allConversations.filter(c => {
+        const q = searchQuery.toLowerCase();
+        return (
+          (c.customerName ?? "").toLowerCase().includes(q) ||
+          c.customerPhone.includes(q)
+        );
+      })
+    : allConversations;
 
   const handleSelect = (id: number) => {
     setSelectedId(id);
@@ -767,10 +1028,10 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
 
   // Auto-select first conversation on desktop (initial load)
   useEffect(() => {
-    if (!selectedId && conversations.length > 0 && window.innerWidth >= 768) {
-      setSelectedId(conversations[0].id);
+    if (!selectedId && allConversations.length > 0 && window.innerWidth >= 768) {
+      setSelectedId(allConversations[0].id);
     }
-  }, [conversations.length]);
+  }, [allConversations.length]);
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 290px)", minHeight: "520px" }}>
@@ -780,7 +1041,12 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
           {(["open", "resolved", "archived"] as ConvStatus[]).map(s => (
             <button
               key={s}
-              onClick={() => { setStatusFilter(s); setSelectedId(null); setMobilePanel("list"); }}
+              onClick={() => {
+                setStatusFilter(s);
+                setSelectedId(null);
+                setMobilePanel("list");
+                setSearchQuery("");
+              }}
               className={cn(
                 "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
                 statusFilter === s
@@ -814,14 +1080,34 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
         {/* ── Left: Conversation list ── */}
         <div className={cn(
           "flex flex-col border-r bg-card/20",
-          // Mobile: show only when on "list" panel
           mobilePanel !== "list" ? "hidden md:flex md:w-64 lg:w-72 shrink-0" : "flex w-full md:w-64 lg:w-72 shrink-0"
         )}>
-          <div className="px-4 py-2.5 border-b bg-muted/10 shrink-0">
-            <p className="text-xs text-muted-foreground">
-              {isLoading ? "Loading…" : `${conversations.length} conversation${conversations.length !== 1 ? "s" : ""}`}
+          {/* Search */}
+          <div className="px-3 py-2 border-b bg-muted/10 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search by name or phone…"
+                className="w-full bg-muted/30 border border-border/50 rounded-lg pl-8 pr-3 py-1.5 text-xs placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground/50 mt-1.5">
+              {isLoading ? "Loading…" : `${conversations.length}${searchQuery ? " found" : ""} conversation${conversations.length !== 1 ? "s" : ""}`}
             </p>
           </div>
+
+          {/* List */}
           <div className="flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -833,10 +1119,14 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
                   <MessageSquare className="h-5 w-5 opacity-40" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">No {statusFilter} conversations</p>
+                  <p className="text-sm font-medium">
+                    {searchQuery ? "No results" : `No ${statusFilter} conversations`}
+                  </p>
                   <p className="text-xs mt-1 leading-relaxed">
-                    {statusFilter === "open"
-                      ? "When customers send WhatsApp messages, they'll appear here automatically."
+                    {searchQuery
+                      ? "Try a different name or phone number"
+                      : statusFilter === "open"
+                      ? "Customer WhatsApp messages will appear here automatically."
                       : `No ${statusFilter} conversations yet.`}
                   </p>
                 </div>
@@ -858,7 +1148,6 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
         {/* ── Center: Message thread ── */}
         <div className={cn(
           "flex flex-col min-w-0 min-h-0",
-          // Desktop: always flex-1; Mobile: show only when on "messages"
           mobilePanel === "list" && "hidden md:flex md:flex-1",
           mobilePanel === "messages" && "flex flex-1",
           mobilePanel === "context" && "hidden md:flex md:flex-1"
@@ -881,7 +1170,7 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
               <div className="text-center">
                 <p className="font-medium">Select a conversation</p>
                 <p className="text-sm mt-1 text-muted-foreground/70">
-                  Choose a conversation from the list to view messages and reply
+                  Choose from the list to view messages and reply
                 </p>
               </div>
             </div>
@@ -891,9 +1180,7 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
         {/* ── Right: Customer context ── */}
         <div className={cn(
           "border-l bg-card/10",
-          // Desktop: fixed width, always visible when something selected
           "hidden lg:flex lg:w-72 xl:w-80 shrink-0 flex-col",
-          // Mobile: full width when context panel selected
           mobilePanel === "context" && "flex flex-1 lg:w-72 xl:w-80"
         )}>
           {mobilePanel === "context" && (
@@ -918,7 +1205,7 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
   );
 }
 
-// ── Customer context wrapper (loads detail data for right panel) ──────────────
+// ── Customer context wrapper ───────────────────────────────────────────────────
 
 function CustomerContextWrapper({ convId }: { convId: number }) {
   const { data, isLoading } = useQuery<ConversationDetail>({
@@ -938,7 +1225,7 @@ function CustomerContextWrapper({ convId }: { convId: number }) {
   return (
     <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
       <div className="px-4 py-2.5 border-b bg-muted/10 shrink-0">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
           Customer Info
         </p>
       </div>

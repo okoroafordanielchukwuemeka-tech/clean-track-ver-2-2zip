@@ -487,6 +487,20 @@ export const api = {
       });
       if (!res.ok) throw new Error(await res.text());
     },
+
+    addNote: async (
+      id: number,
+      body: string
+    ): Promise<{ message: ConversationMessage }> => {
+      const res = await fetch(`/api/conversations/${id}/notes`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   },
 };
 
@@ -1692,6 +1706,8 @@ export interface Conversation {
   assignedWorkerId: number | null;
   createdAt: string;
   updatedAt: string;
+  lastMessageBody?: string | null;
+  lastMessageDirection?: string | null;
 }
 
 export interface ConversationMessage {
@@ -1727,6 +1743,8 @@ export interface ConversationCustomer {
   phone: string;
   totalOrders: number;
   outstandingBalance: number;
+  totalSpent?: number;
+  lastOrderAt?: string | null;
   activeOrders: ConversationOrder[];
   recentOrders: ConversationOrder[];
 }

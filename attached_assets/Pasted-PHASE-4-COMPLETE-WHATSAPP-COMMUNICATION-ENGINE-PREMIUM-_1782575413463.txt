@@ -1,0 +1,484 @@
+PHASE 4 — COMPLETE WHATSAPP COMMUNICATION ENGINE + PREMIUM COMMUNICATION CENTER UX
+
+IMPORTANT:
+
+Before adding new features, perform a complete audit of the current WhatsApp Communication Center.
+
+Do not break existing:
+
+- WhatsApp Embedded Signup
+- WhatsApp connection flow
+- Tenant isolation
+- webhook receiving system
+- conversations database
+- message storage
+- existing inbox UI
+
+The goal is to complete the communication engine so laundry owners can run their customer communication entirely from CleanTrack.
+
+Current state:
+
+Already exists:
+
+✅ WhatsApp connection
+✅ Conversation inbox
+✅ Customer linking
+✅ Activity tab
+✅ Templates tab
+✅ Communications page redesign
+
+Now complete the missing operational workflows.
+
+---
+
+# PART 1 — OUTBOUND WHATSAPP REPLY SYSTEM
+
+Audit the current ability to send replies from CleanTrack.
+
+Implement:
+
+Customer message arrives:
+
+WhatsApp
+↓
+CleanTrack Inbox
+↓
+Worker/Owner types reply
+↓
+Send through WhatsApp Cloud API
+↓
+Message appears in conversation thread
+
+
+Requirements:
+
+Create professional chat composer:
+
+Features:
+
+- text input
+- send button
+- loading state
+- failed message retry
+- sent/delivered/read status
+- timestamps
+
+
+Messages should show:
+
+Customer:
+
+left side bubble
+
+Business:
+
+right side bubble
+
+
+Internal view should show:
+
+Customer sees:
+
+"CleanTrack Laundry"
+
+
+Owner sees:
+
+"Daniel (Worker) replied"
+
+
+Every outbound message must store:
+
+- senderType
+- senderId
+- senderName
+- timestamp
+- conversationId
+
+---
+
+# PART 2 — STAFF PERMISSION SYSTEM
+
+The communication system must support multiple employees.
+
+Audit current worker permissions.
+
+Implement:
+
+Conversation permissions:
+
+OWNER:
+
+Can:
+
+- view all conversations
+- reply
+- assign conversations
+- view activity history
+
+
+MANAGER:
+
+Can:
+
+- view assigned conversations
+- reply
+- create orders
+
+
+WORKER:
+
+Can:
+
+- view allowed conversations
+- reply
+- update customer information if permission allows
+
+
+Add:
+
+Conversation assignment:
+
+Example:
+
+Assigned to:
+
+Owner
+Daniel
+Manager
+
+
+Display inside inbox:
+
+Assigned:
+Daniel
+
+
+---
+
+# PART 3 — MESSAGE AUDIT TRAIL
+
+This is critical for business accountability.
+
+Create internal activity timeline.
+
+Example:
+
+
+10:32 AM
+
+Customer sent:
+
+"How much for 5 shirts?"
+
+
+10:35 AM
+
+Daniel replied:
+
+"₦3000"
+
+
+10:37 AM
+
+Daniel created order #1045
+
+
+10:40 AM
+
+Owner viewed conversation
+
+
+Track:
+
+- messages sent
+- messages viewed
+- assignment changes
+- order creation from chat
+- payment actions from chat
+
+
+Owner must always know what happened.
+
+---
+
+# PART 4 — WHATSAPP TO ORDER CREATION
+
+Create a powerful workflow.
+
+Inside every conversation add:
+
+Button:
+
+"Create Order"
+
+
+When clicked:
+
+Automatically open order creation:
+
+Customer:
+John
+
+
+Conversation:
+
+"10 shirts washing"
+
+
+Pre-fill:
+
+Customer
+Phone number
+Notes
+
+
+Worker selects:
+
+Service
+Quantity
+Price
+
+
+Create order.
+
+Link:
+
+WhatsApp conversation
+
+↓
+
+Customer
+
+↓
+
+Order
+
+
+---
+
+# PART 5 — CUSTOMER PROFILE PANEL IMPROVEMENT
+
+Make the right side customer panel premium.
+
+Display:
+
+Customer:
+
+Name
+
+Phone
+
+Total orders
+
+Total spending
+
+Outstanding balance
+
+Last order
+
+Active order
+
+
+Actions:
+
+Create Order
+
+View Orders
+
+Record Payment
+
+Add Note
+
+Send Message
+
+
+---
+
+# PART 6 — PREMIUM COMMUNICATION CENTER DESIGN
+
+Redesign the UI to feel like a modern SaaS product.
+
+Reference quality:
+
+Think:
+
+Intercom
+HubSpot Inbox
+WhatsApp Business
+
+
+Design requirements:
+
+Desktop:
+
+Three column layout:
+
+LEFT:
+
+Conversation list
+
+CENTER:
+
+Chat
+
+
+RIGHT:
+
+Customer information
+
+
+Conversation list:
+
+Show:
+
+Avatar
+
+Customer name
+
+Last message
+
+Time
+
+Unread badge
+
+Assigned worker
+
+
+Chat:
+
+Modern bubbles
+
+Smooth scrolling
+
+Message grouping
+
+Typing indicator
+
+Status icons
+
+
+Right panel:
+
+Clean customer card
+
+Orders card
+
+Payment card
+
+Notes card
+
+
+---
+
+# PART 7 — MOBILE EXPERIENCE
+
+Laundry owners will mostly use phones.
+
+Verify:
+
+Mobile inbox works.
+
+Requirements:
+
+- responsive layout
+- easy reply
+- conversation switching
+- customer details accessible
+- fast loading
+
+
+---
+
+# PART 8 — SECURITY TESTING
+
+Create:
+
+Laundry A
+
+Owner A
+
+Worker A
+
+
+Laundry B
+
+Owner B
+
+Worker B
+
+
+Test:
+
+Worker A cannot see Laundry B conversations.
+
+Worker A cannot send messages from Laundry B WhatsApp.
+
+Owner A cannot access Laundry B customer messages.
+
+
+Expected:
+
+403 or 404.
+
+No data leakage.
+
+---
+
+# PART 9 — DEMO DATA
+
+Create realistic demo conversations:
+
+Examples:
+
+Customer asking price
+
+Customer asking pickup
+
+Customer complaining delay
+
+Customer requesting discount
+
+Customer confirming payment
+
+
+Create:
+
+10+ conversations
+
+Different statuses:
+
+New
+
+Assigned
+
+Resolved
+
+Archived
+
+
+---
+
+# FINAL REPORT REQUIRED:
+
+Provide:
+
+1. Communication engine status
+
+2. WhatsApp sending status
+
+3. Worker permission status
+
+4. Conversation assignment status
+
+5. Audit trail status
+
+6. Order creation from WhatsApp status
+
+7. Security test results
+
+8. Before/after screenshots
+
+9. Remaining WhatsApp roadmap
+
+Do not move to subscriptions or Paystack until this communication engine is complete and polished.

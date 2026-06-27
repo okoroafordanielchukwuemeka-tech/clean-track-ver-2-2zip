@@ -26,6 +26,7 @@ export const conversationsRouter = Router();
 // ── GET /api/conversations ─────────────────────────────────────────────────
 // Lists conversations for this laundry, newest-first.
 // ?status=open|resolved|archived  ?limit=  ?offset=
+// Includes lastMessageBody and lastMessageDirection via DISTINCT ON subquery.
 
 conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
@@ -60,6 +61,23 @@ conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
       .limit(limit)
       .offset(offset);
 
+    // Enrich with last message body for preview in conversation list
+    const lastMessages: Record<number, { body: string; direction: string }> = {};
+    if (rows.length > 0) {
+      const convIds = rows.map(r => r.id);
+      const idsStr = convIds.join(",");
+      const lastMsgResult = await db.execute(sql`
+        SELECT DISTINCT ON (conversation_id)
+          conversation_id, body, direction
+        FROM conversation_messages
+        WHERE conversation_id = ANY(ARRAY[${sql.raw(idsStr)}]::int[])
+        ORDER BY conversation_id, created_at DESC
+      `);
+      for (const row of lastMsgResult.rows as Array<{ conversation_id: number; body: string; direction: string }>) {
+        lastMessages[row.conversation_id] = { body: row.body, direction: row.direction };
+      }
+    }
+
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(conversations)
@@ -70,7 +88,13 @@ conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
       .from(conversations)
       .where(and(eq(conversations.laundryId, laundryId), eq(conversations.status, "open")));
 
-    return res.json({ conversations: rows, total: count, totalUnread });
+    const enriched = rows.map(r => ({
+      ...r,
+      lastMessageBody: lastMessages[r.id]?.body ?? null,
+      lastMessageDirection: lastMessages[r.id]?.direction ?? null,
+    }));
+
+    return res.json({ conversations: enriched, total: count, totalUnread });
   } catch (err) {
     console.error("[conversations] GET / error:", err);
     return res.status(500).json({ error: "Failed to fetch conversations" });
@@ -156,16 +180,24 @@ conversationsRouter.get("/:id", requireAuth, async (req: AuthRequest, res) => {
             return sum + Math.max(0, due - paid);
           }, 0);
 
+        const totalSpent = customerOrders.reduce((sum, o) => {
+          return sum + parseFloat(o.amountPaid || "0");
+        }, 0);
+
         const activeOrders = customerOrders
           .filter(o => o.status !== "completed")
           .slice(0, 5);
 
         const recentOrders = customerOrders.slice(0, 5);
 
+        const lastOrderAt = customerOrders.length > 0 ? customerOrders[0].createdAt : null;
+
         customer = {
           ...c,
           totalOrders: customerOrders.length,
           outstandingBalance,
+          totalSpent,
+          lastOrderAt,
           activeOrders,
           recentOrders,
         };
@@ -331,6 +363,59 @@ conversationsRouter.patch("/:id/status", requireOwner, async (req: AuthRequest, 
   } catch (err) {
     console.error("[conversations] PATCH /:id/status error:", err);
     return res.status(500).json({ error: "Failed to update conversation status" });
+  }
+});
+
+// ── POST /api/conversations/:id/notes ──────────────────────────────────────
+// Saves an internal note on a conversation. NOT sent to the customer.
+// Marked with metadata.note = true so the frontend can style it differently.
+
+const noteSchema = z.object({
+  body: z.string().min(1).max(4096).trim(),
+});
+
+conversationsRouter.post("/:id/notes", requireAuth, async (req: AuthRequest, res) => {
+  const { laundryId, type, name } = req.auth!;
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
+
+  const parsed = noteSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Note body required" });
+
+  try {
+    const [conv] = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
+
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+    const senderType = type === "owner" ? "owner" : "worker";
+    const senderId: number | null =
+      type === "owner"
+        ? ((req.auth as any).ownerId ?? null)
+        : ((req.auth as any).workerId ?? null);
+    const senderName = name ?? "CleanTrack";
+
+    const [saved] = await db
+      .insert(conversationMessages)
+      .values({
+        conversationId: id,
+        laundryId,
+        direction: "outbound",
+        body: parsed.data.body,
+        senderType,
+        senderId,
+        senderName,
+        status: "sent",
+        metadata: { note: true },
+      })
+      .returning();
+
+    return res.json({ message: saved });
+  } catch (err) {
+    console.error("[conversations] POST /:id/notes error:", err);
+    return res.status(500).json({ error: "Failed to save note" });
   }
 });
 
