@@ -23,13 +23,12 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MessageSquare, Plus, Pencil, Trash2, CheckCircle2, Clock, XCircle,
-  MailCheck, Eye, Zap, Send, AlertCircle, Loader2, Wifi, WifiOff,
-  Copy, RefreshCw, FlaskConical, ChevronDown, ChevronUp, ShieldCheck,
+  MailCheck, Eye, Zap, Send, AlertCircle, Loader2,
+  RefreshCw, FlaskConical,
   Phone,
 } from "lucide-react";
 import type {
   NotifTemplate, NotifMessage, NotifStats, NotifTemplateInput,
-  WaProviderConfig, WaConfigInput,
 } from "@/lib/api";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,11 +65,6 @@ const VARIABLES_HELP = [
   "{{business_name}}", "{{balance}}", "{{amount_paid}}",
   "{{total_due}}", "{{service_type}}",
 ];
-
-function generateToken(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
 
 // ─── Template form ────────────────────────────────────────────────────────────
 
@@ -171,289 +165,6 @@ function TemplateForm({ initial, onClose }: { initial?: NotifTemplate | null; on
         </Button>
       </DialogFooter>
     </div>
-  );
-}
-
-// ─── WhatsApp Setup Card ──────────────────────────────────────────────────────
-
-function WhatsAppSetupCard() {
-  const qc = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
-  const [form, setForm] = useState<WaConfigInput>({
-    phoneNumberId: "", accessToken: "", businessAccountId: "", webhookVerifyToken: "", appSecret: "",
-  });
-  const [tokenTouched, setTokenTouched] = useState(false);
-  const [secretTouched, setSecretTouched] = useState(false);
-
-  const { data: cfg, isLoading } = useQuery<WaProviderConfig>({
-    queryKey: ["wa-config"],
-    queryFn: () => api.communication.getWhatsAppConfig(),
-  });
-
-  useEffect(() => {
-    if (cfg?.isConfigured) {
-      setForm({
-        phoneNumberId:      cfg.phoneNumberId ?? "",
-        accessToken:        cfg.accessTokenMasked ?? "",
-        businessAccountId:  cfg.businessAccountId ?? "",
-        webhookVerifyToken: cfg.webhookVerifyToken ?? "",
-        appSecret:          cfg.appSecretMasked ?? "",
-        apiVersion:         cfg.apiVersion ?? "v21.0",
-      });
-    }
-  }, [cfg]);
-
-  const save = useMutation({
-    mutationFn: () => api.communication.saveWhatsAppConfig({
-      ...form,
-      accessToken: tokenTouched ? form.accessToken : (form.accessToken || "saved"),
-      appSecret:   secretTouched ? (form.appSecret ?? "") : (form.appSecret || "saved"),
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["wa-config"] });
-      setTokenTouched(false);
-      setSecretTouched(false);
-      toast.success("WhatsApp configuration saved");
-    },
-    onError: () => toast.error("Failed to save configuration"),
-  });
-
-  const validate = useMutation({
-    mutationFn: () => api.communication.validateWhatsAppConfig(),
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["wa-config"] });
-      if (result.valid) {
-        toast.success(`Connected! ${result.verifiedName ?? ""} (${result.displayPhoneNumber ?? ""})`);
-      } else {
-        toast.error(`Validation failed: ${result.error}`);
-      }
-    },
-    onError: () => toast.error("Validation request failed"),
-  });
-
-  const remove = useMutation({
-    mutationFn: () => api.communication.deleteWhatsAppConfig(),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["wa-config"] });
-      setForm({ phoneNumberId: "", accessToken: "", businessAccountId: "", webhookVerifyToken: "", appSecret: "" });
-      setTokenTouched(false);
-      setSecretTouched(false);
-      toast.success("WhatsApp configuration removed");
-    },
-  });
-
-  const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp`;
-
-  const copyWebhookUrl = () => {
-    navigator.clipboard.writeText(webhookUrl);
-    toast.success("Webhook URL copied");
-  };
-
-  const isConnected = cfg?.isConfigured && cfg?.isVerified;
-  const isSaved     = cfg?.isConfigured && !cfg?.isVerified;
-
-  const statusBadge = isLoading ? null : isConnected ? (
-    <span className="flex items-center gap-1.5 text-xs font-medium text-green-400">
-      <Wifi className="h-3.5 w-3.5" />
-      Connected
-      {cfg?.verifiedName && <span className="text-muted-foreground">· {cfg.verifiedName}</span>}
-      {cfg?.displayPhoneNumber && <span className="text-muted-foreground">({cfg.displayPhoneNumber})</span>}
-    </span>
-  ) : isSaved ? (
-    <span className="flex items-center gap-1.5 text-xs font-medium text-yellow-400">
-      <WifiOff className="h-3.5 w-3.5" />
-      Saved — not verified
-    </span>
-  ) : (
-    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-      <WifiOff className="h-3.5 w-3.5" />
-      Not configured
-    </span>
-  );
-
-  return (
-    <Card className={`transition-all ${isConnected ? "border-green-500/30 bg-green-500/5" : isSaved ? "border-yellow-500/30 bg-yellow-500/5" : "border-muted"}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${isConnected ? "bg-green-500/15" : "bg-muted"}`}>
-              <MessageSquare className={`h-5 w-5 ${isConnected ? "text-green-400" : "text-muted-foreground"}`} />
-            </div>
-            <div>
-              <CardTitle className="text-sm">WhatsApp Business (Meta Cloud API)</CardTitle>
-              <div className="mt-0.5">{statusBadge}</div>
-            </div>
-          </div>
-          <Button
-            variant="ghost" size="sm"
-            onClick={() => setExpanded((v) => !v)}
-            className="text-xs"
-          >
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            {expanded ? "Collapse" : "Configure"}
-          </Button>
-        </div>
-        {isConnected && cfg?.lastTestedAt && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Last verified: {new Date(cfg.lastTestedAt).toLocaleString()}
-            {cfg.qualityRating && ` · Quality: ${cfg.qualityRating}`}
-          </p>
-        )}
-      </CardHeader>
-
-      {expanded && (
-        <CardContent className="pt-0 space-y-5 border-t border-border/50 mt-0 pt-4">
-          {/* Credentials form */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Phone Number ID <span className="text-red-400">*</span></Label>
-              <Input
-                value={form.phoneNumberId}
-                onChange={(e) => setForm((f) => ({ ...f, phoneNumberId: e.target.value }))}
-                placeholder="e.g. 123456789012345"
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">From Meta Business → WhatsApp → Phone Numbers</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Business Account ID <span className="text-red-400">*</span></Label>
-              <Input
-                value={form.businessAccountId}
-                onChange={(e) => setForm((f) => ({ ...f, businessAccountId: e.target.value }))}
-                placeholder="e.g. 987654321098765"
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">From Meta Business → Business Settings</p>
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">
-                Permanent Access Token <span className="text-red-400">*</span>
-                {cfg?.accessTokenSaved && !tokenTouched && (
-                  <span className="ml-2 text-green-400 text-xs">(saved)</span>
-                )}
-              </Label>
-              <Input
-                type="password"
-                value={form.accessToken}
-                onChange={(e) => {
-                  setTokenTouched(true);
-                  setForm((f) => ({ ...f, accessToken: e.target.value }));
-                }}
-                placeholder={cfg?.accessTokenSaved && !tokenTouched ? "••••••••••••••••" : "EAAxx..."}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">Generate a System User token in Meta Business Manager (never expires)</p>
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Webhook Verify Token <span className="text-red-400">*</span></Label>
-              <div className="flex gap-2">
-                <Input
-                  value={form.webhookVerifyToken}
-                  onChange={(e) => setForm((f) => ({ ...f, webhookVerifyToken: e.target.value }))}
-                  placeholder="A random secret string you choose"
-                  className="font-mono text-sm"
-                />
-                <Button
-                  type="button" variant="outline" size="sm"
-                  onClick={() => setForm((f) => ({ ...f, webhookVerifyToken: generateToken() }))}
-                  className="shrink-0"
-                >
-                  Generate
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">Enter this exact value in Meta's webhook configuration</p>
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">
-                App Secret
-                {cfg?.appSecretSaved && !secretTouched && (
-                  <span className="ml-2 text-green-400 text-xs">(saved)</span>
-                )}
-              </Label>
-              <Input
-                type="password"
-                value={form.appSecret ?? ""}
-                onChange={(e) => {
-                  setSecretTouched(true);
-                  setForm((f) => ({ ...f, appSecret: e.target.value }));
-                }}
-                placeholder={cfg?.appSecretSaved && !secretTouched ? "••••••••••••••••" : "From Meta App Dashboard → App Secret"}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Found in Meta Developers → Your App → Settings → Basic → App Secret.
-                Used to verify <code className="text-primary">X-Hub-Signature-256</code> on inbound webhooks — strongly recommended in production.
-              </p>
-            </div>
-          </div>
-
-          {/* Webhook URL */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Webhook Callback URL</Label>
-            <div className="flex gap-2">
-              <Input value={webhookUrl} readOnly className="font-mono text-xs bg-muted/40" />
-              <Button type="button" variant="outline" size="sm" onClick={copyWebhookUrl} className="shrink-0">
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Paste this URL in Meta Developers → WhatsApp → Configuration → Webhook. Subscribe to the <code className="text-primary">messages</code> field.
-            </p>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              size="sm"
-              onClick={() => save.mutate()}
-              disabled={save.isPending || !form.phoneNumberId || !form.businessAccountId || !form.webhookVerifyToken || (!cfg?.accessTokenSaved && !form.accessToken)}
-            >
-              {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Configuration
-            </Button>
-            <Button
-              size="sm" variant="outline"
-              onClick={() => validate.mutate()}
-              disabled={validate.isPending || !cfg?.isConfigured}
-              title={!cfg?.isConfigured ? "Save configuration first" : ""}
-            >
-              {validate.isPending
-                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                : <ShieldCheck className="h-4 w-4 mr-2" />}
-              Validate Connection
-            </Button>
-            {cfg?.isConfigured && (
-              <Button
-                size="sm" variant="ghost"
-                className="text-destructive hover:text-destructive ml-auto"
-                onClick={() => remove.mutate()}
-                disabled={remove.isPending}
-              >
-                Remove
-              </Button>
-            )}
-          </div>
-
-          {/* Last test result */}
-          {cfg?.lastTestResult && (
-            <div className={`flex items-start gap-2 rounded p-2.5 text-xs ${
-              cfg.isVerified
-                ? "bg-green-500/10 text-green-300 border border-green-500/20"
-                : "bg-red-500/10 text-red-300 border border-red-500/20"
-            }`}>
-              {cfg.isVerified
-                ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                : <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
-              {cfg.lastTestResult}
-            </div>
-          )}
-        </CardContent>
-      )}
-    </Card>
   );
 }
 
@@ -770,9 +481,6 @@ export default function CommunicationsPage() {
           </Card>
         </div>
       )}
-
-      {/* WhatsApp Setup Card */}
-      <WhatsAppSetupCard />
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>

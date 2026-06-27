@@ -8,6 +8,7 @@ import { adminStorageRouter } from "./storage.js";
 import { adminBackupsRouter } from "./backups.js";
 import { adminSubscriptionsRouter } from "./subscriptions.js";
 import { adminActivationRouter } from "./activation.js";
+import { adminIntegrationsRouter } from "./integrations.js";
 
 export const adminRouter = Router();
 
@@ -20,3 +21,4 @@ adminRouter.use("/storage", requireAdmin, adminStorageRouter);
 adminRouter.use("/backups", requireAdmin, adminBackupsRouter);
 adminRouter.use("/subscriptions", requireAdmin, adminSubscriptionsRouter);
 adminRouter.use("/activation", requireAdmin, adminActivationRouter);
+adminRouter.use("/integrations", requireAdmin, adminIntegrationsRouter);

@@ -1,0 +1,140 @@
+CleanTrack WhatsApp Owner Experience Cleanup
+
+Important:
+
+The current WhatsApp connection page is still exposing Meta Cloud API technical fields:
+
+* Phone Number ID
+* WhatsApp Business Account ID
+* Permanent Access Token
+* Webhook Verify Token
+* App Secret
+
+This is NOT acceptable for normal laundry owners.
+
+The owner onboarding experience must be simple.
+
+Audit the current WhatsApp connection flow.
+
+Goal:
+
+Laundry owners should connect WhatsApp without seeing any Meta technical credentials.
+
+Required new experience:
+
+OWNER VIEW:
+
+Settings → WhatsApp
+
+Show:
+
+WhatsApp Business
+
+Status:
+Not Connected
+
+Description:
+
+"Connect your business WhatsApp number to manage customer conversations directly from CleanTrack."
+
+Button:
+
+[ Connect WhatsApp ]
+
+When clicked:
+
+Launch Meta Embedded Signup flow.
+
+Owner completes:
+
+1. Login with Meta
+2. Select WhatsApp Business account
+3. Select phone number
+4. Approve permissions
+
+CleanTrack automatically receives:
+
+* Business Account ID
+* Phone Number ID
+* Access token
+
+Store securely.
+
+Never show these values to owners.
+
+After success display:
+
+Connected ✅
+
+Business:
+Laundry Name
+
+Phone:
++234XXXXXXXXX
+
+Connected:
+Date
+
+Actions:
+
+[ Disconnect WhatsApp ]
+
+---
+
+Developer/Admin requirements:
+
+Move manual Meta credential configuration away from owner settings.
+
+Create a developer-only configuration area:
+
+Admin → Integrations → WhatsApp Setup
+
+Only founder/admin can see:
+
+* Meta App ID
+* Meta App Secret
+* Config ID
+* Webhook settings
+
+Laundry owners should never access these fields.
+
+---
+
+Security checks:
+
+Verify:
+
+Laundry A cannot see Laundry B WhatsApp connection.
+
+Workers cannot disconnect WhatsApp.
+
+Workers cannot access Meta credentials.
+
+Tokens remain encrypted.
+
+---
+
+Final validation:
+
+Create:
+
+Laundry Owner account
+
+Test:
+
+Open WhatsApp settings
+
+Expected:
+
+Only Connect WhatsApp button appears.
+
+No IDs.
+
+No tokens.
+
+No technical fields.
+
+Provide screenshots before and after.
+
+Do not change WhatsApp backend functionality.
+Only fix the onboarding experience and separation between developer configuration and customer usage.

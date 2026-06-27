@@ -11,6 +11,7 @@ import {
   CreditCard, Ban, Hourglass, CheckCircle, ChevronDown,
   Rocket, Target, Mail, Zap, AlertCircle, Search, LogIn,
   ShieldCheck as ShieldRole,
+  MessageSquare, Copy, Plug,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1520,6 +1521,200 @@ function ErrorState() {
   );
 }
 
+// ─── Integrations Tab ──────────────────────────────────────────────────────
+
+interface PlatformIntegrations {
+  whatsapp: {
+    embeddedSignupEnabled: boolean;
+    metaAppIdSet: boolean;
+    metaAppSecretSet: boolean;
+    metaConfigIdSet: boolean;
+    webhookVerifyTokenSet: boolean;
+    appSecretSet: boolean;
+    webhookUrl: string;
+    connectedTenants: number;
+    configuredProviders: number;
+  };
+}
+
+function ConfigRow({ label, set, description }: { label: string; set: boolean; description?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5 border-b border-slate-800 last:border-0">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-mono text-slate-300">{label}</p>
+        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+      </div>
+      <span className={cn(
+        "inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border shrink-0",
+        set
+          ? "bg-emerald-900/40 text-emerald-300 border-emerald-700"
+          : "bg-red-900/40 text-red-300 border-red-700"
+      )}>
+        {set ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+        {set ? "Set" : "Missing"}
+      </span>
+    </div>
+  );
+}
+
+function IntegrationsTab({ token }: { token: string }) {
+  const { data, isLoading, isError, refetch } = useQuery<PlatformIntegrations>({
+    queryKey: ["admin-integrations-platform"],
+    queryFn: () => adminFetch("/admin/integrations/platform", token),
+    staleTime: 60_000,
+  });
+
+  const wa = data?.whatsapp;
+  const allEnvSet = wa
+    ? wa.metaAppIdSet && wa.metaAppSecretSet && wa.metaConfigIdSet
+    : false;
+
+  const copyWebhookUrl = () => {
+    if (wa?.webhookUrl) {
+      navigator.clipboard.writeText(wa.webhookUrl);
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-white font-semibold text-lg flex items-center gap-2">
+            <Plug className="w-5 h-5 text-violet-400" />
+            Platform Integrations
+          </h2>
+          <p className="text-slate-400 text-sm mt-0.5">
+            Developer-only configuration. Laundry owners never see these settings.
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white"
+          onClick={() => refetch()}>
+          <RefreshCw className="w-4 h-4 mr-1.5" />Refresh
+        </Button>
+      </div>
+
+      {isLoading && <LoadingSpinner />}
+      {isError && <ErrorState />}
+
+      {wa && (
+        <div className="space-y-5">
+          {/* WhatsApp Cloud API */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  allEnvSet ? "bg-green-900/40" : "bg-slate-800"
+                )}>
+                  <MessageSquare className={cn("w-5 h-5", allEnvSet ? "text-green-400" : "text-slate-500")} />
+                </div>
+                <div>
+                  <p className="text-white font-medium text-sm">WhatsApp Cloud API</p>
+                  <p className="text-slate-400 text-xs mt-0.5">Meta Business Platform — Embedded Signup</p>
+                </div>
+              </div>
+              <span className={cn(
+                "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border",
+                allEnvSet
+                  ? "bg-green-900/40 text-green-300 border-green-700"
+                  : "bg-amber-900/40 text-amber-300 border-amber-700"
+              )}>
+                {allEnvSet ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                {allEnvSet ? "Ready" : "Needs Config"}
+              </span>
+            </div>
+
+            <div className="px-5 py-1">
+              {/* Operational stats */}
+              <div className="grid grid-cols-2 gap-3 py-4 border-b border-slate-800">
+                <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-white">{wa.connectedTenants}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Connected Tenants</p>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-white">{wa.configuredProviders}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Provider Configs</p>
+                </div>
+              </div>
+
+              {/* Environment variables status */}
+              <div className="py-2">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider py-2">
+                  Required Environment Variables
+                </p>
+                <ConfigRow
+                  label="META_APP_ID"
+                  set={wa.metaAppIdSet}
+                  description="Your Meta App ID — enables Embedded Signup for all tenants"
+                />
+                <ConfigRow
+                  label="META_APP_SECRET"
+                  set={wa.metaAppSecretSet}
+                  description="Meta App Secret — used to exchange OAuth code for access token"
+                />
+                <ConfigRow
+                  label="META_CONFIG_ID"
+                  set={wa.metaConfigIdSet}
+                  description="Embedded Signup Configuration ID from Meta for Developers"
+                />
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider py-2 mt-2">
+                  Webhook Security (Recommended)
+                </p>
+                <ConfigRow
+                  label="WHATSAPP_WEBHOOK_VERIFY_TOKEN"
+                  set={wa.webhookVerifyTokenSet}
+                  description="Token Meta uses to verify your webhook endpoint"
+                />
+                <ConfigRow
+                  label="WHATSAPP_APP_SECRET"
+                  set={wa.appSecretSet}
+                  description="Used to verify X-Hub-Signature-256 on inbound webhooks"
+                />
+              </div>
+
+              {/* Webhook URL */}
+              <div className="py-4 border-t border-slate-800">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                  Webhook Callback URL
+                </p>
+                <div className="flex gap-2">
+                  <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 font-mono text-xs text-slate-300 truncate">
+                    {wa.webhookUrl}
+                  </div>
+                  <Button variant="outline" size="sm"
+                    className="shrink-0 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800"
+                    onClick={copyWebhookUrl}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500 mt-1.5">
+                  Paste this in Meta Developers → WhatsApp → Configuration → Webhook.
+                  Subscribe to the <span className="font-mono text-slate-400">messages</span> field.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Guidance box */}
+          {!allEnvSet && (
+            <div className="bg-amber-900/20 border border-amber-700/40 rounded-xl p-4 text-sm space-y-2">
+              <p className="font-medium text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Embedded Signup not fully configured
+              </p>
+              <p className="text-amber-400/80 text-xs">
+                Set the missing environment variables above in the Replit Secrets panel.
+                Until all three Meta variables are set, tenants will see "WhatsApp connection
+                requires administrator configuration" in their settings.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Shell ────────────────────────────────────────────────────────────
 
 export default function AdminCommandCenter() {
@@ -1542,13 +1737,14 @@ export default function AdminCommandCenter() {
   };
 
   const navTabs = [
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "tenants", label: "Tenants", icon: Building2 },
+    { id: "overview",      label: "Overview",      icon: LayoutDashboard },
+    { id: "tenants",       label: "Tenants",       icon: Building2 },
     { id: "subscriptions", label: "Subscriptions", icon: CreditCard },
-    { id: "devices", label: "Devices", icon: MonitorSmartphone },
-    { id: "storage", label: "Storage", icon: HardDrive },
-    { id: "backups", label: "Backups", icon: Archive },
-    { id: "growth", label: "Growth", icon: Rocket },
+    { id: "devices",       label: "Devices",       icon: MonitorSmartphone },
+    { id: "storage",       label: "Storage",       icon: HardDrive },
+    { id: "backups",       label: "Backups",       icon: Archive },
+    { id: "growth",        label: "Growth",        icon: Rocket },
+    { id: "integrations",  label: "Integrations",  icon: Plug },
   ];
 
   return (
@@ -1619,13 +1815,14 @@ export default function AdminCommandCenter() {
           </div>
 
           <div className="p-4 sm:p-6">
-            {tab === "overview" && <OverviewTab token={token} />}
-            {tab === "tenants" && <TenantsTab token={token} />}
+            {tab === "overview"      && <OverviewTab token={token} />}
+            {tab === "tenants"       && <TenantsTab token={token} />}
             {tab === "subscriptions" && <SubscriptionsTab token={token} />}
-            {tab === "devices" && <DevicesTab token={token} />}
-            {tab === "storage" && <StorageTab token={token} />}
-            {tab === "backups" && <BackupsTab token={token} />}
-            {tab === "growth" && <GrowthTab token={token} />}
+            {tab === "devices"       && <DevicesTab token={token} />}
+            {tab === "storage"       && <StorageTab token={token} />}
+            {tab === "backups"       && <BackupsTab token={token} />}
+            {tab === "growth"        && <GrowthTab token={token} />}
+            {tab === "integrations"  && <IntegrationsTab token={token} />}
           </div>
         </main>
       </div>

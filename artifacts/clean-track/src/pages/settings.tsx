@@ -18,7 +18,6 @@ import {
   type PlanPricingConfig,
   type SubscriptionPricing,
   type WaConnectionStatus,
-  type WaConnectInput,
   type WaMetaConfig,
   type WaMetaCallbackInput,
 } from "@/lib/api";
@@ -1560,17 +1559,9 @@ function BillingSection() {
 
 function WhatsAppBusinessSection() {
   const qc = useQueryClient();
-  const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const pendingWabaRef = useRef<{ wabaId: string; phoneNumberId: string } | null>(null);
-  const [form, setForm] = useState<WaConnectInput>({
-    whatsappBusinessAccountId: "",
-    phoneNumberId: "",
-    accessToken: "",
-    displayPhoneNumber: "",
-    businessName: "",
-  });
 
   const { data: status, isLoading } = useQuery<WaConnectionStatus>({
     queryKey: ["whatsapp-status"],
@@ -1655,17 +1646,6 @@ function WhatsAppBusinessSection() {
     },
   });
 
-  const connect = useMutation({
-    mutationFn: (data: WaConnectInput) => api.whatsapp.connect(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
-      toast.success("WhatsApp Business connected successfully");
-      setShowConnectDialog(false);
-      setForm({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
-    },
-    onError: () => toast.error("Your WhatsApp connection was not completed. Please try again."),
-  });
-
   const disconnect = useMutation({
     mutationFn: () => api.whatsapp.disconnect(),
     onSuccess: () => {
@@ -1731,22 +1711,10 @@ function WhatsAppBusinessSection() {
     );
   };
 
-  const handleConnectClick = () => {
-    if (useEmbeddedSignup) {
-      launchEmbeddedSignup();
-    } else {
-      setShowConnectDialog(true);
-    }
-  };
-
   // ── Derived state ─────────────────────────────────────────────────────────
 
   const isConnected = status?.connected === true;
   const connectedStatus = isConnected ? (status as Extract<WaConnectionStatus, { connected: true }>) : null;
-  const canSubmit =
-    form.whatsappBusinessAccountId.trim() &&
-    form.phoneNumberId.trim() &&
-    form.accessToken.trim();
 
   return (
     <div className="space-y-6">
@@ -1810,7 +1778,7 @@ function WhatsAppBusinessSection() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : useEmbeddedSignup ? (
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
@@ -1819,16 +1787,14 @@ function WhatsAppBusinessSection() {
               <div>
                 <p className="font-semibold text-sm">Not Connected</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {useEmbeddedSignup
-                    ? "Connect your business WhatsApp account in one click."
-                    : "Connect your WhatsApp Business account to enable customer notifications."}
+                  Connect your business WhatsApp account in one click.
                 </p>
               </div>
             </div>
             <Button
               size="sm"
               className="gap-1.5 shrink-0"
-              onClick={handleConnectClick}
+              onClick={launchEmbeddedSignup}
               disabled={isConnecting || metaCallbackMutation.isPending}
             >
               {(isConnecting || metaCallbackMutation.isPending) ? (
@@ -1843,108 +1809,32 @@ function WhatsAppBusinessSection() {
                 : "Connect WhatsApp"}
             </Button>
           </div>
+        ) : (
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+              <WifiOff className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">Not Available</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                WhatsApp connection has not been configured for this platform.
+                Contact your administrator to enable it.
+              </p>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Info callout — adapts based on whether Embedded Signup is available */}
-      {!isConnected && (
-        useEmbeddedSignup ? (
-          <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm space-y-1">
-            <p className="font-medium text-green-200">One-click setup via Meta</p>
-            <p className="text-xs text-green-300/80">
-              You'll be guided through a secure Meta signup flow. CleanTrack never sees your Meta
-              password — only the WhatsApp Business access needed to send notifications.
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm text-blue-300 space-y-1">
-            <p className="font-medium text-blue-200">What you'll need</p>
-            <ul className="list-disc list-inside space-y-0.5 text-xs text-blue-300/80">
-              <li>A Meta Business Manager account</li>
-              <li>A verified WhatsApp Business API phone number</li>
-              <li>A permanent (never-expiring) access token</li>
-            </ul>
-          </div>
-        )
+      {/* Info callout — only shown when Embedded Signup is available and not connected */}
+      {!isConnected && useEmbeddedSignup && (
+        <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm space-y-1">
+          <p className="font-medium text-green-200">One-click setup via Meta</p>
+          <p className="text-xs text-green-300/80">
+            You'll be guided through a secure Meta signup flow. CleanTrack never sees your Meta
+            password — only the WhatsApp Business access needed to send notifications.
+          </p>
+        </div>
       )}
-
-      {/* Manual Connect Dialog (fallback when Embedded Signup is not configured) */}
-      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Connect WhatsApp Business</DialogTitle>
-            <DialogDescription>
-              Enter your Meta WhatsApp Business API credentials. These are stored securely and never displayed again.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Business Account ID (WABA ID)</Label>
-              <Input
-                value={form.whatsappBusinessAccountId}
-                onChange={e => setForm(f => ({ ...f, whatsappBusinessAccountId: e.target.value }))}
-                placeholder="e.g. 123456789012345"
-              />
-              <p className="text-xs text-muted-foreground">Found in Meta Business Manager → WhatsApp Accounts</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Phone Number ID</Label>
-              <Input
-                value={form.phoneNumberId}
-                onChange={e => setForm(f => ({ ...f, phoneNumberId: e.target.value }))}
-                placeholder="e.g. 987654321098765"
-              />
-              <p className="text-xs text-muted-foreground">Found in WhatsApp Manager → Phone Numbers</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Access Token</Label>
-              <Input
-                type="password"
-                value={form.accessToken}
-                onChange={e => setForm(f => ({ ...f, accessToken: e.target.value }))}
-                placeholder="Permanent access token"
-              />
-              <p className="text-xs text-muted-foreground">Use a permanent token — never a temporary one</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Display Number <span className="text-muted-foreground">(optional)</span></Label>
-                <Input
-                  value={form.displayPhoneNumber}
-                  onChange={e => setForm(f => ({ ...f, displayPhoneNumber: e.target.value }))}
-                  placeholder="+234 801 234 5678"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Business Name <span className="text-muted-foreground">(optional)</span></Label>
-                <Input
-                  value={form.businessName}
-                  onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))}
-                  placeholder="My Laundry Co."
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowConnectDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => connect.mutate(form)}
-              disabled={!canSubmit || connect.isPending}
-              className="gap-2"
-            >
-              {connect.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {connect.isPending ? "Connecting…" : "Connect"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Disconnect confirmation */}
       <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
