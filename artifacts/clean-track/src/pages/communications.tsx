@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { InboxTab } from "@/components/inbox-tab";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -689,6 +690,13 @@ export default function CommunicationsPage() {
 
   const failedCount = stats?.byStatus.failed ?? 0;
 
+  const { data: unreadData } = useQuery({
+    queryKey: ["conversations-unread"],
+    queryFn: () => api.conversations.getUnreadCount(),
+    refetchInterval: 30_000,
+  });
+  const inboxUnread = unreadData?.unreadCount ?? 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -766,6 +774,14 @@ export default function CommunicationsPage() {
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
+          <TabsTrigger value="inbox" className="gap-1.5">
+            Inbox
+            {inboxUnread > 0 && (
+              <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                {inboxUnread}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="templates">
             Templates
             {stats && (
@@ -779,6 +795,11 @@ export default function CommunicationsPage() {
             )}
           </TabsTrigger>
         </TabsList>
+
+        {/* ── Inbox tab ── */}
+        <TabsContent value="inbox" className="mt-4">
+          <InboxTab />
+        </TabsContent>
 
         {/* ── Templates tab ── */}
         <TabsContent value="templates" className="space-y-4 mt-4">

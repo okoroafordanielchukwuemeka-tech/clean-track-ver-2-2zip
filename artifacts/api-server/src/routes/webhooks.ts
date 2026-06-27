@@ -421,6 +421,7 @@ async function processWhatsAppWebhook(payload: unknown): Promise<void> {
         message: `${senderLabel}: ${preview}`,
         severity: "info",
         isRead: false,
+        relatedConversationId: conversationId,
       });
 
       console.log(

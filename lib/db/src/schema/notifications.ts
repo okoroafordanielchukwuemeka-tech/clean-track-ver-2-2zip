@@ -19,6 +19,7 @@ export const notifications = pgTable("notifications", {
   severity: text("severity", { enum: ["info", "warning", "urgent", "success"] }).notNull().default("info"),
   isRead: boolean("is_read").notNull().default(false),
   relatedOrderId: integer("related_order_id"),
+  relatedConversationId: integer("related_conversation_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

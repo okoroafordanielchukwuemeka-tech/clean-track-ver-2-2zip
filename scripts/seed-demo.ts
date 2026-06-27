@@ -19,6 +19,7 @@ const {
   laundries, branches, workers, customers, orders,
   paymentRecords, priceAdjustments, discountApprovals, services,
   expenditures, expenseCategories, messageTemplates,
+  conversations, conversationMessages,
 } = schema;
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -482,7 +483,181 @@ async function main() {
     console.log(`✅ Created expenditures for all branches`);
   }
 
-  // ── 7. Final counts ───────────────────────────────────────────────────────
+  // ── 7. WhatsApp Conversations ─────────────────────────────────────────────
+  function normalizePhone(raw: string): string {
+    const s = raw.replace(/[\s\-().+]/g, "");
+    if (s.startsWith("0") && s.length === 11) return "+234" + s.slice(1);
+    if (s.startsWith("234") && s.length === 13) return "+" + s;
+    if (s.startsWith("+")) return s;
+    return "+" + s;
+  }
+
+  const existingConvCount = await db.select().from(conversations).where(eq(conversations.laundryId, laundryId));
+  if (existingConvCount.length > 0) {
+    console.log(`ℹ️  Skipping WhatsApp conversations — already seeded (${existingConvCount.length} found)`);
+  } else {
+    console.log("Creating demo WhatsApp conversations...");
+
+    type ConvThread = {
+      customerIdx: number;
+      status: "open" | "resolved" | "archived";
+      messages: { direction: "inbound" | "outbound"; body: string; minutesAgo: number }[];
+    };
+
+    const threads: ConvThread[] = [
+      {
+        customerIdx: 0, status: "open",
+        messages: [
+          { direction: "inbound",  body: "Hello good morning. I dropped my clothes yesterday evening. When will they be ready?", minutesAgo: 480 },
+          { direction: "outbound", body: "Good morning! Your items are being processed. They should be ready by 3PM today. We'll send you a message when done 🧺", minutesAgo: 470 },
+          { direction: "inbound",  body: "Ok thank you. How much will the total be?", minutesAgo: 460 },
+          { direction: "outbound", body: "For 4 shirts and 2 trousers on standard service, your total is ₦5,800. Payment on pickup is fine!", minutesAgo: 455 },
+          { direction: "inbound",  body: "Alright. Can I also add one native attire?", minutesAgo: 120 },
+        ],
+      },
+      {
+        customerIdx: 1, status: "resolved",
+        messages: [
+          { direction: "inbound",  body: "Please is my order ready? I brought them in on Monday", minutesAgo: 1440 },
+          { direction: "outbound", body: "So sorry for the delay! Your clothes are ready for pickup now. We apologise for the wait 🙏", minutesAgo: 1400 },
+          { direction: "inbound",  body: "Ok I'm coming now", minutesAgo: 1380 },
+          { direction: "outbound", body: "Perfect! See you soon 😊 We're open till 7PM today.", minutesAgo: 1370 },
+          { direction: "inbound",  body: "Thank you, I've picked them up. Good work!", minutesAgo: 1200 },
+          { direction: "outbound", body: "Thank you for using CleanTrack! We look forward to serving you again 🙌", minutesAgo: 1190 },
+        ],
+      },
+      {
+        customerIdx: 2, status: "open",
+        messages: [
+          { direction: "inbound",  body: "Good afternoon. How much do you charge for suits?", minutesAgo: 600 },
+          { direction: "outbound", body: "Good afternoon! Suit dry cleaning is ₦4,000 for standard service or ₦6,500 for express (same-day). Would you like to bring it in?", minutesAgo: 590 },
+          { direction: "inbound",  body: "Express sounds good. Are you open on Saturdays?", minutesAgo: 580 },
+          { direction: "outbound", body: "Yes! We're open Monday to Saturday, 8AM to 7PM 📅", minutesAgo: 575 },
+          { direction: "inbound",  body: "Great, I'll come in tomorrow morning with 2 suits", minutesAgo: 570 },
+        ],
+      },
+      {
+        customerIdx: 3, status: "resolved",
+        messages: [
+          { direction: "inbound",  body: "The collar of my white shirt still has a stain. I paid for premium washing", minutesAgo: 2880 },
+          { direction: "outbound", body: "We sincerely apologise for this! Please bring the shirt back and we will re-wash it free of charge and prioritise it.", minutesAgo: 2840 },
+          { direction: "inbound",  body: "Ok, I'll bring it by tomorrow", minutesAgo: 2820 },
+          { direction: "outbound", body: "Thank you for understanding. Ask for the manager when you arrive and we'll sort it out immediately.", minutesAgo: 2810 },
+          { direction: "inbound",  body: "Done, just picked it up. Collar is spotless now, thank you", minutesAgo: 1440 },
+          { direction: "outbound", body: "We're glad we could make it right! Thank you for your patience 🙏", minutesAgo: 1430 },
+        ],
+      },
+      {
+        customerIdx: 4, status: "open",
+        messages: [
+          { direction: "inbound",  body: "Do you offer home pickup and delivery?", minutesAgo: 300 },
+          { direction: "outbound", body: "Yes! We offer pickup and delivery within our service area. Delivery fee is ₦500 per trip. Shall I schedule one for you?", minutesAgo: 295 },
+          { direction: "inbound",  body: "Nice! How do I book it?", minutesAgo: 290 },
+          { direction: "inbound",  body: "Anyone there?", minutesAgo: 30 },
+        ],
+      },
+      {
+        customerIdx: 5, status: "archived",
+        messages: [
+          { direction: "inbound",  body: "Hello, what are your prices for children's clothes?", minutesAgo: 5760 },
+          { direction: "outbound", body: "Hi! Children's clothes: shirts ₦400, trousers ₦500, dresses ₦600. Any questions?", minutesAgo: 5740 },
+          { direction: "inbound",  body: "Thank you, I'll check and get back to you", minutesAgo: 5720 },
+        ],
+      },
+      {
+        customerIdx: 6, status: "resolved",
+        messages: [
+          { direction: "inbound",  body: "I'm at the shop to pick up my order but you said its not ready. The app says ready", minutesAgo: 720 },
+          { direction: "outbound", body: "We sincerely apologise for the confusion! Please give us 10 minutes — the finishing team is ironing the last items now.", minutesAgo: 710 },
+          { direction: "inbound",  body: "Ok fine", minutesAgo: 700 },
+          { direction: "outbound", body: "Your order is ready! Sorry again for the wait. We added a discount to your next order as an apology 🙏", minutesAgo: 680 },
+          { direction: "inbound",  body: "No problem. Thank you", minutesAgo: 670 },
+        ],
+      },
+      {
+        customerIdx: 7, status: "open",
+        messages: [
+          { direction: "inbound",  body: "Please can I pay online or only cash?", minutesAgo: 200 },
+          { direction: "outbound", body: "We accept cash, bank transfer, and POS! For transfer, please use the account details on your receipt. Let us know if you need anything else.", minutesAgo: 195 },
+          { direction: "inbound",  body: "Perfect. I'll do a transfer when I come for pickup", minutesAgo: 190 },
+        ],
+      },
+      {
+        customerIdx: 8, status: "resolved",
+        messages: [
+          { direction: "inbound",  body: "Is there any discount for bringing more than 20 pieces at once?", minutesAgo: 4320 },
+          { direction: "outbound", body: "Great question! Yes — for 20+ pieces we offer 10% off the total. Shall I note this for your next drop-off?", minutesAgo: 4310 },
+          { direction: "inbound",  body: "Yes please. I'll bring 25 pieces next week", minutesAgo: 4300 },
+          { direction: "outbound", body: "Wonderful! We'll have it noted. See you next week 🧺✨", minutesAgo: 4290 },
+        ],
+      },
+      {
+        customerIdx: 9, status: "open",
+        messages: [
+          { direction: "inbound",  body: "My order number is LT-2024-0891. Any update on when it will be ready?", minutesAgo: 90 },
+          { direction: "outbound", body: "Hi! Let me check that for you right now… Your order is currently being processed and should be ready by end of day today.", minutesAgo: 85 },
+          { direction: "inbound",  body: "End of day meaning what time?", minutesAgo: 60 },
+          { direction: "inbound",  body: "Still waiting for a reply", minutesAgo: 5 },
+        ],
+      },
+    ];
+
+    let convsCreated = 0;
+    let msgsCreated = 0;
+
+    for (let t = 0; t < threads.length; t++) {
+      const thread = threads[t];
+      const branchIdx = Math.floor(t / 2);
+      const branch = branchList[branchIdx] ?? branchList[0];
+      const branchCustomers = customersByBranch[branch.id] ?? [];
+      if (!branchCustomers.length) continue;
+      const customer = branchCustomers[thread.customerIdx % branchCustomers.length];
+      const phone = normalizePhone(customer.phone);
+
+      const now = Date.now();
+      const lastMsgMinutesAgo = Math.min(...thread.messages.map(m => m.minutesAgo));
+      const lastMessageAt = new Date(now - lastMsgMinutesAgo * 60_000);
+
+      const unreadCount = thread.status === "open"
+        ? thread.messages.filter(m => m.direction === "inbound").length > 0
+          ? thread.messages.filter((m, i) => m.direction === "inbound" && i === thread.messages.length - 1 ? 1 : 0).length
+          : 0
+        : 0;
+
+      const [conv] = await db.insert(conversations).values({
+        laundryId,
+        customerId: customer.id,
+        customerName: customer.fullName ?? null,
+        customerPhone: phone,
+        channel: "whatsapp",
+        status: thread.status,
+        unreadCount: thread.status === "open" ? thread.messages.filter(m => m.direction === "inbound").slice(-2).length : 0,
+        lastMessageAt,
+        createdAt: new Date(now - Math.max(...thread.messages.map(m => m.minutesAgo)) * 60_000),
+        updatedAt: lastMessageAt,
+      }).returning();
+      convsCreated++;
+
+      for (const msg of thread.messages) {
+        const msgTime = new Date(now - msg.minutesAgo * 60_000);
+        await db.insert(conversationMessages).values({
+          conversationId: conv.id,
+          laundryId,
+          direction: msg.direction,
+          body: msg.body,
+          senderType: msg.direction === "inbound" ? "customer" : "owner",
+          senderName: msg.direction === "inbound" ? (customer.fullName ?? undefined) : "CleanTrack",
+          status: msg.direction === "outbound" ? "delivered" : null,
+          createdAt: msgTime,
+        });
+        msgsCreated++;
+      }
+    }
+
+    console.log(`✅ Created ${convsCreated} WhatsApp conversations, ${msgsCreated} messages`);
+  }
+
+  // ── 8. Final counts ───────────────────────────────────────────────────────
   const [orderCount] = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
   const allOrders = await db.select().from(orders).where(eq(orders.laundryId, laundryId));
   const allDiscounts = await db.select().from(discountApprovals).where(eq(discountApprovals.laundryId, laundryId));

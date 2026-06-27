@@ -62,7 +62,15 @@ export function Layout() {
     refetchInterval: 30_000,
   });
 
+  const { data: unreadConvData } = useQuery({
+    queryKey: ["conversations-unread"],
+    queryFn: () => api.conversations.getUnreadCount(),
+    enabled: isOwner,
+    refetchInterval: 30_000,
+  });
+
   const pending = pendingCount?.count ?? 0;
+  const unreadConversations = unreadConvData?.unreadCount ?? 0;
 
   const ownerNavItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -80,9 +88,9 @@ export function Layout() {
   ];
 
   const advancedNavItems = [
-    { to: "/operations", label: "Operations", icon: Activity },
-    { to: "/communications", label: "Communications", icon: MessageSquare },
-    { to: "/platform-health", label: "Platform Health", icon: ShieldCheck },
+    { to: "/operations", label: "Operations", icon: Activity, badge: undefined as number | undefined },
+    { to: "/communications", label: "Communications", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined },
+    { to: "/platform-health", label: "Platform Health", icon: ShieldCheck, badge: undefined as number | undefined },
   ];
 
   const navItems = isOwner ? ownerNavItems : workerNavItems;
@@ -155,7 +163,7 @@ export function Layout() {
                 <span className="flex-1 text-left">Advanced</span>
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", advancedOpen && "rotate-180")} />
               </button>
-              {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon }) => (
+              {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => (
                 <Link
                   key={to}
                   to={to}
@@ -169,6 +177,11 @@ export function Layout() {
                 >
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="flex-1">{label}</span>
+                  {badge != null && (
+                    <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      {badge}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
