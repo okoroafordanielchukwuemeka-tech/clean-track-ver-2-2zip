@@ -18,9 +18,16 @@
 import crypto from "crypto";
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { notificationMessages, providerConfigs } from "@workspace/db/schema";
-import { and, eq } from "drizzle-orm";
-import { WhatsAppCloudProvider } from "../lib/providers/whatsapp-cloud.js";
+import {
+  notificationMessages,
+  providerConfigs,
+  conversations,
+  conversationMessages,
+  customers,
+  notifications,
+} from "@workspace/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
+import { WhatsAppCloudProvider, normalizePhoneE164 } from "../lib/providers/whatsapp-cloud.js";
 
 export const webhooksRouter = Router();
 
@@ -241,24 +248,39 @@ webhooksRouter.post("/whatsapp", async (req, res) => {
   );
 });
 
+// ─── Helper: look up laundryId by phoneNumberId ────────────────────────────────
+
+async function lookupLaundryByPhoneNumberId(phoneNumberId: string): Promise<number | null> {
+  try {
+    const configs = await db
+      .select({ laundryId: providerConfigs.laundryId, config: providerConfigs.config })
+      .from(providerConfigs)
+      .where(and(eq(providerConfigs.provider, "whatsapp"), eq(providerConfigs.isActive, true)));
+
+    const matched = configs.find((row) => {
+      const cfg = row.config as Record<string, unknown>;
+      return cfg.phoneNumberId === phoneNumberId;
+    });
+
+    return matched?.laundryId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Async webhook processing ─────────────────────────────────────────────────
 
 async function processWhatsAppWebhook(payload: unknown): Promise<void> {
-  // Use the provider to parse the webhook (handles all format details)
-  const dummyProvider = new WhatsAppCloudProvider({
+  const parser = new WhatsAppCloudProvider({
     phoneNumberId: "",
     accessToken: "",
     businessAccountId: "",
     webhookVerifyToken: "",
   });
 
-  const { phoneNumberId, statusUpdates } = dummyProvider.handleWebhook(payload);
+  const { statusUpdates, inboundMessages } = parser.handleWebhook(payload);
 
-  if (!statusUpdates.length) {
-    return; // Not a status update payload (could be inbound message — ignore for now)
-  }
-
-  // Apply each status update to the corresponding message record
+  // ── 1. Outbound status updates ─────────────────────────────────────────────
   for (const update of statusUpdates) {
     try {
       const rows = await db
@@ -268,24 +290,16 @@ async function processWhatsAppWebhook(payload: unknown): Promise<void> {
         .limit(1);
 
       if (!rows.length) {
-        console.warn(
-          `[Webhook] Message not found for providerMessageId=${update.providerMessageId}`
-        );
+        console.warn(`[Webhook] Message not found for providerMessageId=${update.providerMessageId}`);
         continue;
       }
 
       const msg = rows[0];
 
-      // Enforce lifecycle order: queued → sent → delivered → read
-      // Don't downgrade status (e.g. ignore "sent" if already "delivered")
-      const RANK: Record<string, number> = {
-        queued: 0, sent: 1, delivered: 2, read: 3, failed: 4,
-      };
+      const RANK: Record<string, number> = { queued: 0, sent: 1, delivered: 2, read: 3, failed: 4 };
       const currentRank = RANK[msg.status] ?? -1;
       const newRank = RANK[update.status] ?? -1;
-      if (update.status !== "failed" && newRank <= currentRank) {
-        continue; // stale update — skip
-      }
+      if (update.status !== "failed" && newRank <= currentRank) continue;
 
       const patch: Record<string, unknown> = { status: update.status };
       if (update.status === "sent")      patch.sentAt = update.timestamp;
@@ -294,23 +308,126 @@ async function processWhatsAppWebhook(payload: unknown): Promise<void> {
       if (update.status === "failed") {
         patch.failedAt = update.timestamp;
         patch.errorMessage =
-          update.errorMessage ??
-          (update.errorCode ? `Error code ${update.errorCode}` : "Unknown error");
+          update.errorMessage ?? (update.errorCode ? `Error code ${update.errorCode}` : "Unknown error");
       }
 
-      await db
-        .update(notificationMessages)
-        .set(patch)
-        .where(eq(notificationMessages.id, msg.id));
+      await db.update(notificationMessages).set(patch).where(eq(notificationMessages.id, msg.id));
+      console.log(`[Webhook] Updated message ${msg.id} → ${update.status}`);
+    } catch (err) {
+      console.error(`[Webhook] Failed to update message ${update.providerMessageId}:`, err);
+    }
+  }
+
+  // ── 2. Inbound messages from customers ────────────────────────────────────
+  for (const msg of inboundMessages ?? []) {
+    try {
+      // Resolve which laundry this phoneNumberId belongs to
+      const laundryId = await lookupLaundryByPhoneNumberId(msg.phoneNumberId);
+      if (!laundryId) {
+        console.warn(`[Webhook] No active laundry found for phoneNumberId=${msg.phoneNumberId}`);
+        continue;
+      }
+
+      // Normalize sender phone to E.164
+      const senderPhone = normalizePhoneE164(msg.from);
+
+      // Look up customer by phone + laundryId (soft-delete aware)
+      const [customer] = await db
+        .select({ id: customers.id, fullName: customers.fullName })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.laundryId, laundryId),
+            eq(customers.phone, senderPhone),
+            isNull(customers.deletedAt)
+          )
+        )
+        .limit(1);
+
+      const now = new Date();
+
+      // ── Find or create conversation thread ─────────────────────────────
+      const [existingConv] = await db
+        .select({
+          id: conversations.id,
+          unreadCount: conversations.unreadCount,
+          status: conversations.status,
+        })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.laundryId, laundryId),
+            eq(conversations.customerPhone, senderPhone),
+            eq(conversations.channel, "whatsapp")
+          )
+        )
+        .limit(1);
+
+      let conversationId: number;
+
+      if (existingConv) {
+        conversationId = existingConv.id;
+        await db
+          .update(conversations)
+          .set({
+            lastMessageAt: msg.timestamp,
+            unreadCount: existingConv.unreadCount + 1,
+            // Reopen if it was resolved when customer writes back
+            status: existingConv.status === "resolved" ? "open" : existingConv.status,
+            // Refresh customer linkage if it was missing and we now found them
+            customerId: customer?.id ?? undefined,
+            customerName: customer?.fullName ?? undefined,
+            updatedAt: now,
+          })
+          .where(eq(conversations.id, existingConv.id));
+      } else {
+        const [newConv] = await db
+          .insert(conversations)
+          .values({
+            laundryId,
+            customerId: customer?.id ?? null,
+            channel: "whatsapp",
+            customerPhone: senderPhone,
+            customerName: customer?.fullName ?? null,
+            status: "open",
+            lastMessageAt: msg.timestamp,
+            unreadCount: 1,
+          })
+          .returning({ id: conversations.id });
+        conversationId = newConv.id;
+      }
+
+      // ── Save the inbound conversation message ──────────────────────────
+      await db.insert(conversationMessages).values({
+        conversationId,
+        laundryId,
+        direction: "inbound",
+        body: msg.body,
+        providerMessageId: msg.providerMessageId,
+        senderType: "customer",
+        senderName: customer?.fullName ?? null,
+        metadata: { messageType: msg.messageType, from: msg.from },
+        createdAt: msg.timestamp,
+      });
+
+      // ── Dashboard notification for the owner ───────────────────────────
+      const preview = msg.body.length > 80 ? msg.body.substring(0, 80) + "…" : msg.body;
+      const senderLabel = customer?.fullName ?? senderPhone;
+      await db.insert(notifications).values({
+        laundryId,
+        targetType: "owner",
+        eventType: "whatsapp_message",
+        title: "New WhatsApp message",
+        message: `${senderLabel}: ${preview}`,
+        severity: "info",
+        isRead: false,
+      });
 
       console.log(
-        `[Webhook] Updated message ${msg.id} → ${update.status}`
+        `[Webhook] Inbound message saved — laundry=${laundryId} conv=${conversationId} from=${senderPhone} customer=${customer?.id ?? "unknown"}`
       );
     } catch (err) {
-      console.error(
-        `[Webhook] Failed to update message ${update.providerMessageId}:`,
-        err
-      );
+      console.error(`[Webhook] Failed to process inbound message from ${msg.from}:`, err);
     }
   }
 }

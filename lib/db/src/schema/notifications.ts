@@ -11,6 +11,7 @@ export const notifications = pgTable("notifications", {
       "new_order", "order_assigned", "due_soon", "overdue",
       "payment_received", "unpaid_balance", "order_ready",
       "partial_pickup", "pickup_completed", "high_expense", "low_profit_warning",
+      "whatsapp_message",
     ],
   }).notNull(),
   title: text("title").notNull(),

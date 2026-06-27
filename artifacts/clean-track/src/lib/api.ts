@@ -1606,6 +1606,100 @@ export interface WaMetaCallbackInput {
   phoneNumberId: string;
 }
 
+// ─── Conversations ────────────────────────────────────────────────────────────
+
+export interface Conversation {
+  id: number;
+  customerId: number | null;
+  customerName: string | null;
+  customerPhone: string;
+  channel: "whatsapp" | "sms";
+  status: "open" | "resolved" | "archived";
+  unreadCount: number;
+  lastMessageAt: string | null;
+  assignedWorkerId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationMessage {
+  id: number;
+  conversationId: number;
+  laundryId: number;
+  direction: "inbound" | "outbound";
+  body: string;
+  status: string | null;
+  providerMessageId: string | null;
+  senderType: string | null;
+  senderName: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ConversationDetail {
+  conversation: Conversation;
+  messages: ConversationMessage[];
+  customer: { id: number; fullName: string; phone: string } | null;
+}
+
+export interface ConversationListResponse {
+  conversations: Conversation[];
+  total: number;
+  totalUnread: number;
+}
+
+export const api = {
+  ...api,
+  conversations: {
+    list: async (params?: {
+      status?: "open" | "resolved" | "archived";
+      limit?: number;
+      offset?: number;
+    }): Promise<ConversationListResponse> => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set("status", params.status);
+      if (params?.limit != null) q.set("limit", String(params.limit));
+      if (params?.offset != null) q.set("offset", String(params.offset));
+      const res = await fetch(`/api/conversations?${q}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+
+    getUnreadCount: async (): Promise<{ unreadCount: number }> => {
+      const res = await fetch("/api/conversations/unread-count", { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+
+    get: async (id: number): Promise<ConversationDetail> => {
+      const res = await fetch(`/api/conversations/${id}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+
+    markRead: async (id: number): Promise<void> => {
+      const res = await fetch(`/api/conversations/${id}/read`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+
+    updateStatus: async (
+      id: number,
+      status: "open" | "resolved" | "archived"
+    ): Promise<void> => {
+      const res = await fetch(`/api/conversations/${id}/status`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+  },
+};
+
 export interface SubscriptionUsage {
   monthlyOrderCount: number;
   activeWorkerCount: number;

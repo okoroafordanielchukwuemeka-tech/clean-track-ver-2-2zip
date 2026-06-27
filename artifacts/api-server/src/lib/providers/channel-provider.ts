@@ -35,10 +35,27 @@ export interface WebhookStatusUpdate {
   errorMessage?: string;
 }
 
+export interface InboundMessage {
+  /** The provider's phone_number_id — used to route to the correct tenant */
+  phoneNumberId: string;
+  /** Unique message ID from the provider (WAMID) */
+  providerMessageId: string;
+  /** Sender's phone number (E.164, with leading +) */
+  from: string;
+  /** Message body text (non-text types are converted to a human-readable placeholder) */
+  body: string;
+  /** Timestamp from the provider */
+  timestamp: Date;
+  /** Raw message type reported by Meta */
+  messageType: "text" | "image" | "audio" | "document" | "video" | "sticker" | "location" | "unknown";
+}
+
 export interface WebhookHandleResult {
   /** The provider's phone_number_id / sender ID — used to route to the correct tenant */
   phoneNumberId?: string;
   statusUpdates: WebhookStatusUpdate[];
+  /** Parsed inbound messages from customers (replies) */
+  inboundMessages?: InboundMessage[];
 }
 
 // ─── Core interface ───────────────────────────────────────────────────────────

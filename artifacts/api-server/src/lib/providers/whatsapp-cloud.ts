@@ -10,6 +10,7 @@
 
 import type {
   ChannelProvider,
+  InboundMessage,
   SendParams,
   SendResult,
   ValidationResult,
@@ -134,6 +135,8 @@ export class WhatsAppCloudProvider implements ChannelProvider {
 
   handleWebhook(payload: unknown): WebhookHandleResult {
     const statusUpdates: WebhookStatusUpdate[] = [];
+    const inboundMessages: InboundMessage[] = [];
+    let lastPhoneNumberId = "";
 
     try {
       const entries = (payload as any)?.entry ?? [];
@@ -143,9 +146,10 @@ export class WhatsAppCloudProvider implements ChannelProvider {
           const value = change?.value;
           if (!value || change.field !== "messages") continue;
 
-          const phoneNumberId: string =
-            value?.metadata?.phone_number_id ?? "";
+          const phoneNumberId: string = value?.metadata?.phone_number_id ?? "";
+          if (phoneNumberId) lastPhoneNumberId = phoneNumberId;
 
+          // ── Outbound status updates ────────────────────────────────────
           for (const raw of value?.statuses ?? []) {
             const wamid: string = raw.id;
             const rawStatus: string = raw.status;
@@ -174,13 +178,76 @@ export class WhatsAppCloudProvider implements ChannelProvider {
             statusUpdates.push(update);
           }
 
-          if (statusUpdates.length > 0) {
-            return { phoneNumberId, statusUpdates };
+          // ── Inbound messages (customer replies) ────────────────────────
+          for (const raw of value?.messages ?? []) {
+            const wamid: string = raw.id;
+            const from: string = raw.from;
+            if (!wamid || !from) continue;
+
+            const ts = new Date(parseInt(raw.timestamp, 10) * 1000);
+            const rawType: string = raw.type ?? "unknown";
+
+            const KNOWN_TYPES = [
+              "text", "image", "audio", "document", "video",
+              "sticker", "location",
+            ] as const;
+            type KnownType = (typeof KNOWN_TYPES)[number];
+
+            const messageType: InboundMessage["messageType"] =
+              (KNOWN_TYPES as readonly string[]).includes(rawType)
+                ? (rawType as KnownType)
+                : "unknown";
+
+            let body: string;
+            switch (raw.type) {
+              case "text":
+                body = raw.text?.body ?? "";
+                break;
+              case "image":
+                body = raw.image?.caption ? `[Image: ${raw.image.caption}]` : "[Image]";
+                break;
+              case "audio":
+                body = "[Voice message]";
+                break;
+              case "document":
+                body = raw.document?.filename
+                  ? `[Document: ${raw.document.filename}]`
+                  : "[Document]";
+                break;
+              case "video":
+                body = raw.video?.caption ? `[Video: ${raw.video.caption}]` : "[Video]";
+                break;
+              case "sticker":
+                body = "[Sticker]";
+                break;
+              case "location":
+                body = "[Location shared]";
+                break;
+              default:
+                body = `[${raw.type ?? "Unknown"} message]`;
+            }
+
+            inboundMessages.push({
+              phoneNumberId,
+              providerMessageId: wamid,
+              from: from.startsWith("+") ? from : `+${from}`,
+              body,
+              timestamp: ts,
+              messageType,
+            });
           }
         }
       }
     } catch (err) {
       console.error("[WhatsApp] Webhook parse error:", err);
+    }
+
+    if (statusUpdates.length > 0 || inboundMessages.length > 0) {
+      return {
+        phoneNumberId: lastPhoneNumberId || undefined,
+        statusUpdates,
+        inboundMessages: inboundMessages.length > 0 ? inboundMessages : undefined,
+      };
     }
 
     return { statusUpdates: [] };

@@ -27,6 +27,7 @@ import { webhooksRouter } from "./webhooks.js";
 import { subscriptionRouter } from "./subscription.js";
 import { productionHealthRouter } from "./production-health.js";
 import { whatsappRouter } from "./whatsapp.js";
+import { conversationsRouter } from "./conversations.js";
 
 export const router = Router();
 
@@ -62,6 +63,7 @@ router.use("/health", productionHealthRouter);
 router.use("/alerts", requireOwner, alertsRouter);
 router.use("/communication", requireOwner, communicationRouter);
 router.use("/whatsapp", requireOwner, whatsappRouter);
+router.use("/conversations", requireAuth, conversationsRouter);
 router.use("/subscription", requireOwner, subscriptionRouter);
 
 // Platform admin routes (CleanTrack internal — not for laundry owners)
