@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { whatsappConnections, providerConfigs } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { whatsappConnections, providerConfigs, conversations, conversationMessages } from "@workspace/db/schema";
+import { eq, and, count, max, sql } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
@@ -177,6 +177,32 @@ whatsappRouter.get("/status", requireOwner, async (req: AuthRequest, res) => {
       return res.json({ connected: false });
     }
 
+    // Fetch conversation stats to power the owner dashboard card
+    const [convStats] = await db
+      .select({
+        totalConversations: count(conversations.id),
+        lastActivityAt: max(conversations.lastMessageAt),
+      })
+      .from(conversations)
+      .where(eq(conversations.laundryId, laundryId));
+
+    const [msgStats] = await db
+      .select({ totalMessages: count(conversationMessages.id) })
+      .from(conversationMessages)
+      .innerJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
+      .where(eq(conversations.laundryId, laundryId));
+
+    // Unique customers: count distinct customer_id where not null
+    const custRows = await db
+      .selectDistinct({ customerId: conversations.customerId })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.laundryId, laundryId),
+          sql`${conversations.customerId} IS NOT NULL`
+        )
+      );
+
     return res.json({
       connected: true,
       phoneNumberId: row.phoneNumberId,
@@ -184,6 +210,12 @@ whatsappRouter.get("/status", requireOwner, async (req: AuthRequest, res) => {
       displayPhoneNumber: row.displayPhoneNumber ?? null,
       businessName: row.businessName ?? null,
       connectedAt: row.connectedAt,
+      stats: {
+        totalConversations: Number(convStats?.totalConversations ?? 0),
+        totalMessages: Number(msgStats?.totalMessages ?? 0),
+        uniqueCustomers: custRows.length,
+        lastActivityAt: convStats?.lastActivityAt ?? null,
+      },
     });
   } catch (err) {
     console.error("[whatsapp] GET /status error:", err);

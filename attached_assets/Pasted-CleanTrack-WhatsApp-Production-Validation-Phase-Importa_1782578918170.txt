@@ -1,0 +1,144 @@
+CleanTrack WhatsApp Production Validation Phase
+
+Important:
+
+The owner WhatsApp onboarding experience has been cleaned.
+
+Now perform a complete production readiness audit of the WhatsApp system.
+
+Do not add unnecessary features.
+
+Focus on making sure a real laundry business can use this successfully.
+
+Audit and validate:
+
+1. Meta Embedded Signup
+
+Verify:
+
+* Owner clicks Connect WhatsApp
+* Meta popup opens
+* Owner can select their WhatsApp Business account
+* Phone number is returned correctly
+* Business Account ID is saved
+* Phone Number ID is saved
+* Token is encrypted
+* Connection status updates correctly
+
+2. Real message flow
+
+Test:
+
+Customer sends WhatsApp message:
+
+"Hello, I want to wash clothes"
+
+Verify:
+
+* Webhook receives message
+* Conversation is created
+* Customer phone is linked
+* Message appears in CleanTrack inbox
+* Owner sees notification
+* Worker sees notification
+
+3. Reply flow
+
+Test from CleanTrack:
+
+Worker replies:
+
+"Hello, your order can be created today."
+
+Verify:
+
+* Message sends through WhatsApp Cloud API
+* Customer receives it
+* Message status updates correctly
+
+4. Permission audit
+
+Verify:
+
+OWNER:
+
+Can:
+
+* connect WhatsApp
+* view inbox
+* reply
+* assign conversations
+
+Cannot:
+
+* access platform Meta settings
+
+WORKER:
+
+Can:
+
+* reply to conversations
+
+Cannot:
+
+* disconnect WhatsApp
+* view tokens
+* change connection settings
+
+FOUNDER ADMIN:
+
+Can:
+
+* see WhatsApp platform health
+* see connected tenants
+* troubleshoot connections
+
+5. Improve owner UI
+
+Make sure WhatsApp page feels premium:
+
+Show:
+
+Connected ✅
+
+Business:
+ABC Laundry
+
+Phone:
++234 XXXXX
+
+Messages:
+125
+
+Customers:
+80
+
+Last activity:
+2 minutes ago
+
+Buttons:
+
+Open Inbox
+Disconnect
+
+6. Error handling
+
+Test:
+
+* disconnected number
+* expired token
+* failed webhook
+* invalid permissions
+
+Show friendly messages.
+
+Final report:
+
+Provide:
+
+1. WhatsApp readiness score
+2. Failed tests
+3. Remaining gaps
+4. Production launch recommendation
+
+Do not expose technical Meta fields to owners.

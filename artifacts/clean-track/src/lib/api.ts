@@ -1672,6 +1672,12 @@ export type WaConnectionStatus =
       displayPhoneNumber: string | null;
       businessName: string | null;
       connectedAt: string;
+      stats?: {
+        totalConversations: number;
+        totalMessages: number;
+        uniqueCustomers: number;
+        lastActivityAt: string | null;
+      };
     };
 
 export interface WaConnectInput {

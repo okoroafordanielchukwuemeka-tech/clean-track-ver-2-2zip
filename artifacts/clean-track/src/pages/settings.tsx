@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
@@ -18,6 +19,7 @@ import {
   type PlanPricingConfig,
   type SubscriptionPricing,
   type WaConnectionStatus,
+  type WaConnectInput,
   type WaMetaConfig,
   type WaMetaCallbackInput,
 } from "@/lib/api";
@@ -1559,9 +1561,18 @@ function BillingSection() {
 
 function WhatsAppBusinessSection() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
+  const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const pendingWabaRef = useRef<{ wabaId: string; phoneNumberId: string } | null>(null);
+  const [form, setForm] = useState<WaConnectInput>({
+    whatsappBusinessAccountId: "",
+    phoneNumberId: "",
+    accessToken: "",
+    displayPhoneNumber: "",
+    businessName: "",
+  });
 
   const { data: status, isLoading } = useQuery<WaConnectionStatus>({
     queryKey: ["whatsapp-status"],
@@ -1656,6 +1667,17 @@ function WhatsAppBusinessSection() {
     onError: () => toast.error("Failed to disconnect"),
   });
 
+  const connect = useMutation({
+    mutationFn: (data: WaConnectInput) => api.whatsapp.connect(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      setShowConnectDialog(false);
+      setForm({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
+      toast.success("WhatsApp Business connected successfully");
+    },
+    onError: () => toast.error("Failed to connect. Please check your credentials and try again."),
+  });
+
   // ── Embedded Signup launcher ──────────────────────────────────────────────
 
   const launchEmbeddedSignup = () => {
@@ -1715,6 +1737,7 @@ function WhatsAppBusinessSection() {
 
   const isConnected = status?.connected === true;
   const connectedStatus = isConnected ? (status as Extract<WaConnectionStatus, { connected: true }>) : null;
+  const stats = connectedStatus?.stats;
 
   return (
     <div className="space-y-6">
@@ -1737,6 +1760,7 @@ function WhatsAppBusinessSection() {
           </div>
         ) : isConnected && connectedStatus ? (
           <div className="space-y-4">
+            {/* Header row */}
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
@@ -1749,18 +1773,30 @@ function WhatsAppBusinessSection() {
                   </p>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
-                onClick={() => setShowDisconnectDialog(true)}
-              >
-                <Unlink className="h-3.5 w-3.5" />
-                Disconnect
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => navigate("/communications")}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Open Inbox
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => setShowDisconnectDialog(true)}
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                  Disconnect
+                </Button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Account info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
                 <p className="text-xs text-muted-foreground mb-0.5">Business Number</p>
                 <p className="text-sm font-medium">
@@ -1777,6 +1813,32 @@ function WhatsAppBusinessSection() {
                 </p>
               </div>
             </div>
+
+            {/* Stats row */}
+            {stats && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/40">
+                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
+                  <p className="text-lg font-bold">{stats.totalMessages.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Messages</p>
+                </div>
+                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
+                  <p className="text-lg font-bold">{stats.totalConversations.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Conversations</p>
+                </div>
+                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
+                  <p className="text-lg font-bold">{stats.uniqueCustomers.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Customers</p>
+                </div>
+                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
+                  <p className="text-sm font-medium">
+                    {stats.lastActivityAt
+                      ? new Date(stats.lastActivityAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+                      : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Last Activity</p>
+                </div>
+              </div>
+            )}
           </div>
         ) : useEmbeddedSignup ? (
           <div className="flex items-start justify-between gap-4">
@@ -1802,25 +1864,31 @@ function WhatsAppBusinessSection() {
               ) : (
                 <Link className="h-3.5 w-3.5" />
               )}
-              {isConnecting
-                ? "Connecting…"
-                : metaCallbackMutation.isPending
-                ? "Saving…"
-                : "Connect WhatsApp"}
+              {isConnecting ? "Connecting…" : metaCallbackMutation.isPending ? "Saving…" : "Connect WhatsApp"}
             </Button>
           </div>
         ) : (
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <WifiOff className="h-5 w-5 text-muted-foreground" />
+          /* Manual connect — shown when Meta Embedded Signup is not configured (META_APP_ID not set) */
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <WifiOff className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Not Connected</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Connect your WhatsApp Business account using your API credentials.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="font-semibold text-sm">Not Available</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                WhatsApp connection has not been configured for this platform.
-                Contact your administrator to enable it.
-              </p>
-            </div>
+            <Button
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={() => setShowConnectDialog(true)}
+            >
+              <Link className="h-3.5 w-3.5" />
+              Connect WhatsApp
+            </Button>
           </div>
         )}
       </div>
@@ -1835,6 +1903,88 @@ function WhatsAppBusinessSection() {
           </p>
         </div>
       )}
+
+      {/* Manual connect dialog — used when META_APP_ID is not configured */}
+      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Connect WhatsApp Business</DialogTitle>
+            <DialogDescription>
+              Enter your WhatsApp Business API credentials from the{" "}
+              <a
+                href="https://developers.facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 text-primary"
+              >
+                Meta Developer Portal
+              </a>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Business Account ID *</label>
+              <Input
+                placeholder="e.g. 123456789012345"
+                value={form.whatsappBusinessAccountId}
+                onChange={e => setForm(f => ({ ...f, whatsappBusinessAccountId: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone Number ID *</label>
+              <Input
+                placeholder="e.g. 123456789012345"
+                value={form.phoneNumberId}
+                onChange={e => setForm(f => ({ ...f, phoneNumberId: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Permanent Access Token *</label>
+              <Input
+                type="password"
+                placeholder="EAAxxxx…"
+                value={form.accessToken}
+                onChange={e => setForm(f => ({ ...f, accessToken: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Display Number</label>
+                <Input
+                  placeholder="+234 801 234 5678"
+                  value={form.displayPhoneNumber ?? ""}
+                  onChange={e => setForm(f => ({ ...f, displayPhoneNumber: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Business Name</label>
+                <Input
+                  placeholder="Your Laundry"
+                  value={form.businessName ?? ""}
+                  onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConnectDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => connect.mutate(form)}
+              disabled={
+                connect.isPending ||
+                !form.whatsappBusinessAccountId.trim() ||
+                !form.phoneNumberId.trim() ||
+                !form.accessToken.trim()
+              }
+            >
+              {connect.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Connecting…</>
+              ) : "Connect"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Disconnect confirmation */}
       <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
