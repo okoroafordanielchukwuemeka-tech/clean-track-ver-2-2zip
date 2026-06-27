@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { InboxTab } from "@/components/inbox-tab";
+import { CustomersTab } from "@/components/communications/customers-tab";
+import { ActivityTab } from "@/components/communications/activity-tab";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -614,7 +616,8 @@ function DeliveryTimeline({ msg }: { msg: NotifMessage }) {
 
 export default function CommunicationsPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState("templates");
+  const [tab, setTab] = useState("inbox");
+  const [inboxOpenConvId, setInboxOpenConvId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<NotifTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<NotifTemplate | null>(null);
@@ -707,7 +710,7 @@ export default function CommunicationsPage() {
             Communications
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            WhatsApp provider, notification templates, and delivery tracking.
+            Shared inbox, WhatsApp contacts, notification templates, and activity tracking.
           </p>
         </div>
         <div className="flex gap-2">
@@ -757,7 +760,7 @@ export default function CommunicationsPage() {
               <p className={`text-2xl font-bold ${failedCount > 0 ? "text-red-400" : ""}`}>{failedCount}</p>
               {failedCount > 0 && (
                 <button
-                  onClick={() => { setMsgStatus("failed"); setTab("messages"); }}
+                  onClick={() => { setMsgStatus("failed"); setTab("activity"); }}
                   className="text-xs text-red-400 hover:underline"
                 >
                   View failed →
@@ -782,23 +785,29 @@ export default function CommunicationsPage() {
               </span>
             )}
           </TabsTrigger>
+          <TabsTrigger value="customers">Customers</TabsTrigger>
           <TabsTrigger value="templates">
             Templates
             {stats && (
               <span className="ml-2 text-xs bg-muted rounded-full px-1.5">{stats.templates.total}</span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="messages">
-            Message Log
-            {stats && stats.total > 0 && (
-              <span className="ml-2 text-xs bg-muted rounded-full px-1.5">{stats.total}</span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
 
         {/* ── Inbox tab ── */}
         <TabsContent value="inbox" className="mt-4">
           <InboxTab />
+        </TabsContent>
+
+        {/* ── Customers tab ── */}
+        <TabsContent value="customers" className="mt-4">
+          <CustomersTab
+            onOpenConversation={(convId) => {
+              setTab("inbox");
+              setInboxOpenConvId(convId);
+            }}
+          />
         </TabsContent>
 
         {/* ── Templates tab ── */}
@@ -894,7 +903,17 @@ export default function CommunicationsPage() {
           )}
         </TabsContent>
 
-        {/* ── Message Log tab ── */}
+        {/* ── Activity tab ── */}
+        <TabsContent value="activity" className="mt-4">
+          <ActivityTab
+            onOpenConversation={(convId) => {
+              setTab("inbox");
+              setInboxOpenConvId(convId);
+            }}
+          />
+        </TabsContent>
+
+        {/* ── Message Log (notification delivery log) ── */}
         <TabsContent value="messages" className="space-y-4 mt-4">
           <div className="flex flex-wrap gap-2 items-center">
             <Select value={msgStatus} onValueChange={setMsgStatus}>

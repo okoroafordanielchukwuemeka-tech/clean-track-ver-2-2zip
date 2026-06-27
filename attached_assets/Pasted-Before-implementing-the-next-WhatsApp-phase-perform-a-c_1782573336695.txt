@@ -1,0 +1,235 @@
+Before implementing the next WhatsApp phase, perform a complete UX and workflow audit of the current Communications page.
+
+The goal is NOT just to receive WhatsApp messages.
+
+The goal is to make CleanTrack the central communication system for laundry businesses.
+
+Audit:
+
+1. Current Communications page layout.
+2. Current WhatsApp Inbox experience.
+3. How owners see conversations.
+4. How workers would access conversations.
+5. How conversations connect to customers.
+6. How conversations connect to orders.
+7. Missing actions required for daily laundry operations.
+
+Do not remove existing WhatsApp webhook functionality.
+
+Keep:
+
+- Meta connection
+- webhook receiving
+- message storage
+- tenant isolation
+
+Now improve the Communication workflow.
+
+Implement:
+
+## 1. New Communication Center UI
+
+Redesign Communications page into:
+
+Communications
+
+Tabs:
+
+- Inbox
+- Customers
+- Templates
+- Activity
+
+
+Inbox should have:
+
+Left side:
+Conversation list
+
+Show:
+
+- Customer name
+- Phone number
+- Last message
+- Time
+- Unread count
+- Assigned staff member
+- Status
+
+
+Right side:
+
+Conversation panel
+
+Show:
+
+- Customer information
+- Current orders
+- Previous orders
+- Payments
+- Notes
+- Messages
+
+
+## 2. Customer Context Panel
+
+When opening a conversation show:
+
+Customer:
+
+Name
+
+Phone
+
+Total orders
+
+Outstanding balance
+
+Last order
+
+Active orders
+
+
+Actions:
+
+Create Order
+
+View Orders
+
+Record Payment
+
+Add Note
+
+
+## 3. Staff Visibility
+
+Prepare the system for multiple workers.
+
+Every outgoing message must store:
+
+- sender type
+- sender ID
+- timestamp
+
+
+Example:
+
+Customer sees:
+
+CleanTrack Laundry
+
+Owner sees:
+
+Daniel replied at 2:30 PM
+
+
+## 4. Conversation Assignment
+
+Add:
+
+Assigned to:
+
+Owner
+Worker
+Manager
+
+
+Owner can see:
+
+All conversations
+
+Worker can only see assigned conversations based on permissions.
+
+
+## 5. Activity Timeline
+
+Add audit history:
+
+Example:
+
+10:30
+Customer sent message
+
+10:35
+Worker Daniel replied
+
+10:40
+Order created
+
+10:45
+Payment recorded
+
+
+## 6. WhatsApp Business Workflow
+
+Support:
+
+Customer message
+
+↓
+
+Conversation created
+
+↓
+
+Worker replies
+
+↓
+
+Create order
+
+↓
+
+Record payment
+
+↓
+
+Pickup notification
+
+
+## 7. Mobile Experience
+
+Laundry owners will mostly use phones.
+
+Verify:
+
+- responsive inbox
+- easy reply
+- unread notifications
+- fast loading
+
+
+Testing:
+
+Create:
+
+Laundry A
+Owner
+Worker A
+
+Connect WhatsApp.
+
+Test:
+
+Customer sends message.
+
+Owner sees it.
+
+Worker sees it according to permissions.
+
+Worker replies.
+
+Owner sees reply history.
+
+Create order from conversation.
+
+Verify no cross-tenant data leakage.
+
+
+Provide:
+
+1. Before/after Communication page screenshots.
+2. UX changes.
+3. Database changes.
+4. Security results.
+5. Remaining WhatsApp roadmap.

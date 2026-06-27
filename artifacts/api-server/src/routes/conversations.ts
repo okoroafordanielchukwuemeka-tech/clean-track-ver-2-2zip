@@ -1,10 +1,10 @@
 /**
  * Conversations API
  *
- * Provides access to WhatsApp (and future SMS) conversation threads.
- * Workers can view conversations; only owners can resolve/archive.
- *
- * All routes enforce laundryId scoping via the JWT — no cross-tenant access.
+ * Full shared inbox for WhatsApp (and future channel) conversations.
+ * - Workers can view conversations and send replies.
+ * - Only owners can resolve/archive/assign.
+ * - All routes enforce laundryId scoping — no cross-tenant access.
  */
 
 import { Router } from "express";
@@ -13,16 +13,19 @@ import {
   conversations,
   conversationMessages,
   customers,
+  orders,
+  workers,
 } from "@workspace/db/schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type AuthRequest, requireAuth, requireOwner } from "../middleware/auth.js";
+import { providerRegistry } from "../lib/providers/registry.js";
 
 export const conversationsRouter = Router();
 
 // ── GET /api/conversations ─────────────────────────────────────────────────
-// Lists all conversations for this laundry, newest first.
-// Supports ?status=open|resolved|archived and ?limit=&offset=
+// Lists conversations for this laundry, newest-first.
+// ?status=open|resolved|archived  ?limit=  ?offset=
 
 conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
@@ -57,22 +60,15 @@ conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
       .limit(limit)
       .offset(offset);
 
-    // Total count for pagination
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(conversations)
       .where(and(...conditions));
 
-    // Total unread across all open conversations (for badge)
     const [{ totalUnread }] = await db
       .select({ totalUnread: sql<number>`coalesce(sum(unread_count),0)::int` })
       .from(conversations)
-      .where(
-        and(
-          eq(conversations.laundryId, laundryId),
-          eq(conversations.status, "open")
-        )
-      );
+      .where(and(eq(conversations.laundryId, laundryId), eq(conversations.status, "open")));
 
     return res.json({ conversations: rows, total: count, totalUnread });
   } catch (err) {
@@ -82,7 +78,6 @@ conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ── GET /api/conversations/unread-count ────────────────────────────────────
-// Lightweight endpoint for the notification badge.
 
 conversationsRouter.get("/unread-count", requireAuth, async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
@@ -90,12 +85,7 @@ conversationsRouter.get("/unread-count", requireAuth, async (req: AuthRequest, r
     const [{ totalUnread }] = await db
       .select({ totalUnread: sql<number>`coalesce(sum(unread_count),0)::int` })
       .from(conversations)
-      .where(
-        and(
-          eq(conversations.laundryId, laundryId),
-          eq(conversations.status, "open")
-        )
-      );
+      .where(and(eq(conversations.laundryId, laundryId), eq(conversations.status, "open")));
     return res.json({ unreadCount: totalUnread });
   } catch (err) {
     console.error("[conversations] GET /unread-count error:", err);
@@ -104,14 +94,14 @@ conversationsRouter.get("/unread-count", requireAuth, async (req: AuthRequest, r
 });
 
 // ── GET /api/conversations/:id ─────────────────────────────────────────────
-// Returns a single conversation with its most recent messages (newest last).
+// Returns conversation + messages + enriched customer (orders + balance).
 
 conversationsRouter.get("/:id", requireAuth, async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
 
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const msgLimit = Math.min(parseInt(req.query.limit as string) || 100, 500);
 
   try {
     const [conv] = await db
@@ -121,41 +111,169 @@ conversationsRouter.get("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
-    // Fetch linked customer for order context
-    let customer = null;
-    if (conv.customerId) {
-      const [c] = await db
-        .select({
-          id: customers.id,
-          fullName: customers.fullName,
-          phone: customers.phone,
-        })
-        .from(customers)
-        .where(and(eq(customers.id, conv.customerId), eq(customers.laundryId, laundryId)));
-      customer = c ?? null;
-    }
-
     const messages = await db
       .select()
       .from(conversationMessages)
-      .where(
-        and(
-          eq(conversationMessages.conversationId, id),
-          eq(conversationMessages.laundryId, laundryId)
-        )
-      )
+      .where(and(
+        eq(conversationMessages.conversationId, id),
+        eq(conversationMessages.laundryId, laundryId)
+      ))
       .orderBy(asc(conversationMessages.createdAt))
-      .limit(limit);
+      .limit(msgLimit);
 
-    return res.json({ conversation: conv, messages, customer });
+    let customer = null;
+    if (conv.customerId) {
+      const [c] = await db
+        .select({ id: customers.id, fullName: customers.fullName, phone: customers.phone })
+        .from(customers)
+        .where(and(eq(customers.id, conv.customerId), eq(customers.laundryId, laundryId)));
+
+      if (c) {
+        // Fetch customer orders for context panel
+        const customerOrders = await db
+          .select({
+            id: orders.id,
+            orderId: orders.orderId,
+            status: orders.status,
+            paymentStatus: orders.paymentStatus,
+            price: orders.price,
+            amountPaid: orders.amountPaid,
+            createdAt: orders.createdAt,
+            serviceType: orders.serviceType,
+            branchId: orders.branchId,
+            customerName: orders.customerName,
+          })
+          .from(orders)
+          .where(and(eq(orders.customerId, conv.customerId!), eq(orders.laundryId, laundryId)))
+          .orderBy(desc(orders.createdAt))
+          .limit(20);
+
+        const outstandingBalance = customerOrders
+          .filter(o => o.paymentStatus !== "paid")
+          .reduce((sum, o) => {
+            const due = parseFloat(o.price || "0");
+            const paid = parseFloat(o.amountPaid || "0");
+            return sum + Math.max(0, due - paid);
+          }, 0);
+
+        const activeOrders = customerOrders
+          .filter(o => o.status !== "completed")
+          .slice(0, 5);
+
+        const recentOrders = customerOrders.slice(0, 5);
+
+        customer = {
+          ...c,
+          totalOrders: customerOrders.length,
+          outstandingBalance,
+          activeOrders,
+          recentOrders,
+        };
+      }
+    }
+
+    // Fetch assigned worker info if set
+    let assignedWorker = null;
+    if (conv.assignedWorkerId) {
+      const [w] = await db
+        .select({ id: workers.id, name: workers.name, role: workers.role })
+        .from(workers)
+        .where(and(eq(workers.id, conv.assignedWorkerId), eq(workers.laundryId, laundryId)));
+      assignedWorker = w ?? null;
+    }
+
+    return res.json({ conversation: conv, messages, customer, assignedWorker });
   } catch (err) {
     console.error("[conversations] GET /:id error:", err);
     return res.status(500).json({ error: "Failed to fetch conversation" });
   }
 });
 
+// ── POST /api/conversations/:id/messages ───────────────────────────────────
+// Saves a reply from the owner/worker and attempts WhatsApp delivery.
+// Gracefully degrades: message is always saved even if delivery fails.
+
+const replySchema = z.object({
+  body: z.string().min(1).max(4096).trim(),
+});
+
+conversationsRouter.post("/:id/messages", requireAuth, async (req: AuthRequest, res) => {
+  const { laundryId, type, name } = req.auth!;
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
+
+  const parsed = replySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Message body required" });
+
+  try {
+    const [conv] = await db
+      .select()
+      .from(conversations)
+      .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
+
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+    const senderType = type === "owner" ? "owner" : "worker";
+    const senderId: number | null =
+      type === "owner"
+        ? ((req.auth as any).ownerId ?? null)
+        : ((req.auth as any).workerId ?? null);
+    const senderName = name ?? "CleanTrack";
+
+    const [saved] = await db
+      .insert(conversationMessages)
+      .values({
+        conversationId: id,
+        laundryId,
+        direction: "outbound",
+        body: parsed.data.body,
+        senderType,
+        senderId,
+        senderName,
+        status: "queued",
+      })
+      .returning();
+
+    // Re-open conversation if it was resolved/archived
+    await db
+      .update(conversations)
+      .set({ lastMessageAt: new Date(), updatedAt: new Date(), status: "open" })
+      .where(eq(conversations.id, id));
+
+    // Attempt WhatsApp delivery (non-blocking)
+    let deliveryStatus = "queued";
+    let providerMessageId: string | null = null;
+
+    try {
+      const provider = await providerRegistry.getProvider(laundryId, "whatsapp");
+      if (provider) {
+        const result = await provider.send({
+          phone: conv.customerPhone,
+          body: parsed.data.body,
+        });
+        deliveryStatus = "sent";
+        providerMessageId = result.providerMessageId ?? null;
+        await db
+          .update(conversationMessages)
+          .set({ status: "sent", providerMessageId })
+          .where(eq(conversationMessages.id, saved.id));
+      }
+    } catch (sendErr) {
+      console.error(`[conversations] WhatsApp delivery failed for msg ${saved.id}:`, sendErr);
+      // Not fatal — message saved locally regardless
+    }
+
+    return res.json({
+      message: { ...saved, status: deliveryStatus, providerMessageId },
+      delivered: deliveryStatus === "sent",
+    });
+  } catch (err) {
+    console.error("[conversations] POST /:id/messages error:", err);
+    return res.status(500).json({ error: "Failed to send reply" });
+  }
+});
+
 // ── PATCH /api/conversations/:id/read ─────────────────────────────────────
-// Marks a conversation as read (clears unreadCount).
 
 conversationsRouter.patch("/:id/read", requireAuth, async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
@@ -183,7 +301,6 @@ conversationsRouter.patch("/:id/read", requireAuth, async (req: AuthRequest, res
 });
 
 // ── PATCH /api/conversations/:id/status ───────────────────────────────────
-// Owners can change conversation status: open | resolved | archived.
 
 const statusSchema = z.object({
   status: z.enum(["open", "resolved", "archived"]),
@@ -214,5 +331,48 @@ conversationsRouter.patch("/:id/status", requireOwner, async (req: AuthRequest, 
   } catch (err) {
     console.error("[conversations] PATCH /:id/status error:", err);
     return res.status(500).json({ error: "Failed to update conversation status" });
+  }
+});
+
+// ── PATCH /api/conversations/:id/assign ───────────────────────────────────
+// Assigns (or unassigns) a conversation to a worker. Owner only.
+
+const assignSchema = z.object({
+  workerId: z.number().int().nullable(),
+});
+
+conversationsRouter.patch("/:id/assign", requireOwner, async (req: AuthRequest, res) => {
+  const { laundryId } = req.auth!;
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
+
+  const parsed = assignSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid workerId" });
+
+  try {
+    if (parsed.data.workerId !== null) {
+      const [worker] = await db
+        .select({ id: workers.id })
+        .from(workers)
+        .where(and(eq(workers.id, parsed.data.workerId), eq(workers.laundryId, laundryId)));
+      if (!worker) return res.status(404).json({ error: "Worker not found" });
+    }
+
+    const [existing] = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
+
+    if (!existing) return res.status(404).json({ error: "Conversation not found" });
+
+    await db
+      .update(conversations)
+      .set({ assignedWorkerId: parsed.data.workerId, updatedAt: new Date() })
+      .where(eq(conversations.id, id));
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[conversations] PATCH /:id/assign error:", err);
+    return res.status(500).json({ error: "Failed to assign conversation" });
   }
 });

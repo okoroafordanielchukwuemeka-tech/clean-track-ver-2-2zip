@@ -463,6 +463,30 @@ export const api = {
       });
       if (!res.ok) throw new Error(await res.text());
     },
+
+    reply: async (
+      id: number,
+      body: string
+    ): Promise<{ message: ConversationMessage; delivered: boolean }> => {
+      const res = await fetch(`/api/conversations/${id}/messages`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+
+    assign: async (id: number, workerId: number | null): Promise<void> => {
+      const res = await fetch(`/api/conversations/${id}/assign`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workerId }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
   },
 };
 
@@ -1684,10 +1708,40 @@ export interface ConversationMessage {
   createdAt: string;
 }
 
+export interface ConversationOrder {
+  id: number;
+  orderId: string;
+  status: string;
+  paymentStatus: string;
+  price: string;
+  amountPaid: string;
+  createdAt: string;
+  serviceType: string;
+  branchId: number | null;
+  customerName: string | null;
+}
+
+export interface ConversationCustomer {
+  id: number;
+  fullName: string;
+  phone: string;
+  totalOrders: number;
+  outstandingBalance: number;
+  activeOrders: ConversationOrder[];
+  recentOrders: ConversationOrder[];
+}
+
+export interface ConversationAssignedWorker {
+  id: number;
+  name: string;
+  role: string;
+}
+
 export interface ConversationDetail {
   conversation: Conversation;
   messages: ConversationMessage[];
-  customer: { id: number; fullName: string; phone: string } | null;
+  customer: ConversationCustomer | null;
+  assignedWorker: ConversationAssignedWorker | null;
 }
 
 export interface ConversationListResponse {
