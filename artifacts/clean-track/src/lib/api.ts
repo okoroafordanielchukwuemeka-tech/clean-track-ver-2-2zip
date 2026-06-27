@@ -292,6 +292,11 @@ export const api = {
   },
   whatsapp: {
     status: () => request<WaConnectionStatus>("GET", "/whatsapp/status"),
+    metaConfig: () => request<WaMetaConfig>("GET", "/whatsapp/meta/config"),
+    metaCallback: (data: WaMetaCallbackInput) =>
+      request<{ connected: true; displayPhoneNumber: string | null; businessName: string | null; connectedAt: string }>(
+        "POST", "/whatsapp/meta/callback", data
+      ),
     connect: (data: WaConnectInput) => request<{ connected: true; displayPhoneNumber: string | null; businessName: string | null; connectedAt: string }>("POST", "/whatsapp/connect", data),
     disconnect: () => request<{ connected: false; disconnectedAt: string }>("POST", "/whatsapp/disconnect"),
   },
