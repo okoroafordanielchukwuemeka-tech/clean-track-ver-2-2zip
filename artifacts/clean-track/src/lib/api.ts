@@ -1667,8 +1667,6 @@ export type WaConnectionStatus =
   | { connected: false }
   | {
       connected: true;
-      phoneNumberId: string;
-      whatsappBusinessAccountId: string;
       displayPhoneNumber: string | null;
       businessName: string | null;
       connectedAt: string;

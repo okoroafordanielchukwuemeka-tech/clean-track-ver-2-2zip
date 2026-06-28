@@ -205,8 +205,6 @@ whatsappRouter.get("/status", requireOwner, async (req: AuthRequest, res) => {
 
     return res.json({
       connected: true,
-      phoneNumberId: row.phoneNumberId,
-      whatsappBusinessAccountId: row.whatsappBusinessAccountId,
       displayPhoneNumber: row.displayPhoneNumber ?? null,
       businessName: row.businessName ?? null,
       connectedAt: row.connectedAt,
