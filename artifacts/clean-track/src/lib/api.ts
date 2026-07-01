@@ -501,6 +501,26 @@ export const api = {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
+
+    getActivity: async (params?: {
+      limit?: number;
+      offset?: number;
+      conversationId?: number;
+    }): Promise<WhatsAppActivityResponse> => {
+      const q = new URLSearchParams();
+      if (params?.limit != null) q.set("limit", String(params.limit));
+      if (params?.offset != null) q.set("offset", String(params.offset));
+      if (params?.conversationId != null) q.set("conversationId", String(params.conversationId));
+      const res = await fetch(`/api/conversations/activity?${q}`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+
+    getConversationActivity: async (convId: number): Promise<WhatsAppActivityResponse> => {
+      const res = await fetch(`/api/conversations/${convId}/activity`, { credentials: "include" });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
   },
 };
 
@@ -1051,6 +1071,25 @@ export interface DiscountSettings {
   maxDiscountPerOrder?: number;
   maxDiscountPercentage?: number;
   autoApprovalThreshold?: number;
+}
+
+export interface WhatsAppActivityLog {
+  id: number;
+  laundryId: number;
+  conversationId: number | null;
+  actorType: string;
+  actorId: number | null;
+  actorName: string;
+  action: string;
+  metadata: Record<string, any> | null;
+  createdAt: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+}
+
+export interface WhatsAppActivityResponse {
+  logs: WhatsAppActivityLog[];
+  total: number;
 }
 
 export interface WorkerPermission {

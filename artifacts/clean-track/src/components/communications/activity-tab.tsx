@@ -1,20 +1,22 @@
 /**
- * ActivityTab — Conversation Timeline
+ * ActivityTab — WhatsApp Worker Activity Audit Log
  *
- * Shows recent WhatsApp conversation events in a chronological feed.
- * Groups activity by date. Each entry shows what happened, who was involved,
- * and quick-links to the relevant conversation.
+ * Shows a chronological feed of worker actions inside the WhatsApp inbox.
+ * Each entry shows who did what, to whom, and when.
+ * Owners see all activity. Workers with canManageWhatsApp see all activity.
+ * Workers without that permission see a permission wall.
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/auth-context";
 import {
   MessageSquare, CheckCircle2, Archive, RotateCcw,
-  Loader2, RefreshCw, Circle, UserCircle, Phone,
+  Loader2, RefreshCw, StickyNote, UserCircle, Shield,
 } from "lucide-react";
 import { format, formatDistanceToNow, differenceInDays } from "date-fns";
-import type { ConversationListResponse, Conversation } from "@/lib/api";
+import type { WhatsAppActivityLog, WhatsAppActivityResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function relTime(ts: string): string {
@@ -26,116 +28,167 @@ function dayLabel(date: Date): string {
   const days = differenceInDays(new Date(), date);
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
-  if (days < 7) return format(date, "EEEE"); // Monday, Tuesday...
+  if (days < 7) return format(date, "EEEE");
   return format(date, "MMMM d, yyyy");
 }
 
-interface ActivityEvent {
-  id: string;
-  convId: number;
-  customerName: string | null;
-  customerPhone: string;
-  type: "new_message" | "resolved" | "archived" | "reopened" | "unread";
-  ts: string;
-  assignedWorkerId: number | null;
-}
-
-const EVENT_CONFIG = {
-  new_message: { icon: MessageSquare, label: "New message", color: "text-green-400", bg: "bg-green-500/10" },
-  unread:      { icon: Circle,        label: "Unread messages", color: "text-amber-400", bg: "bg-amber-500/10" },
-  resolved:    { icon: CheckCircle2,  label: "Resolved",        color: "text-teal-400",  bg: "bg-teal-500/10" },
-  archived:    { icon: Archive,       label: "Archived",        color: "text-muted-foreground", bg: "bg-muted/30" },
-  reopened:    { icon: RotateCcw,     label: "Reopened",        color: "text-blue-400",  bg: "bg-blue-500/10" },
-};
-
-function buildEvents(conversations: Conversation[]): ActivityEvent[] {
-  const events: ActivityEvent[] = [];
-
-  for (const conv of conversations) {
-    const base = {
-      convId: conv.id,
-      customerName: conv.customerName,
-      customerPhone: conv.customerPhone,
-      assignedWorkerId: conv.assignedWorkerId,
-    };
-
-    // Recent message event (if there's a lastMessageAt)
-    if (conv.lastMessageAt) {
-      events.push({
-        id: `msg-${conv.id}`,
-        ...base,
-        type: conv.unreadCount > 0 ? "unread" : "new_message",
-        ts: conv.lastMessageAt,
-      });
-    }
-
-    // Status-based events
-    if (conv.status === "resolved") {
-      events.push({
-        id: `resolved-${conv.id}`,
-        ...base,
-        type: "resolved",
-        ts: conv.updatedAt,
-      });
-    } else if (conv.status === "archived") {
-      events.push({
-        id: `archived-${conv.id}`,
-        ...base,
-        type: "archived",
-        ts: conv.updatedAt,
-      });
-    }
-  }
-
-  // Sort by most recent first, deduplicate by convId keeping newest
-  events.sort((a, b) => (a.ts > b.ts ? -1 : 1));
-
-  // Keep at most 2 events per conversation to avoid clutter
-  const countByConv = new Map<number, number>();
-  return events.filter(e => {
-    const c = (countByConv.get(e.convId) ?? 0);
-    if (c >= 2) return false;
-    countByConv.set(e.convId, c + 1);
-    return true;
-  }).slice(0, 60);
-}
-
-function groupByDay(events: ActivityEvent[]): Array<{ day: string; date: Date; events: ActivityEvent[] }> {
-  const map = new Map<string, { date: Date; events: ActivityEvent[] }>();
-
-  for (const event of events) {
+function groupByDay(logs: WhatsAppActivityLog[]) {
+  const map = new Map<string, { date: Date; logs: WhatsAppActivityLog[] }>();
+  for (const log of logs) {
     try {
-      const d = new Date(event.ts);
+      const d = new Date(log.createdAt);
       const key = d.toDateString();
-      if (!map.has(key)) {
-        map.set(key, { date: d, events: [] });
-      }
-      map.get(key)!.events.push(event);
+      if (!map.has(key)) map.set(key, { date: d, logs: [] });
+      map.get(key)!.logs.push(log);
     } catch {}
   }
+  return Array.from(map.values());
+}
 
-  return Array.from(map.entries()).map(([day, v]) => ({ day, ...v }));
+function customerDisplay(l: WhatsAppActivityLog): string {
+  return l.customerName ?? l.customerPhone ?? l.metadata?.customerPhone ?? "customer";
+}
+
+const ACTION_CONFIG: Record<string, {
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+  label: (log: WhatsAppActivityLog) => string;
+}> = {
+  MESSAGE_SENT: {
+    icon: MessageSquare,
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+    label: (l) => `${l.actorName} replied to ${customerDisplay(l)}`,
+  },
+  NOTE_ADDED: {
+    icon: StickyNote,
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    label: (l) => `${l.actorName} added a note on ${customerDisplay(l)}`,
+  },
+  CONVERSATION_RESOLVED: {
+    icon: CheckCircle2,
+    color: "text-teal-400",
+    bg: "bg-teal-500/10",
+    label: (l) => `${l.actorName} resolved conversation with ${customerDisplay(l)}`,
+  },
+  CONVERSATION_ARCHIVED: {
+    icon: Archive,
+    color: "text-muted-foreground",
+    bg: "bg-muted/30",
+    label: (l) => `${l.actorName} archived conversation with ${customerDisplay(l)}`,
+  },
+  CONVERSATION_REOPENED: {
+    icon: RotateCcw,
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    label: (l) => `${l.actorName} reopened conversation with ${customerDisplay(l)}`,
+  },
+  CONVERSATION_ASSIGNED: {
+    icon: UserCircle,
+    color: "text-purple-400",
+    bg: "bg-purple-500/10",
+    label: (l) => {
+      const to = l.metadata?.assignedWorkerName
+        ? `to ${l.metadata.assignedWorkerName}`
+        : `for ${customerDisplay(l)}`;
+      return `${l.actorName} assigned ${to}`;
+    },
+  },
+};
+
+function ActivityRow({
+  log,
+  onOpenConversation,
+}: {
+  log: WhatsAppActivityLog;
+  onOpenConversation?: (convId: number) => void;
+}) {
+  const cfg = ACTION_CONFIG[log.action] ?? {
+    icon: MessageSquare,
+    color: "text-muted-foreground",
+    bg: "bg-muted/20",
+    label: (l: WhatsAppActivityLog) => `${l.actorName} performed ${l.action}`,
+  };
+  const Icon = cfg.icon;
+  const label = cfg.label(log);
+  const snippet = log.metadata?.messageSnippet as string | undefined;
+
+  const inner = (
+    <>
+      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5", cfg.bg)}>
+        <Icon className={cn("h-4 w-4", cfg.color)} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm leading-snug">{label}</p>
+        {snippet && (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate italic">"{snippet}"</p>
+        )}
+        <p className="text-xs text-muted-foreground mt-1">{relTime(log.createdAt)}</p>
+      </div>
+      <span className="text-[10px] text-muted-foreground/50 shrink-0 self-start mt-0.5">
+        {format(new Date(log.createdAt), "h:mm a")}
+      </span>
+    </>
+  );
+
+  if (log.conversationId && onOpenConversation) {
+    return (
+      <button
+        onClick={() => onOpenConversation(log.conversationId!)}
+        className="w-full flex items-start gap-3 p-3 rounded-xl border border-border/50 hover:bg-muted/20 hover:border-border transition-colors text-left"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-xl border border-border/50">
+      {inner}
+    </div>
+  );
 }
 
 export function ActivityTab({ onOpenConversation }: { onOpenConversation: (convId: number) => void }) {
-  const { data: allData, isLoading, refetch, isFetching } = useQuery<ConversationListResponse>({
-    queryKey: ["conversations-activity"],
-    queryFn: () => api.conversations.list({ limit: 100 }),
+  const { isOwner, hasPermission } = useAuth();
+  const canView = isOwner || hasPermission("canManageWhatsApp");
+
+  const { data, isLoading, refetch, isFetching } = useQuery<WhatsAppActivityResponse>({
+    queryKey: ["whatsapp-activity"],
+    queryFn: () => api.conversations.getActivity({ limit: 100 }),
     refetchInterval: 30_000,
+    enabled: canView,
   });
 
-  const allConvs = allData?.conversations ?? [];
-  const events = buildEvents(allConvs);
-  const grouped = groupByDay(events);
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-4 text-muted-foreground">
+        <div className="w-14 h-14 rounded-full bg-muted/20 flex items-center justify-center">
+          <Shield className="h-6 w-6 opacity-30" />
+        </div>
+        <div>
+          <p className="font-semibold text-foreground">Access Restricted</p>
+          <p className="text-sm mt-1.5 max-w-xs leading-relaxed">
+            Only owners and workers with the <span className="font-medium text-foreground">Manage WhatsApp</span> permission can view activity logs.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const logs = data?.logs ?? [];
+  const grouped = groupByDay(logs);
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {allConvs.length > 0
-            ? <><span className="text-foreground font-semibold">{allConvs.length}</span> conversations · <span className="text-foreground font-semibold">{events.length}</span> recent events</>
-            : "No conversation activity yet"
+          {logs.length > 0
+            ? <><span className="text-foreground font-semibold">{data?.total ?? logs.length}</span> total actions · showing last <span className="text-foreground font-semibold">{logs.length}</span></>
+            : "No activity recorded yet"
           }
         </div>
         <Button
@@ -154,21 +207,22 @@ export function ActivityTab({ onOpenConversation }: { onOpenConversation: (convI
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading activity…
         </div>
-      ) : events.length === 0 ? (
+      ) : logs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-4">
           <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center">
             <MessageSquare className="h-8 w-8 opacity-25" />
           </div>
           <div className="text-center">
             <p className="font-medium">No activity yet</p>
-            <p className="text-sm mt-1">Conversation events will appear here once customers start messaging.</p>
+            <p className="text-sm mt-1 text-muted-foreground/70">
+              Worker actions in the WhatsApp inbox will appear here.
+            </p>
           </div>
         </div>
       ) : (
         <div className="space-y-6">
-          {grouped.map(({ day, date, events: dayEvents }) => (
-            <div key={day}>
-              {/* Day header */}
+          {grouped.map(({ date, logs: dayLogs }) => (
+            <div key={date.toDateString()}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="flex-1 border-t border-border/40" />
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -176,46 +230,14 @@ export function ActivityTab({ onOpenConversation }: { onOpenConversation: (convI
                 </span>
                 <div className="flex-1 border-t border-border/40" />
               </div>
-
-              {/* Events */}
               <div className="space-y-2">
-                {dayEvents.map(event => {
-                  const cfg = EVENT_CONFIG[event.type];
-                  const Icon = cfg.icon;
-                  const displayName = event.customerName ?? event.customerPhone;
-
-                  return (
-                    <button
-                      key={event.id}
-                      onClick={() => onOpenConversation(event.convId)}
-                      className="w-full flex items-start gap-3 p-3 rounded-xl border border-border/50 hover:bg-muted/20 hover:border-border transition-colors text-left"
-                    >
-                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5", cfg.bg)}>
-                        <Icon className={cn("h-4 w-4", cfg.color)} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium truncate">{displayName}</span>
-                          <span className={cn("text-xs font-medium", cfg.color)}>{cfg.label}</span>
-                          {event.type === "unread" && (
-                            <span className="text-xs text-muted-foreground">
-                              via WhatsApp
-                            </span>
-                          )}
-                        </div>
-                        {event.customerName && (
-                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{event.customerPhone}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">{relTime(event.ts)}</p>
-                      </div>
-                      {event.assignedWorkerId && (
-                        <div className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground" title="Assigned">
-                          <UserCircle className="h-3.5 w-3.5" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+                {dayLogs.map(log => (
+                  <ActivityRow
+                    key={log.id}
+                    log={log}
+                    onOpenConversation={onOpenConversation}
+                  />
+                ))}
               </div>
             </div>
           ))}

@@ -22,12 +22,12 @@ import {
   Loader2, ChevronLeft, RotateCcw, Clock, AlertCircle, ExternalLink,
   Send, AlertTriangle, ShoppingCart, CreditCard, ChevronRight,
   UserCircle, BadgeCheck, Users, X, Search, StickyNote, Plus,
-  TrendingUp, Calendar, MoreHorizontal, RotateCw,
+  TrendingUp, Calendar, MoreHorizontal, RotateCw, History,
 } from "lucide-react";
 import { formatDistanceToNow, format, differenceInHours, differenceInDays } from "date-fns";
 import type {
   Conversation, ConversationMessage, ConversationDetail,
-  ConversationListResponse, Worker,
+  ConversationListResponse, Worker, WhatsAppActivityLog,
 } from "@/lib/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -296,6 +296,60 @@ function DaySep({ date }: { date: Date }) {
 
 // ── Customer Context Panel ────────────────────────────────────────────────────
 
+// ── Conversation activity timeline (mini) ─────────────────────────────────────
+
+const CONV_ACTION_LABELS: Record<string, string> = {
+  MESSAGE_SENT: "replied",
+  NOTE_ADDED: "added a note",
+  CONVERSATION_RESOLVED: "resolved",
+  CONVERSATION_ARCHIVED: "archived",
+  CONVERSATION_REOPENED: "reopened",
+  CONVERSATION_ASSIGNED: "assigned",
+};
+
+function ConversationTimeline({ convId }: { convId: number }) {
+  const { isOwner, hasPermission } = useAuth();
+  const canView = isOwner || hasPermission("canManageWhatsApp") || hasPermission("canReplyWhatsApp");
+
+  const { data } = useQuery<{ logs: WhatsAppActivityLog[]; total: number }>({
+    queryKey: ["conv-activity", convId],
+    queryFn: () => api.conversations.getConversationActivity(convId),
+    enabled: canView,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (!canView || !data?.logs?.length) return null;
+
+  return (
+    <div className="px-4 py-4 border-t border-border/40">
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+        <History className="h-3 w-3" />
+        Activity ({data.total})
+      </p>
+      <div className="space-y-2.5">
+        {data.logs.slice(0, 8).map(log => (
+          <div key={log.id} className="flex items-start gap-2.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0 mt-[5px]" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs leading-snug">
+                <span className="font-medium">{log.actorName}</span>
+                {" "}{CONV_ACTION_LABELS[log.action] ?? log.action.toLowerCase()}
+                {log.action === "CONVERSATION_ASSIGNED" && log.metadata?.assignedWorkerName
+                  ? ` to ${log.metadata.assignedWorkerName}`
+                  : null}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {relTime(log.createdAt)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CustomerContext({
   detail, convId,
 }: {
@@ -500,6 +554,8 @@ function CustomerContext({
           <p className="text-xs mt-1 text-muted-foreground/60">Use the button above to create their first</p>
         </div>
       )}
+
+      <ConversationTimeline convId={convId} />
     </div>
   );
 }

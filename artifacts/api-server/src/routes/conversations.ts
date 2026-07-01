@@ -15,6 +15,7 @@ import {
   customers,
   orders,
   workers,
+  whatsappActivityLogs,
 } from "@workspace/db/schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -23,6 +24,33 @@ import { checkPermission } from "../middleware/permissions.js";
 import { providerRegistry } from "../lib/providers/registry.js";
 
 export const conversationsRouter = Router();
+
+// ── Audit log helper ──────────────────────────────────────────────────────────
+// Fire-and-forget — never throws, never blocks the primary response.
+
+async function logActivity(params: {
+  laundryId: number;
+  conversationId: number;
+  actorType: string;
+  actorId: number | null;
+  actorName: string;
+  action: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await db.insert(whatsappActivityLogs).values({
+      laundryId: params.laundryId,
+      conversationId: params.conversationId,
+      actorType: params.actorType,
+      actorId: params.actorId,
+      actorName: params.actorName,
+      action: params.action,
+      metadata: params.metadata ?? null,
+    });
+  } catch (err) {
+    console.error("[conversations] audit log insert failed:", err);
+  }
+}
 
 // ── GET /api/conversations ─────────────────────────────────────────────────
 // Lists conversations for this laundry, newest-first.
@@ -115,6 +143,59 @@ conversationsRouter.get("/unread-count", requireAuth, checkPermission("view:what
   } catch (err) {
     console.error("[conversations] GET /unread-count error:", err);
     return res.status(500).json({ error: "Failed to fetch unread count" });
+  }
+});
+
+// ── GET /api/conversations/activity ───────────────────────────────────────
+// Paginated WhatsApp activity audit log. Owner sees all; workers with
+// canManageWhatsApp see all. Workers without that permission get 403.
+// Optional ?conversationId= to filter to one conversation.
+
+conversationsRouter.get("/activity", requireAuth, checkPermission("manage:whatsapp"), async (req: AuthRequest, res) => {
+  const { laundryId } = req.auth!;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const offset = parseInt(req.query.offset as string) || 0;
+  const convIdFilter = req.query.conversationId
+    ? parseInt(req.query.conversationId as string)
+    : null;
+
+  try {
+    const conditions = [eq(whatsappActivityLogs.laundryId, laundryId)];
+    if (convIdFilter && !isNaN(convIdFilter)) {
+      conditions.push(eq(whatsappActivityLogs.conversationId, convIdFilter));
+    }
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(whatsappActivityLogs)
+      .where(and(...conditions));
+
+    const rows = await db
+      .select({
+        id: whatsappActivityLogs.id,
+        laundryId: whatsappActivityLogs.laundryId,
+        conversationId: whatsappActivityLogs.conversationId,
+        actorType: whatsappActivityLogs.actorType,
+        actorId: whatsappActivityLogs.actorId,
+        actorName: whatsappActivityLogs.actorName,
+        action: whatsappActivityLogs.action,
+        metadata: whatsappActivityLogs.metadata,
+        createdAt: whatsappActivityLogs.createdAt,
+        customerName: customers.fullName,
+        customerPhone: conversations.customerPhone,
+      })
+      .from(whatsappActivityLogs)
+      .leftJoin(conversations, eq(whatsappActivityLogs.conversationId, conversations.id))
+      .leftJoin(customers, eq(conversations.customerId, customers.id))
+      .where(and(...conditions))
+      .orderBy(desc(whatsappActivityLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return res.json({ logs: rows, total });
+  } catch (err) {
+    console.error("[conversations] GET /activity error:", err);
+    return res.status(500).json({ error: "Failed to fetch activity logs" });
   }
 });
 
@@ -296,6 +377,17 @@ conversationsRouter.post("/:id/messages", requireAuth, checkPermission("reply:wh
       // Not fatal — message saved locally regardless
     }
 
+    // Fire-and-forget audit log
+    logActivity({
+      laundryId,
+      conversationId: id,
+      actorType: senderType,
+      actorId: senderId,
+      actorName: senderName,
+      action: "MESSAGE_SENT",
+      metadata: { customerPhone: conv.customerPhone, messageSnippet: parsed.data.body.slice(0, 80) },
+    });
+
     return res.json({
       message: { ...saved, status: deliveryStatus, providerMessageId },
       delivered: deliveryStatus === "sent",
@@ -349,7 +441,7 @@ conversationsRouter.patch("/:id/status", requireAuth, checkPermission("manage:wh
 
   try {
     const [existing] = await db
-      .select({ id: conversations.id })
+      .select({ id: conversations.id, customerPhone: conversations.customerPhone })
       .from(conversations)
       .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
 
@@ -359,6 +451,22 @@ conversationsRouter.patch("/:id/status", requireAuth, checkPermission("manage:wh
       .update(conversations)
       .set({ status: parsed.data.status, updatedAt: new Date() })
       .where(eq(conversations.id, id));
+
+    const statusAction =
+      parsed.data.status === "resolved" ? "CONVERSATION_RESOLVED" :
+      parsed.data.status === "archived" ? "CONVERSATION_ARCHIVED" :
+      "CONVERSATION_REOPENED";
+    logActivity({
+      laundryId,
+      conversationId: id,
+      actorType: req.auth!.type,
+      actorId: req.auth!.type === "owner"
+        ? ((req.auth as any).ownerId ?? null)
+        : ((req.auth as any).workerId ?? null),
+      actorName: req.auth!.name ?? "Unknown",
+      action: statusAction,
+      metadata: { customerPhone: existing.customerPhone },
+    });
 
     return res.json({ ok: true, status: parsed.data.status });
   } catch (err) {
@@ -385,7 +493,7 @@ conversationsRouter.post("/:id/notes", requireAuth, checkPermission("reply:whats
 
   try {
     const [conv] = await db
-      .select({ id: conversations.id })
+      .select({ id: conversations.id, customerPhone: conversations.customerPhone })
       .from(conversations)
       .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
 
@@ -413,6 +521,16 @@ conversationsRouter.post("/:id/notes", requireAuth, checkPermission("reply:whats
       })
       .returning();
 
+    logActivity({
+      laundryId,
+      conversationId: id,
+      actorType: senderType,
+      actorId: senderId,
+      actorName: senderName,
+      action: "NOTE_ADDED",
+      metadata: { customerPhone: conv.customerPhone, noteSnippet: parsed.data.body.slice(0, 80) },
+    });
+
     return res.json({ message: saved });
   } catch (err) {
     console.error("[conversations] POST /:id/notes error:", err);
@@ -436,16 +554,18 @@ conversationsRouter.patch("/:id/assign", requireOwner, async (req: AuthRequest, 
   if (!parsed.success) return res.status(400).json({ error: "Invalid workerId" });
 
   try {
+    let assignedWorkerName: string | null = null;
     if (parsed.data.workerId !== null) {
       const [worker] = await db
-        .select({ id: workers.id })
+        .select({ id: workers.id, name: workers.name })
         .from(workers)
         .where(and(eq(workers.id, parsed.data.workerId), eq(workers.laundryId, laundryId)));
       if (!worker) return res.status(404).json({ error: "Worker not found" });
+      assignedWorkerName = worker.name;
     }
 
     const [existing] = await db
-      .select({ id: conversations.id })
+      .select({ id: conversations.id, customerPhone: conversations.customerPhone })
       .from(conversations)
       .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
 
@@ -456,9 +576,77 @@ conversationsRouter.patch("/:id/assign", requireOwner, async (req: AuthRequest, 
       .set({ assignedWorkerId: parsed.data.workerId, updatedAt: new Date() })
       .where(eq(conversations.id, id));
 
+    logActivity({
+      laundryId,
+      conversationId: id,
+      actorType: req.auth!.type,
+      actorId: req.auth!.type === "owner"
+        ? ((req.auth as any).ownerId ?? null)
+        : ((req.auth as any).workerId ?? null),
+      actorName: req.auth!.name ?? "Unknown",
+      action: "CONVERSATION_ASSIGNED",
+      metadata: {
+        customerPhone: existing.customerPhone,
+        assignedWorkerName,
+        unassigned: parsed.data.workerId === null,
+      },
+    });
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("[conversations] PATCH /:id/assign error:", err);
     return res.status(500).json({ error: "Failed to assign conversation" });
+  }
+});
+
+// ── GET /api/conversations/:id/activity ────────────────────────────────────
+// Returns the audit trail for a single conversation.
+// Workers with view:whatsapp can see their own conversation's timeline.
+
+conversationsRouter.get("/:id/activity", requireAuth, checkPermission("view:whatsapp"), async (req: AuthRequest, res) => {
+  const { laundryId } = req.auth!;
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+
+  try {
+    const [conv] = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, id), eq(conversations.laundryId, laundryId)));
+
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+    const rows = await db
+      .select({
+        id: whatsappActivityLogs.id,
+        laundryId: whatsappActivityLogs.laundryId,
+        conversationId: whatsappActivityLogs.conversationId,
+        actorType: whatsappActivityLogs.actorType,
+        actorId: whatsappActivityLogs.actorId,
+        actorName: whatsappActivityLogs.actorName,
+        action: whatsappActivityLogs.action,
+        metadata: whatsappActivityLogs.metadata,
+        createdAt: whatsappActivityLogs.createdAt,
+        customerName: customers.fullName,
+        customerPhone: conversations.customerPhone,
+      })
+      .from(whatsappActivityLogs)
+      .leftJoin(conversations, eq(whatsappActivityLogs.conversationId, conversations.id))
+      .leftJoin(customers, eq(conversations.customerId, customers.id))
+      .where(
+        and(
+          eq(whatsappActivityLogs.conversationId, id),
+          eq(whatsappActivityLogs.laundryId, laundryId)
+        )
+      )
+      .orderBy(desc(whatsappActivityLogs.createdAt))
+      .limit(limit);
+
+    return res.json({ logs: rows, total: rows.length });
+  } catch (err) {
+    console.error("[conversations] GET /:id/activity error:", err);
+    return res.status(500).json({ error: "Failed to fetch conversation activity" });
   }
 });

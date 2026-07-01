@@ -35,3 +35,4 @@ export * from "./activation-events.js";
 export * from "./nudge-log.js";
 export * from "./admin-audit-log.js";
 export * from "./whatsapp-connections.js";
+export * from "./whatsapp-activity-logs.js";
