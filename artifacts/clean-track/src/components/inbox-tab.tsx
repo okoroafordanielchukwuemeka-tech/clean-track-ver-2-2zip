@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
@@ -575,11 +576,11 @@ function AssignDropdown({
 // ── Message panel (center) ────────────────────────────────────────────────────
 
 function MessagesPanel({
-  convId, workers, isOwner, onBack, onShowContext, mobile,
+  convId, workers, isOwner, canReply, canManage, onBack, onShowContext, mobile,
 }: {
   convId: number; workers: Worker[];
-  isOwner: boolean; onBack: () => void;
-  onShowContext: () => void; mobile: boolean;
+  isOwner: boolean; canReply: boolean; canManage: boolean;
+  onBack: () => void; onShowContext: () => void; mobile: boolean;
 }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -770,9 +771,9 @@ function MessagesPanel({
           />
         )}
 
-        {/* Status actions */}
+        {/* Status actions — owner or workers with manage permission */}
         <div className="flex items-center gap-1 shrink-0">
-          {isOpen && (
+          {canManage && isOpen && (
             <>
               <Button
                 size="sm" variant="outline"
@@ -801,7 +802,7 @@ function MessagesPanel({
               </Button>
             </>
           )}
-          {!isOpen && (
+          {canManage && !isOpen && (
             <Button
               size="sm" variant="outline" className="h-7 text-xs"
               onClick={() => updateStatus.mutate("open")}
@@ -885,7 +886,14 @@ function MessagesPanel({
         <div ref={bottomRef} />
       </div>
 
-      {/* Composer */}
+      {/* Composer — only for users who can reply */}
+      {!canReply && (
+        <div className="border-t px-4 py-3 bg-muted/20 shrink-0 flex items-center gap-2 text-xs text-muted-foreground">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+          You have read-only access to this conversation.
+        </div>
+      )}
+      {canReply && (
       <div className={cn(
         "border-t p-3 shrink-0 transition-colors",
         composerMode === "note" ? "bg-amber-500/5 border-amber-500/15" : "bg-card/30"
@@ -972,13 +980,19 @@ function MessagesPanel({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
 
 // ── Main InboxTab ─────────────────────────────────────────────────────────────
 
-export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
+export function InboxTab() {
+  const { isOwner, hasPermission } = useAuth();
+  const canView   = isOwner || hasPermission("canViewWhatsApp");
+  const canReply  = isOwner || hasPermission("canReplyWhatsApp");
+  const canManage = isOwner || hasPermission("canManageWhatsApp");
+
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<ConvStatus>("open");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -990,6 +1004,7 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
     queryKey: ["conversations", statusFilter],
     queryFn: () => api.conversations.list({ status: statusFilter, limit: 100 }),
     refetchInterval: 15_000,
+    enabled: canView,
   });
 
   const { data: workersData } = useQuery<Worker[]>({
@@ -998,6 +1013,23 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
     enabled: isOwner,
     staleTime: 60_000,
   });
+
+  if (!canView) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-4 text-muted-foreground">
+        <div className="w-14 h-14 rounded-full bg-muted/30 flex items-center justify-center">
+          <MessageSquare className="h-6 w-6 opacity-30" />
+        </div>
+        <div>
+          <p className="font-semibold text-foreground">WhatsApp Access Required</p>
+          <p className="text-sm mt-1.5 max-w-xs leading-relaxed">
+            You do not have permission to view WhatsApp conversations.
+            Ask your owner to grant the <span className="font-medium text-foreground">View Conversations</span> permission.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const workers = workersData ?? [];
   const allConversations = data?.conversations ?? [];
@@ -1158,6 +1190,8 @@ export function InboxTab({ isOwner = true }: { isOwner?: boolean }) {
               convId={selectedId}
               workers={workers}
               isOwner={isOwner}
+              canReply={canReply}
+              canManage={canManage}
               onBack={() => setMobilePanel("list")}
               onShowContext={() => setMobilePanel("context")}
               mobile={window.innerWidth < 768}

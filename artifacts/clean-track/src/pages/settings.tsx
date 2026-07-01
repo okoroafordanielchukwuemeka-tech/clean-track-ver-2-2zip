@@ -452,15 +452,28 @@ function OperationalSection() {
   );
 }
 
-const PERMISSION_KEYS: { key: keyof WorkerPermission; label: string }[] = [
-  { key: "canViewOrders", label: "View Orders" },
-  { key: "canProcessOrders", label: "Process Orders" },
-  { key: "canAssignOrders", label: "Assign Orders" },
-  { key: "canViewCustomers", label: "View Customers" },
-  { key: "canCreateCustomers", label: "Create Customers" },
-  { key: "canViewCustomerBalances", label: "View Balances" },
-  { key: "canRecordPayments", label: "Record Payments" },
-  { key: "canRecordPickups", label: "Record Pickups" },
+const PERMISSION_GROUPS: { heading: string; keys: { key: keyof WorkerPermission; label: string }[] }[] = [
+  {
+    heading: "Orders & Customers",
+    keys: [
+      { key: "canViewOrders", label: "View Orders" },
+      { key: "canProcessOrders", label: "Process Orders" },
+      { key: "canAssignOrders", label: "Assign Orders" },
+      { key: "canViewCustomers", label: "View Customers" },
+      { key: "canCreateCustomers", label: "Create Customers" },
+      { key: "canViewCustomerBalances", label: "View Balances" },
+      { key: "canRecordPayments", label: "Record Payments" },
+      { key: "canRecordPickups", label: "Record Pickups" },
+    ],
+  },
+  {
+    heading: "WhatsApp Access",
+    keys: [
+      { key: "canViewWhatsApp", label: "View customer conversations" },
+      { key: "canReplyWhatsApp", label: "Reply to customers" },
+      { key: "canManageWhatsApp", label: "Manage WhatsApp settings" },
+    ],
+  },
 ];
 
 function WorkerPermissionCard({
@@ -523,20 +536,29 @@ function WorkerPermissionCard({
       <CardContent>
         {isLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {Array.from({ length: 8 }).map((_, i) => (
+            {Array.from({ length: 11 }).map((_, i) => (
               <div key={i} className="h-8 bg-muted animate-pulse rounded" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-            {PERMISSION_KEYS.map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
-                <Checkbox
-                  checked={!!form[key]}
-                  onCheckedChange={() => toggle(key)}
-                />
-                <span className="text-xs">{label}</span>
-              </label>
+          <div className="space-y-4">
+            {PERMISSION_GROUPS.map(group => (
+              <div key={group.heading}>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  {group.heading}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+                  {group.keys.map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                      <Checkbox
+                        checked={!!form[key]}
+                        onCheckedChange={() => toggle(key)}
+                      />
+                      <span className="text-xs">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}

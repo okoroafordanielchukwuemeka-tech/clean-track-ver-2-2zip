@@ -1063,6 +1063,9 @@ export interface WorkerPermission {
   canViewOrders: boolean;
   canProcessOrders: boolean;
   canAssignOrders: boolean;
+  canViewWhatsApp: boolean;
+  canReplyWhatsApp: boolean;
+  canManageWhatsApp: boolean;
 }
 
 export interface NotifTemplate {

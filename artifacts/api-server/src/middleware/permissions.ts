@@ -17,7 +17,10 @@ export type Permission =
   | "view:customers"
   | "create:customers"
   | "view:customer-balances"
-  | "assign:orders";
+  | "assign:orders"
+  | "view:whatsapp"
+  | "reply:whatsapp"
+  | "manage:whatsapp";
 
 const OWNER_ONLY = new Set<Permission>([
   "delete:customers",
@@ -39,6 +42,9 @@ const WORKER_PERM_FIELD: Partial<Record<Permission, keyof WorkerPermissions>> = 
   "create:customers": "canCreateCustomers",
   "view:customer-balances": "canViewCustomerBalances",
   "assign:orders": "canAssignOrders",
+  "view:whatsapp": "canViewWhatsApp",
+  "reply:whatsapp": "canReplyWhatsApp",
+  "manage:whatsapp": "canManageWhatsApp",
 };
 
 const PERM_HINT: Partial<Record<keyof WorkerPermissions, string>> = {
@@ -50,6 +56,9 @@ const PERM_HINT: Partial<Record<keyof WorkerPermissions, string>> = {
   canCreateCustomers: "create customers",
   canViewCustomerBalances: "view customer balances",
   canAssignOrders: "assign orders",
+  canViewWhatsApp: "view WhatsApp conversations",
+  canReplyWhatsApp: "reply to WhatsApp conversations",
+  canManageWhatsApp: "manage WhatsApp conversations",
 };
 
 export function checkPermission(permission: Permission) {

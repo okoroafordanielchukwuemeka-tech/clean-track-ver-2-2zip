@@ -19,6 +19,7 @@ import {
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type AuthRequest, requireAuth, requireOwner } from "../middleware/auth.js";
+import { checkPermission } from "../middleware/permissions.js";
 import { providerRegistry } from "../lib/providers/registry.js";
 
 export const conversationsRouter = Router();
@@ -28,7 +29,7 @@ export const conversationsRouter = Router();
 // ?status=open|resolved|archived  ?limit=  ?offset=
 // Includes lastMessageBody and lastMessageDirection via DISTINCT ON subquery.
 
-conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
+conversationsRouter.get("/", requireAuth, checkPermission("view:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
 
   const statusFilter = req.query.status as string | undefined;
@@ -103,7 +104,7 @@ conversationsRouter.get("/", requireAuth, async (req: AuthRequest, res) => {
 
 // ── GET /api/conversations/unread-count ────────────────────────────────────
 
-conversationsRouter.get("/unread-count", requireAuth, async (req: AuthRequest, res) => {
+conversationsRouter.get("/unread-count", requireAuth, checkPermission("view:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
   try {
     const [{ totalUnread }] = await db
@@ -120,7 +121,7 @@ conversationsRouter.get("/unread-count", requireAuth, async (req: AuthRequest, r
 // ── GET /api/conversations/:id ─────────────────────────────────────────────
 // Returns conversation + messages + enriched customer (orders + balance).
 
-conversationsRouter.get("/:id", requireAuth, async (req: AuthRequest, res) => {
+conversationsRouter.get("/:id", requireAuth, checkPermission("view:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
@@ -229,7 +230,7 @@ const replySchema = z.object({
   body: z.string().min(1).max(4096).trim(),
 });
 
-conversationsRouter.post("/:id/messages", requireAuth, async (req: AuthRequest, res) => {
+conversationsRouter.post("/:id/messages", requireAuth, checkPermission("reply:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId, type, name } = req.auth!;
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
@@ -307,7 +308,7 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req: AuthRequest, 
 
 // ── PATCH /api/conversations/:id/read ─────────────────────────────────────
 
-conversationsRouter.patch("/:id/read", requireAuth, async (req: AuthRequest, res) => {
+conversationsRouter.patch("/:id/read", requireAuth, checkPermission("view:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
@@ -338,7 +339,7 @@ const statusSchema = z.object({
   status: z.enum(["open", "resolved", "archived"]),
 });
 
-conversationsRouter.patch("/:id/status", requireOwner, async (req: AuthRequest, res) => {
+conversationsRouter.patch("/:id/status", requireAuth, checkPermission("manage:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });
@@ -374,7 +375,7 @@ const noteSchema = z.object({
   body: z.string().min(1).max(4096).trim(),
 });
 
-conversationsRouter.post("/:id/notes", requireAuth, async (req: AuthRequest, res) => {
+conversationsRouter.post("/:id/notes", requireAuth, checkPermission("reply:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId, type, name } = req.auth!;
   const id = parseInt(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid conversation ID" });

@@ -13,6 +13,9 @@ export interface WorkerPermissions {
   canCreateCustomers: boolean;
   canViewCustomerBalances: boolean;
   canAssignOrders: boolean;
+  canViewWhatsApp: boolean;
+  canReplyWhatsApp: boolean;
+  canManageWhatsApp: boolean;
 }
 
 export interface AuthPayload {

@@ -14,6 +14,9 @@ export const workerPermissions = pgTable("worker_permissions", {
   canViewOrders: boolean("can_view_orders").notNull().default(true),
   canProcessOrders: boolean("can_process_orders").notNull().default(true),
   canAssignOrders: boolean("can_assign_orders").notNull().default(false),
+  canViewWhatsApp: boolean("can_view_whatsapp").notNull().default(false),
+  canReplyWhatsApp: boolean("can_reply_whatsapp").notNull().default(false),
+  canManageWhatsApp: boolean("can_manage_whatsapp").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -30,6 +33,9 @@ export const ADMIN_DEFAULT_PERMISSIONS = {
   canViewOrders: true,
   canProcessOrders: true,
   canAssignOrders: true,
+  canViewWhatsApp: false,
+  canReplyWhatsApp: false,
+  canManageWhatsApp: false,
 };
 
 export const WORKER_DEFAULT_PERMISSIONS = {
@@ -41,4 +47,7 @@ export const WORKER_DEFAULT_PERMISSIONS = {
   canViewOrders: false,
   canProcessOrders: false,
   canAssignOrders: false,
+  canViewWhatsApp: false,
+  canReplyWhatsApp: false,
+  canManageWhatsApp: false,
 };
