@@ -66,7 +66,11 @@ persistQueryClient({
   queryClient,
   persister: idbPersister,
   maxAge: GC_TIME,
-  buster: "ct-v1",
+  // Bumping this buster invalidates ALL previously persisted IndexedDB
+  // cache entries for every user on next load — use this whenever a cached
+  // response shape (or its correctness) may have gone stale, e.g. the
+  // WhatsApp Meta config once-cached-false-forever bug (2026-07-01).
+  buster: "ct-v2",
 });
 
 function RootRedirect() {

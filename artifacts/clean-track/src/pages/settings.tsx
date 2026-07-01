@@ -1571,10 +1571,13 @@ function WhatsAppBusinessSection() {
     staleTime: 30_000,
   });
 
-  const { data: metaConfig } = useQuery<WaMetaConfig>({
+  const { data: metaConfig, isLoading: isMetaConfigLoading } = useQuery<WaMetaConfig>({
     queryKey: ["whatsapp-meta-config"],
     queryFn: () => api.whatsapp.metaConfig(),
-    staleTime: Infinity,
+    staleTime: 5 * 60 * 1000, // 5 minutes — was Infinity, which meant a
+    // config change on the backend (e.g. secrets added) never got picked up
+    // by an already-open browser session without a full cache wipe.
+    refetchOnMount: "always",
   });
 
   const useEmbeddedSignup = metaConfig?.available === true;
@@ -1639,6 +1642,7 @@ function WhatsAppBusinessSection() {
     mutationFn: (data: WaMetaCallbackInput) => api.whatsapp.metaCallback(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      qc.invalidateQueries({ queryKey: ["whatsapp-meta-config"] });
       setIsConnecting(false);
       toast.success("WhatsApp Business connected successfully");
     },
@@ -1652,6 +1656,7 @@ function WhatsAppBusinessSection() {
     mutationFn: () => api.whatsapp.disconnect(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      qc.invalidateQueries({ queryKey: ["whatsapp-meta-config"] });
       toast.success("WhatsApp Business disconnected");
       setShowDisconnectDialog(false);
     },
@@ -1734,10 +1739,12 @@ function WhatsAppBusinessSection() {
           ? "border-green-500/30 bg-green-500/5"
           : "border-border bg-muted/30"
       )}>
-        {isLoading ? (
+        {isLoading || isMetaConfigLoading ? (
           <div className="flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Checking connection…</span>
+            <span className="text-sm text-muted-foreground">
+              {isMetaConfigLoading && !isLoading ? "Checking WhatsApp configuration…" : "Checking connection…"}
+            </span>
           </div>
         ) : isConnected && connectedStatus ? (
           <div className="space-y-4">
