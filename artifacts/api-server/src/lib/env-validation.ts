@@ -6,6 +6,21 @@
  * No silent fallbacks. No defaults. Fail loudly.
  */
 
+/**
+ * Meta (WhatsApp Embedded Signup) environment variable keys, trimmed of
+ * accidental leading/trailing whitespace. Copy-pasted secrets from the Meta
+ * dashboard frequently pick up trailing newlines/spaces, which silently
+ * breaks Facebook SDK init and Graph API calls without any error message.
+ * Always read Meta env vars through this helper — never process.env directly.
+ */
+export function getMetaEnv() {
+  return {
+    appId: process.env.META_APP_ID?.trim() || undefined,
+    appSecret: process.env.META_APP_SECRET?.trim() || undefined,
+    configId: process.env.META_CONFIG_ID?.trim() || undefined,
+  };
+}
+
 interface EnvRequirement {
   key: string;
   description: string;
@@ -189,6 +204,21 @@ export function validateEnvironment(): void {
       "Set it to your deployed frontend domain, e.g.: https://cleantrack.replit.app"
     );
     process.exit(1);
+  }
+
+  // ── Meta (WhatsApp Embedded Signup) configuration status ────────────────
+  // Log only presence/absence (booleans) — never the values themselves.
+  const meta = getMetaEnv();
+  console.log(`[env]   META_APP_ID configured: ${!!meta.appId}`);
+  console.log(`[env]   META_APP_SECRET configured: ${!!meta.appSecret}`);
+  console.log(`[env]   META_CONFIG_ID configured: ${!!meta.configId}`);
+  if (meta.appId && meta.appSecret && meta.configId) {
+    console.log("[env]   ✓ WhatsApp Embedded Signup is fully configured.");
+  } else if (meta.appId || meta.appSecret || meta.configId) {
+    console.warn(
+      "[env] ⚠ WARNING: WhatsApp Embedded Signup is partially configured. " +
+      "All three of META_APP_ID, META_APP_SECRET, META_CONFIG_ID are required together."
+    );
   }
 
   console.log("[env] ✓ Environment validation passed.\n");

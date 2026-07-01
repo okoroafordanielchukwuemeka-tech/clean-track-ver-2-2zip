@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { whatsappConnections, providerConfigs } from "@workspace/db/schema";
 import { count, eq } from "drizzle-orm";
+import { getMetaEnv } from "../../lib/env-validation.js";
 
 export const adminIntegrationsRouter = Router();
 
@@ -26,12 +27,14 @@ adminIntegrationsRouter.get("/platform", async (req, res) => {
       .from(providerConfigs)
       .where(eq(providerConfigs.provider, "whatsapp"));
 
+    const meta = getMetaEnv();
+
     res.json({
       whatsapp: {
-        embeddedSignupEnabled: !!process.env.META_APP_ID,
-        metaAppIdSet:          !!process.env.META_APP_ID,
-        metaAppSecretSet:      !!process.env.META_APP_SECRET,
-        metaConfigIdSet:       !!process.env.META_CONFIG_ID,
+        embeddedSignupEnabled: !!meta.appId,
+        metaAppIdSet:          !!meta.appId,
+        metaAppSecretSet:      !!meta.appSecret,
+        metaConfigIdSet:       !!meta.configId,
         webhookVerifyTokenSet: !!process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
         appSecretSet:          !!process.env.WHATSAPP_APP_SECRET,
         webhookUrl:            `${webhookBase}/api/webhooks/whatsapp`,

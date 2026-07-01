@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { logAction } from "../lib/audit.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
+import { getMetaEnv } from "../lib/env-validation.js";
 
 export const whatsappRouter = Router();
 
@@ -226,9 +227,7 @@ whatsappRouter.get("/status", requireOwner, async (req: AuthRequest, res) => {
 // Embedded Signup popup. Never exposes the app secret.
 
 whatsappRouter.get("/meta/config", requireOwner, async (_req: AuthRequest, res) => {
-  const appId = process.env.META_APP_ID;
-  const configId = process.env.META_CONFIG_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const { appId, appSecret, configId } = getMetaEnv();
 
   if (!appId || !configId || !appSecret) {
     return res.json({ available: false });
@@ -264,8 +263,7 @@ whatsappRouter.post("/meta/callback", requireOwner, async (req: AuthRequest, res
     });
   }
 
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const { appId, appSecret } = getMetaEnv();
 
   if (!appId || !appSecret) {
     return res.status(503).json({ error: "Meta Embedded Signup is not configured on this server" });
