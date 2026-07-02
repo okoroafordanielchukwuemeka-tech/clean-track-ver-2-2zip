@@ -160,6 +160,7 @@ whatsappRouter.get("/status", requireOwner, async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
 
   try {
+    console.log(`[whatsapp] GET /status — laundryId=${laundryId}`);
     const [row] = await db
       .select({
         id: whatsappConnections.id,
@@ -174,7 +175,11 @@ whatsappRouter.get("/status", requireOwner, async (req: AuthRequest, res) => {
       .from(whatsappConnections)
       .where(eq(whatsappConnections.laundryId, laundryId));
 
-    if (!row || row.status === "disconnected") {
+    console.log(`[whatsapp] GET /status — row=${row ? `id=${row.id} status=${row.status}` : "NOT FOUND"}`);
+
+    // Treat missing, "disconnected", or "error" rows as not connected.
+    // Only status="connected" counts as active.
+    if (!row || row.status !== "connected") {
       return res.json({ connected: false });
     }
 
@@ -271,24 +276,30 @@ whatsappRouter.post("/meta/callback", requireOwner, async (req: AuthRequest, res
 
   const { code, wabaId, phoneNumberId } = parsed.data;
 
+  console.log(`[whatsapp] POST /meta/callback — laundryId=${laundryId} wabaId=${wabaId} phoneNumberId=${phoneNumberId} codeLen=${code.length}`);
+
   try {
     // Step 1: Exchange the authorization code for a short-lived token
+    console.log(`[whatsapp] Step 1: exchanging auth code for short-lived token`);
     const tokenUrl = new URL("https://graph.facebook.com/v19.0/oauth/access_token");
     tokenUrl.searchParams.set("client_id", appId);
     tokenUrl.searchParams.set("client_secret", appSecret);
     tokenUrl.searchParams.set("code", code);
 
     const tokenRes = await fetch(tokenUrl.toString());
+    const tokenStatus = tokenRes.status;
     if (!tokenRes.ok) {
       const body = await tokenRes.text();
-      console.error("[whatsapp] Token exchange failed:", body);
+      console.error(`[whatsapp] Step 1 FAILED: HTTP ${tokenStatus}:`, body);
       return res.status(502).json({ error: "Failed to exchange authorization code with Meta" });
     }
     const tokenData = await tokenRes.json() as { access_token: string; token_type: string };
     const shortLivedToken = tokenData.access_token;
+    console.log(`[whatsapp] Step 1 OK: short-lived token obtained (${shortLivedToken.length} chars)`);
 
     // Step 2: Exchange short-lived token for a long-lived System User token
     // (60-day token — owners can reconnect before expiry)
+    console.log(`[whatsapp] Step 2: exchanging for long-lived token`);
     const longLivedUrl = new URL("https://graph.facebook.com/v19.0/oauth/access_token");
     longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
     longLivedUrl.searchParams.set("client_id", appId);
@@ -296,15 +307,18 @@ whatsappRouter.post("/meta/callback", requireOwner, async (req: AuthRequest, res
     longLivedUrl.searchParams.set("fb_exchange_token", shortLivedToken);
 
     const longRes = await fetch(longLivedUrl.toString());
+    const longStatus = longRes.status;
     if (!longRes.ok) {
       const body = await longRes.text();
-      console.error("[whatsapp] Long-lived token exchange failed:", body);
+      console.error(`[whatsapp] Step 2 FAILED: HTTP ${longStatus}:`, body);
       return res.status(502).json({ error: "Failed to obtain long-lived token from Meta" });
     }
     const longData = await longRes.json() as { access_token: string };
     const accessToken = longData.access_token;
+    console.log(`[whatsapp] Step 2 OK: long-lived token obtained (${accessToken.length} chars)`);
 
     // Step 3: Fetch phone number display details from the Graph API
+    console.log(`[whatsapp] Step 3: fetching phone number display info for phoneNumberId=${phoneNumberId}`);
     let displayPhoneNumber: string | null = null;
     let businessName: string | null = null;
 
@@ -315,13 +329,18 @@ whatsappRouter.post("/meta/callback", requireOwner, async (req: AuthRequest, res
         const phoneData = await phoneRes.json() as { display_phone_number?: string; verified_name?: string };
         displayPhoneNumber = phoneData.display_phone_number ?? null;
         businessName = phoneData.verified_name ?? null;
+        console.log(`[whatsapp] Step 3 OK: displayPhone="${displayPhoneNumber}" businessName="${businessName}"`);
+      } else {
+        const body = await phoneRes.text();
+        console.warn(`[whatsapp] Step 3 non-fatal WARN: HTTP ${phoneRes.status}:`, body);
       }
     } catch (err) {
       // Non-fatal — we still save the connection even if display info is unavailable
-      console.warn("[whatsapp] Could not fetch phone number display info:", err);
+      console.warn("[whatsapp] Step 3 non-fatal exception:", err);
     }
 
     // Step 4: Save the connection
+    console.log(`[whatsapp] Step 4: saving connection for laundryId=${laundryId}`);
     const { connectedAt } = await saveConnection(laundryId, {
       whatsappBusinessAccountId: wabaId,
       phoneNumberId,
@@ -329,6 +348,8 @@ whatsappRouter.post("/meta/callback", requireOwner, async (req: AuthRequest, res
       displayPhoneNumber,
       businessName,
     });
+
+    console.log(`[whatsapp] Step 4 OK: connection saved. connectedAt=${connectedAt.toISOString()}`);
 
     // Step 5: Audit + activation tracking (fire-and-forget)
     logAction({
@@ -403,6 +424,8 @@ whatsappRouter.post("/connect", requireOwner, async (req: AuthRequest, res) => {
     businessName,
   } = parsed.data;
 
+  console.log(`[whatsapp] POST /connect — laundryId=${laundryId} wabaId=${whatsappBusinessAccountId} phoneNumberId=${phoneNumberId} displayPhone="${displayPhoneNumber ?? ""}" businessName="${businessName ?? ""}"`);
+
   try {
     const { connectedAt } = await saveConnection(laundryId, {
       whatsappBusinessAccountId,
@@ -412,6 +435,8 @@ whatsappRouter.post("/connect", requireOwner, async (req: AuthRequest, res) => {
       businessName,
     });
 
+    console.log(`[whatsapp] POST /connect OK — laundryId=${laundryId} connectedAt=${connectedAt.toISOString()}`);
+
     logAction({
       auth: req.auth!,
       laundryId,
@@ -419,8 +444,6 @@ whatsappRouter.post("/connect", requireOwner, async (req: AuthRequest, res) => {
       metadata: { method: "manual", wabaId: whatsappBusinessAccountId, phoneNumberId },
     });
     trackActivationEvent(laundryId, "whatsapp_connected");
-
-    console.log(`[whatsapp] Laundry ${laundryId} connected WhatsApp manually (WABA: ${whatsappBusinessAccountId})`);
 
     return res.json({
       connected: true,
@@ -431,6 +454,54 @@ whatsappRouter.post("/connect", requireOwner, async (req: AuthRequest, res) => {
   } catch (err) {
     console.error("[whatsapp] POST /connect error:", err);
     return res.status(500).json({ error: "Failed to save WhatsApp connection" });
+  }
+});
+
+// ── GET /api/whatsapp/debug ────────────────────────────────────────────────
+// Owner-only diagnostic endpoint.
+// Returns connection state without exposing tokens, secrets, WABA IDs, or phone IDs.
+
+whatsappRouter.get("/debug", requireOwner, async (req: AuthRequest, res) => {
+  const { laundryId } = req.auth!;
+  const { appId, appSecret, configId } = getMetaEnv();
+
+  try {
+    const [row] = await db
+      .select({
+        status: whatsappConnections.status,
+        businessName: whatsappConnections.businessName,
+        displayPhoneNumber: whatsappConnections.displayPhoneNumber,
+        connectedAt: whatsappConnections.connectedAt,
+      })
+      .from(whatsappConnections)
+      .where(eq(whatsappConnections.laundryId, laundryId));
+
+    const [provRow] = await db
+      .select({ isActive: providerConfigs.isActive })
+      .from(providerConfigs)
+      .where(
+        and(
+          eq(providerConfigs.laundryId, laundryId),
+          eq(providerConfigs.provider, "whatsapp")
+        )
+      );
+
+    console.log(`[whatsapp] GET /debug — laundryId=${laundryId} row=${row ? `status=${row.status}` : "NOT FOUND"} provRow=${provRow ? `active=${provRow.isActive}` : "NOT FOUND"}`);
+
+    return res.json({
+      platformConfigured: !!(appId && appSecret && configId),
+      connectionExists: !!row,
+      connected: row?.status === "connected",
+      status: row?.status ?? null,
+      businessName: row?.businessName ?? null,
+      displayPhoneNumber: row?.displayPhoneNumber ?? null,
+      connectedAt: row?.connectedAt ?? null,
+      providerActive: provRow?.isActive ?? false,
+      laundryId,
+    });
+  } catch (err) {
+    console.error("[whatsapp] GET /debug error:", err);
+    return res.status(500).json({ error: "Diagnostic check failed" });
   }
 });
 

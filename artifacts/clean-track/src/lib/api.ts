@@ -306,6 +306,7 @@ export const api = {
       ),
     connect: (data: WaConnectInput) => request<{ connected: true; displayPhoneNumber: string | null; businessName: string | null; connectedAt: string }>("POST", "/whatsapp/connect", data),
     disconnect: () => request<{ connected: false; disconnectedAt: string }>("POST", "/whatsapp/disconnect"),
+    debug: () => request<WaDebugResult>("GET", "/whatsapp/debug"),
   },
   operations: {
     auditLog: (params?: { period?: string; action?: string; actorType?: string; actorName?: string; limit?: number; offset?: number }) => {
@@ -1753,6 +1754,18 @@ export interface WaMetaCallbackInput {
   code: string;
   wabaId: string;
   phoneNumberId: string;
+}
+
+export interface WaDebugResult {
+  platformConfigured: boolean;
+  connectionExists: boolean;
+  connected: boolean;
+  status: string | null;
+  businessName: string | null;
+  displayPhoneNumber: string | null;
+  connectedAt: string | null;
+  providerActive: boolean;
+  laundryId: number;
 }
 
 // ─── Conversations ────────────────────────────────────────────────────────────

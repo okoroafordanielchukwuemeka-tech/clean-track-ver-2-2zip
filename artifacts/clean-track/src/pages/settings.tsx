@@ -21,6 +21,8 @@ import {
   type WaConnectionStatus,
   type WaMetaConfig,
   type WaMetaCallbackInput,
+  type WaConnectInput,
+  type WaDebugResult,
 } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1846,6 +1848,25 @@ function WhatsAppBusinessSection() {
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const pendingWabaRef = useRef<{ wabaId: string; phoneNumberId: string } | null>(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualFields, setManualFields] = useState<WaConnectInput>({
+    whatsappBusinessAccountId: "",
+    phoneNumberId: "",
+    accessToken: "",
+    displayPhoneNumber: "",
+    businessName: "",
+  });
+
+  const connectManually = useMutation({
+    mutationFn: (data: WaConnectInput) => api.whatsapp.connect(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
+      setShowManualForm(false);
+      setManualFields({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
+      toast.success("WhatsApp Business connected successfully");
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to connect. Check your credentials and try again."),
+  });
 
   const { data: status, isLoading } = useQuery<WaConnectionStatus>({
     queryKey: ["whatsapp-status"],
@@ -2138,17 +2159,122 @@ function WhatsAppBusinessSection() {
             </Button>
           </div>
         ) : (
-          /* Setup required — shown when Meta Embedded Signup is not configured (META_APP_ID not set) */
-          <div className="flex items-start gap-4">
-            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <WifiOff className="h-5 w-5 text-muted-foreground" />
+          /* Manual connect form — shown when Meta Embedded Signup is not configured (META_APP_ID not set) */
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <WifiOff className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Not Connected</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Enter your WhatsApp Business credentials to connect.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 shrink-0"
+                onClick={() => {
+                  setShowManualForm(v => !v);
+                  setManualFields({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
+                }}
+              >
+                <Link className="h-3.5 w-3.5" />
+                {showManualForm ? "Cancel" : "Connect manually"}
+              </Button>
             </div>
-            <div>
-              <p className="font-semibold text-sm">Not Connected</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                WhatsApp Business is not yet enabled for your account. Contact your administrator to activate it.
-              </p>
-            </div>
+
+            {showManualForm && (
+              <form
+                onSubmit={e => { e.preventDefault(); connectManually.mutate(manualFields); }}
+                className="space-y-4 rounded-lg border bg-muted/20 p-4"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">WABA ID <span className="text-destructive">*</span></Label>
+                    <Input
+                      placeholder="1234567890"
+                      value={manualFields.whatsappBusinessAccountId}
+                      onChange={e => setManualFields(f => ({ ...f, whatsappBusinessAccountId: e.target.value.trim() }))}
+                      required
+                    />
+                    <p className="text-[11px] text-muted-foreground">WhatsApp Business Account ID from Meta</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Phone Number ID <span className="text-destructive">*</span></Label>
+                    <Input
+                      placeholder="9876543210"
+                      value={manualFields.phoneNumberId}
+                      onChange={e => setManualFields(f => ({ ...f, phoneNumberId: e.target.value.trim() }))}
+                      required
+                    />
+                    <p className="text-[11px] text-muted-foreground">From WhatsApp Manager → Phone Numbers</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Permanent Access Token <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="password"
+                    placeholder="EAA…"
+                    value={manualFields.accessToken}
+                    onChange={e => setManualFields(f => ({ ...f, accessToken: e.target.value.trim() }))}
+                    required
+                    minLength={10}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    System User permanent token from Meta Business Manager. Encrypted at rest — never returned to the browser after saving.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Display Phone Number <span className="text-muted-foreground">(optional)</span></Label>
+                    <Input
+                      placeholder="+234 801 234 5678"
+                      value={manualFields.displayPhoneNumber ?? ""}
+                      onChange={e => setManualFields(f => ({ ...f, displayPhoneNumber: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Business Name <span className="text-muted-foreground">(optional)</span></Label>
+                    <Input
+                      placeholder="Fresh Wash Laundry"
+                      value={manualFields.businessName ?? ""}
+                      onChange={e => setManualFields(f => ({ ...f, businessName: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1 border-t border-border/40">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => {
+                    setShowManualForm(false);
+                    setManualFields({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={
+                      connectManually.isPending ||
+                      !manualFields.whatsappBusinessAccountId ||
+                      !manualFields.phoneNumberId ||
+                      !manualFields.accessToken
+                    }
+                    className="gap-1.5"
+                  >
+                    {connectManually.isPending
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Link className="h-3.5 w-3.5" />}
+                    {connectManually.isPending ? "Connecting…" : "Save Connection"}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
         )}
       </div>
