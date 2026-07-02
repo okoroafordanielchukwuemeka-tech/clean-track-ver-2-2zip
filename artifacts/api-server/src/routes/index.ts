@@ -66,6 +66,7 @@ router.use("/communication", requireOwner, communicationRouter);
 router.use("/whatsapp", requireOwner, whatsappRouter);
 router.use("/conversations", requireAuth, conversationsRouter);
 router.use("/subscription", requireOwner, subscriptionRouter);
+router.use("/automation-rules", requireAuth, automationRulesRouter);
 
 // Platform admin routes (CleanTrack internal — not for laundry owners)
 router.use("/admin", adminRouter);

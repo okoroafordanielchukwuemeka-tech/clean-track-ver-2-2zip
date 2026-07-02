@@ -23,6 +23,7 @@ import { signToken, requireAuth, AuthRequest } from "../middleware/auth.js";
 import { sendPasswordResetEmail, sendWelcomeEmail, generateEmailTrackingToken, verifyEmailTrackingToken } from "../lib/email-service.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
 import { warn } from "../lib/logger.js";
+import { initializeDefaultRules } from "../lib/automation-service.js";
 
 export const authRouter = Router();
 
@@ -173,6 +174,9 @@ authRouter.post("/signup", async (req, res) => {
       .returning();
 
     await seedLaundryDefaults(laundry.id);
+
+    // Seed default WhatsApp automation rules (fire-and-forget)
+    initializeDefaultRules(laundry.id).catch(() => {});
 
     // Activation tracking — fire-and-forget, never delays signup response
     trackActivationEvent(laundry.id, "workspace_created");

@@ -48,7 +48,7 @@ import {
   LayoutDashboard, Save, ImageIcon, Plus, Trash2, AlertCircle,
   RefreshCw, ChevronRight, Percent, CreditCard, Check, Zap,
   MessageCircle, Mail, X, Smartphone, CheckCircle2, WifiOff,
-  Loader2, Link, Unlink, Calendar,
+  Loader2, Link, Unlink, Calendar, Eye, EyeOff, Bot,
 } from "lucide-react";
 import {
   Dialog,
@@ -68,6 +68,7 @@ const SECTIONS = [
   { id: "automation", label: "Automation Alerts", icon: Bell },
   { id: "templates", label: "Message Templates", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp Business", icon: Smartphone },
+  { id: "wa-automations", label: "WhatsApp Automations", icon: Bot },
   { id: "categories", label: "Expense Categories", icon: Tag },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "billing", label: "Billing & Usage", icon: CreditCard },
@@ -1578,6 +1579,265 @@ function BillingSection() {
   );
 }
 
+// ─── WhatsApp Automations Section ────────────────────────────────────────────
+
+const TRIGGER_META: Record<string, { label: string; description: string; icon: string }> = {
+  ORDER_CREATED:    { label: "Order Received",       description: "Sent when a new order is created",             icon: "📦" },
+  PAYMENT_RECEIVED: { label: "Payment Confirmation",  description: "Sent when a payment is recorded",              icon: "💳" },
+  ORDER_READY:      { label: "Ready Notification",    description: "Sent when the order is marked ready for pickup", icon: "✅" },
+  ORDER_COMPLETED:  { label: "Order Completed",       description: "Sent when the order is fully completed",        icon: "🎉" },
+  ORDER_DELIVERED:  { label: "Delivery Confirmation", description: "Sent when all items are picked up",             icon: "🚚" },
+};
+
+const PREVIEW_VARS: Record<string, string> = {
+  customerName: "Daniel",
+  orderId: "ORD-0042",
+  businessName: "Your Laundry",
+};
+
+function interpolatePreview(template: string): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => PREVIEW_VARS[key] ?? `{{${key}}}`);
+}
+
+function AutomationRuleCard({
+  rule,
+  canEdit,
+  onUpdate,
+}: {
+  rule: import("@/lib/api").AutomationRule;
+  canEdit: boolean;
+  onUpdate: (updated: import("@/lib/api").AutomationRule) => void;
+}) {
+  const [template, setTemplate] = useState(rule.messageTemplate);
+  const [showPreview, setShowPreview] = useState(false);
+  const isDirty = template !== rule.messageTemplate;
+
+  const toggleMutation = useMutation({
+    mutationFn: () => api.automationRules.update(rule.id, { enabled: !rule.enabled }),
+    onSuccess: ({ rule: updated }) => { onUpdate(updated); toast.success(`${rule.name} ${updated.enabled ? "enabled" : "disabled"}`); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.automationRules.update(rule.id, { messageTemplate: template.trim() }),
+    onSuccess: ({ rule: updated }) => { onUpdate(updated); toast.success("Template saved"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const meta = TRIGGER_META[rule.triggerEvent] ?? { label: rule.name, description: "", icon: "📨" };
+
+  return (
+    <div className={cn(
+      "rounded-xl border bg-card transition-all",
+      rule.enabled ? "border-green-200 dark:border-green-900" : "border-border opacity-70"
+    )}>
+      {/* Header */}
+      <div className="flex items-start gap-3 p-4">
+        <div className="text-2xl mt-0.5 shrink-0">{meta.icon}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">{meta.label}</p>
+            <Switch
+              checked={rule.enabled}
+              onCheckedChange={() => canEdit && toggleMutation.mutate()}
+              disabled={!canEdit || toggleMutation.isPending}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">{meta.description}</p>
+        </div>
+      </div>
+
+      {/* Template editor */}
+      <div className="px-4 pb-4 space-y-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Message Template</Label>
+          <Textarea
+            value={template}
+            onChange={e => canEdit && setTemplate(e.target.value)}
+            rows={2}
+            className="text-sm font-mono resize-none"
+            readOnly={!canEdit}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Variables: <code className="bg-muted px-1 rounded">{"{{customerName}}"}</code>{" "}
+            <code className="bg-muted px-1 rounded">{"{{orderId}}"}</code>{" "}
+            <code className="bg-muted px-1 rounded">{"{{businessName}}"}</code>
+          </p>
+        </div>
+
+        {/* Preview */}
+        {showPreview && (
+          <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-3">
+            <p className="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+              <Eye className="h-3 w-3" /> Preview
+            </p>
+            <p className="text-sm text-green-900 dark:text-green-200 leading-relaxed">
+              {interpolatePreview(template)}
+            </p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 justify-between">
+          <button
+            type="button"
+            onClick={() => setShowPreview(v => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showPreview ? "Hide preview" : "Preview message"}
+          </button>
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              {isDirty && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs gap-1"
+                  onClick={() => setTemplate(rule.messageTemplate)}
+                >
+                  <X className="h-3 w-3" /> Discard
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate()}
+                disabled={!isDirty || saveMutation.isPending}
+                className="gap-1.5"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {saveMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WhatsAppAutomationsSection() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const canEdit = user?.type === "owner" || !!(user as any)?.permissions?.canManageWhatsApp;
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["automation-rules"],
+    queryFn: () => api.automationRules.list(),
+  });
+
+  const initMutation = useMutation({
+    mutationFn: () => api.automationRules.initialize(),
+    onSuccess: ({ rules }) => {
+      qc.setQueryData(["automation-rules"], { rules });
+      toast.success("Default automation rules created");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rules = data?.rules ?? [];
+  const hasRules = rules.length > 0;
+
+  function updateRule(updated: import("@/lib/api").AutomationRule) {
+    qc.setQueryData(["automation-rules"], (prev: { rules: import("@/lib/api").AutomationRule[] } | undefined) => ({
+      rules: (prev?.rules ?? []).map(r => r.id === updated.id ? updated : r),
+    }));
+  }
+
+  // Sort rules in the canonical trigger order
+  const TRIGGER_ORDER = ["ORDER_CREATED", "PAYMENT_RECEIVED", "ORDER_READY", "ORDER_COMPLETED", "ORDER_DELIVERED"];
+  const sorted = [...rules].sort(
+    (a, b) => TRIGGER_ORDER.indexOf(a.triggerEvent) - TRIGGER_ORDER.indexOf(b.triggerEvent)
+  );
+
+  const enabledCount = rules.filter(r => r.enabled).length;
+
+  return (
+    <div>
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">WhatsApp Automations</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Send automatic WhatsApp messages to customers when key events happen.
+            </p>
+          </div>
+          {hasRules && (
+            <span className={cn(
+              "shrink-0 text-xs font-medium px-2 py-1 rounded-full border",
+              enabledCount > 0
+                ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
+                : "bg-muted text-muted-foreground border-border"
+            )}>
+              {enabledCount} of {rules.length} active
+            </span>
+          )}
+        </div>
+
+        {/* Info banner */}
+        <div className="mt-4 flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-sm">
+          <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="text-blue-700 dark:text-blue-300">
+            <span className="font-semibold">Requires WhatsApp Business connection.</span>{" "}
+            Set up your WhatsApp number in <em>WhatsApp Business</em> settings first. Rules with no connected account are skipped silently.
+          </div>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <SkeletonRows rows={5} />
+      ) : !hasRules ? (
+        <div className="text-center py-12 space-y-4 border rounded-xl border-dashed">
+          <Bot className="h-10 w-10 mx-auto text-muted-foreground/40" />
+          <div>
+            <p className="font-medium">No automation rules yet</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Create the default set of 5 rules to get started.
+            </p>
+          </div>
+          {canEdit && (
+            <Button onClick={() => initMutation.mutate()} disabled={initMutation.isPending} className="gap-2">
+              <Zap className="h-4 w-4" />
+              {initMutation.isPending ? "Creating…" : "Create Default Rules"}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {sorted.map(rule => (
+            <AutomationRuleCard
+              key={rule.id}
+              rule={rule}
+              canEdit={canEdit}
+              onUpdate={updateRule}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Re-init button */}
+      {hasRules && canEdit && (
+        <div className="mt-6 pt-4 border-t flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Missing a rule?</p>
+            <p className="text-xs text-muted-foreground">Re-run initialization to add any missing default rules.</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => initMutation.mutate()}
+            disabled={initMutation.isPending}
+            className="gap-1.5 shrink-0"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", initMutation.isPending && "animate-spin")} />
+            Re-initialize
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── WhatsApp Business Section ────────────────────────────────────────────────
 
 function WhatsAppBusinessSection() {
@@ -1998,6 +2258,7 @@ export default function SettingsPage() {
               {activeSection === "automation" && <AutomationSection />}
               {activeSection === "templates" && <MessageTemplatesSection />}
               {activeSection === "whatsapp" && <WhatsAppBusinessSection />}
+              {activeSection === "wa-automations" && <WhatsAppAutomationsSection />}
               {activeSection === "categories" && <ExpenseCategoriesSection />}
               {activeSection === "dashboard" && <DashboardPreferencesSection />}
               {activeSection === "billing" && <BillingSection />}

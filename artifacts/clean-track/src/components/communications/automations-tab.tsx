@@ -123,7 +123,7 @@ function RuleCard({
 
   const toggle = useMutation({
     mutationFn: (enabled: boolean) =>
-      api.automations.update(rule.id, { enabled }),
+      api.automationRules.update(rule.id, { enabled }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["automation-rules"] });
     },
@@ -132,7 +132,7 @@ function RuleCard({
 
   const save = useMutation({
     mutationFn: () =>
-      api.automations.update(rule.id, { messageTemplate: draft.trim() }),
+      api.automationRules.update(rule.id, { messageTemplate: draft.trim() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["automation-rules"] });
       setShowEdit(false);
@@ -285,12 +285,12 @@ export function AutomationsTab() {
 
   const { data, isLoading } = useQuery<{ rules: AutomationRule[] }>({
     queryKey: ["automation-rules"],
-    queryFn: () => api.automations.list(),
+    queryFn: () => api.automationRules.list(),
     staleTime: 30_000,
   });
 
   const initialize = useMutation({
-    mutationFn: () => api.automations.initialize(),
+    mutationFn: () => api.automationRules.initialize(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["automation-rules"] });
       toast.success("Automation rules initialized");

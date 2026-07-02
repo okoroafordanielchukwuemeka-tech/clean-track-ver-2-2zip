@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { pickupRecords, orders, orderItems } from "@workspace/db/schema";
+import { pickupRecords, orders, orderItems, customers } from "@workspace/db/schema";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
+import { fireAutomation } from "../lib/automation-service.js";
 
 export const pickupsRouter = Router({ mergeParams: true });
 
@@ -70,7 +71,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
         : sql``;
 
       const lockResult = await tx.execute(
-        sql`SELECT id, laundry_id, order_id, customer_name, status, price,
+        sql`SELECT id, laundry_id, order_id, customer_id, customer_name, status, price,
                    extra_charge, discount, amount_paid, shirts, trousers,
                    shirts_picked_up, trousers_picked_up
             FROM orders
@@ -85,6 +86,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
         id: raw.id as number,
         laundryId: raw.laundry_id as number,
         orderId: raw.order_id as string,
+        customerId: raw.customer_id as number | null,
         customerName: raw.customer_name as string,
         status: raw.status as string,
         price: raw.price as string,
@@ -202,6 +204,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
           fullyPaid,
           itemPickupsJson,
           orderRef: order.orderId,
+          customerId: order.customerId,
           customerName: order.customerName,
           remainingShirts,
           remainingTrousers,
@@ -260,6 +263,29 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
         severity: "info",
         relatedOrderId: orderId,
       }).catch(() => {});
+    }
+
+    // ORDER_DELIVERED automation — fires when all items are picked up (regardless of payment)
+    if (meta.allPickedUp) {
+      (async () => {
+        try {
+          let customerPhone: string | null = null;
+          if (meta.customerId) {
+            const [cust] = await db
+              .select({ phone: customers.phone })
+              .from(customers)
+              .where(eq(customers.id, meta.customerId));
+            customerPhone = cust?.phone ?? null;
+          }
+          await fireAutomation({
+            laundryId,
+            triggerEvent: "ORDER_DELIVERED",
+            customerName: meta.customerName,
+            customerPhone,
+            orderId: meta.orderRef,
+          });
+        } catch { /* non-fatal */ }
+      })();
     }
 
     res.status(201).json({ pickup, order: orderResult });

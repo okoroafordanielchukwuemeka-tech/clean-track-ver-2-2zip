@@ -290,6 +290,12 @@ export const api = {
       return request<{ events: NotifEvent[]; total: number }>("GET", `/communication/events${qs}`);
     },
   },
+  automationRules: {
+    list: () => request<{ rules: AutomationRule[] }>("GET", "/automation-rules"),
+    update: (id: number, data: { enabled?: boolean; messageTemplate?: string; name?: string }) =>
+      request<{ rule: AutomationRule }>("PATCH", `/automation-rules/${id}`, data),
+    initialize: () => request<{ ok: boolean; rules: AutomationRule[] }>("POST", "/automation-rules/initialize"),
+  },
   whatsapp: {
     status: () => request<WaConnectionStatus>("GET", "/whatsapp/status"),
     metaConfig: () => request<WaMetaConfig>("GET", "/whatsapp/meta/config"),
