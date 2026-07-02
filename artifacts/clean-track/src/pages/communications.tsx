@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { InboxTab } from "@/components/inbox-tab";
 import { CustomersTab } from "@/components/communications/customers-tab";
 import { ActivityTab } from "@/components/communications/activity-tab";
+import { AutomationsTab } from "@/components/communications/automations-tab";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -501,6 +502,7 @@ export default function CommunicationsPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="automations">Automations</TabsTrigger>
         </TabsList>
 
         {/* ── Inbox tab ── */}
@@ -619,6 +621,11 @@ export default function CommunicationsPage() {
               setInboxOpenConvId(convId);
             }}
           />
+        </TabsContent>
+
+        {/* ── Automations tab ── */}
+        <TabsContent value="automations" className="mt-4">
+          <AutomationsTab />
         </TabsContent>
 
         {/* ── Message Log (notification delivery log) ── */}

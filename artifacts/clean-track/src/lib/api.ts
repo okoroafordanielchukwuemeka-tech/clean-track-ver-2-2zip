@@ -1092,6 +1092,17 @@ export interface WhatsAppActivityResponse {
   total: number;
 }
 
+export interface AutomationRule {
+  id: number;
+  laundryId: number;
+  name: string;
+  triggerEvent: string;
+  messageTemplate: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkerPermission {
   workerId: number;
   canViewCustomers: boolean;

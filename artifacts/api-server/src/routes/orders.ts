@@ -11,6 +11,7 @@ import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 import { dispatchNotification, buildOrderVariables } from "../lib/notification-dispatcher.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
+import { fireAutomation } from "../lib/automation-service.js";
 
 export const ordersRouter = Router();
 
@@ -419,6 +420,14 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
 
     trackActivationEvent(laundryId, "order_created");
 
+    fireAutomation({
+      laundryId,
+      triggerEvent: "ORDER_CREATED",
+      customerName: order.customerName,
+      customerPhone: order.phone,
+      orderId: order.orderId,
+    }).catch(() => {});
+
     logAction({
       auth: req.auth!,
       laundryId,
@@ -528,10 +537,26 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
           severity: "success",
           relatedOrderId: order.id,
         }).catch(() => {});
+
+        fireAutomation({
+          laundryId,
+          triggerEvent: "ORDER_READY",
+          customerName: order.customerName,
+          customerPhone: order.phone,
+          orderId: order.orderId,
+        }).catch(() => {});
       }
 
       if (data.status === "completed" && beforeOrder.status !== "completed") {
         trackActivationEvent(laundryId, "order_completed");
+
+        fireAutomation({
+          laundryId,
+          triggerEvent: "ORDER_COMPLETED",
+          customerName: order.customerName,
+          customerPhone: order.phone,
+          orderId: order.orderId,
+        }).catch(() => {});
       }
 
       if (data.assignedWorkerId && data.assignedWorkerId !== beforeOrder.assignedWorkerId) {
@@ -724,6 +749,20 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
         orderId: orderRef,
       },
     }).catch(() => {});
+
+    // Fire automation (fire-and-forget, non-blocking)
+    db.select({ phone: orders.phone }).from(orders).where(eq(orders.id, oId))
+      .then(([o]) => {
+        if (!o?.phone) return Promise.resolve();
+        return fireAutomation({
+          laundryId,
+          triggerEvent: "PAYMENT_RECEIVED",
+          customerName,
+          customerPhone: o.phone,
+          orderId: orderRef,
+        });
+      })
+      .catch(() => {});
 
     res.status(201).json(payment);
   } catch (err: any) {

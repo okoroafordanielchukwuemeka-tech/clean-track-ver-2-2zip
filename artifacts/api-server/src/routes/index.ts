@@ -28,6 +28,7 @@ import { subscriptionRouter } from "./subscription.js";
 import { productionHealthRouter } from "./production-health.js";
 import { whatsappRouter } from "./whatsapp.js";
 import { conversationsRouter } from "./conversations.js";
+import { automationRulesRouter } from "./automation-rules.js";
 
 export const router = Router();
 
