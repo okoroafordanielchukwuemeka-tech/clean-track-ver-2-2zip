@@ -1,0 +1,232 @@
+The WhatsApp architecture refactor is complete.
+
+Do NOT redesign Customer Hub.
+
+Do NOT move components.
+
+Do NOT rename pages.
+
+Do NOT change UX.
+
+Do NOT refactor anything.
+
+We are now in DEBUG mode only.
+
+## Current situation
+
+Customer Hub loads correctly.
+
+Tabs render correctly:
+
+* Overview
+* Inbox
+* Templates
+* Automations
+* Campaigns
+* Analytics
+* Activity
+
+However Overview always shows:
+
+> "WhatsApp Business is currently unavailable.
+> Contact your platform administrator."
+
+The Connect WhatsApp button never appears.
+
+The Meta popup never opens.
+
+This is now a runtime debugging task.
+
+---
+
+## IMPORTANT
+
+I do NOT want guesses.
+
+I do NOT want assumptions.
+
+I want runtime evidence.
+
+---
+
+### Step 1
+
+Verify the runtime values of:
+
+```
+META_APP_ID
+META_APP_SECRET
+META_CONFIG_ID
+```
+
+Confirm they are actually present inside the running backend process.
+
+---
+
+### Step 2
+
+Call as an authenticated OWNER:
+
+```
+GET /api/whatsapp/meta/config
+```
+
+Print the EXACT JSON response.
+
+Example:
+
+```
+{
+  "available": true,
+  "appId": "...",
+  "configId": "..."
+}
+```
+
+or
+
+```
+{
+  "available": false
+}
+```
+
+Do NOT summarize.
+
+Print the exact response.
+
+---
+
+### Step 3
+
+If
+
+```
+available == false
+```
+
+trace exactly WHY.
+
+Show the exact line of code.
+
+Show every condition.
+
+Print every variable.
+
+Example:
+
+```
+appId =
+configId =
+appSecret =
+```
+
+Explain which condition evaluates to false.
+
+---
+
+### Step 4
+
+If
+
+```
+available == true
+```
+
+trace the frontend.
+
+Print:
+
+```
+metaConfig
+```
+
+Print:
+
+```
+useEmbeddedSignup
+```
+
+Print which JSX branch is rendered.
+
+I want the execution path:
+
+Backend
+
+↓
+
+React Query
+
+↓
+
+metaConfig
+
+↓
+
+useEmbeddedSignup
+
+↓
+
+Rendered JSX
+
+---
+
+### Step 5
+
+If Customer Hub is incorrectly hiding the Connect button,
+
+identify the exact component and line responsible.
+
+Do NOT redesign the page.
+
+Only identify the incorrect condition.
+
+---
+
+### Step 6
+
+Verify that the Connect button still exists in the codebase.
+
+If it exists:
+
+show where.
+
+If it does not:
+
+show when it was removed.
+
+---
+
+### Step 7
+
+Verify the Facebook SDK.
+
+Print:
+
+* window.FB exists?
+* SDK loaded?
+* FB.login available?
+
+---
+
+### Step 8
+
+Produce a final diagnosis.
+
+Not a fix.
+
+A diagnosis.
+
+Exactly one of these must be true:
+
+1. Backend returning available:false
+
+2. Frontend incorrectly hiding Connect button
+
+3. Connect button removed during refactor
+
+4. Facebook SDK failed to initialize
+
+5. Another specific root cause supported by runtime evidence.
+
+Do not modify code until the root cause has been proven with logs.
