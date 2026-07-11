@@ -1,0 +1,180 @@
+We are NOT adding new features.
+
+We are NOT refactoring.
+
+We are NOT changing the UI.
+
+We are performing a complete end-to-end debugging session of the WhatsApp Embedded Signup connection.
+
+Current situation:
+
+* The Connect WhatsApp button works.
+* Customer Hub loads correctly.
+* Facebook login popup opens.
+* I can successfully log into Facebook.
+* I can now see my real WhatsApp Business number (not only the test number).
+* I select my real number.
+* Meta reports success.
+* CleanTrack reports "Connection Successful".
+* Immediately afterwards the system displays:
+
+"Cannot retrieve account information. Try again later."
+
+This means Embedded Signup is progressing almost to completion.
+
+I do NOT want guesses.
+
+I want evidence.
+
+Your task is to trace the connection step-by-step and identify exactly where it fails.
+
+Audit the complete flow:
+
+STEP 1
+
+Verify the Meta popup returns:
+
+* authorization code
+* WABA ID
+* Phone Number ID
+
+Log all three values (redact sensitive values if necessary).
+
+STEP 2
+
+Verify the backend receives:
+
+POST /api/whatsapp/meta/callback
+
+Log:
+
+* authorization code received
+* WABA ID
+* Phone Number ID
+
+STEP 3
+
+Verify authorization code exchange.
+
+Check:
+
+https://graph.facebook.com
+
+Log:
+
+* request
+* response
+* HTTP status
+* any Graph API error message
+
+STEP 4
+
+Verify long-lived token exchange.
+
+Log:
+
+* request
+* response
+* expiration
+* Graph API errors
+
+STEP 5
+
+Verify retrieval of Business Profile.
+
+Specifically inspect the Graph API request that retrieves:
+
+* business name
+* display phone number
+
+Log:
+
+* request URL
+* request headers
+* Graph response
+* HTTP status
+
+If Graph returns an error:
+
+Print the COMPLETE Graph error including:
+
+* code
+* subcode
+* message
+* type
+
+Do NOT summarize it.
+
+STEP 6
+
+Verify database write.
+
+Confirm:
+
+* encrypted token stored
+* WABA stored
+* phone number stored
+* provider config created
+* WhatsApp connection row created
+
+STEP 7
+
+Immediately after connection succeeds,
+
+call:
+
+GET /api/whatsapp/status
+
+Log the FULL response.
+
+Determine why the frontend believes the account information is unavailable.
+
+STEP 8
+
+Compare against Meta documentation.
+
+Determine whether the Graph API version currently used is correct.
+
+If versions are inconsistent, identify exactly which request should change.
+
+STEP 9
+
+Determine whether the problem is caused by:
+
+* Meta App still in Development mode
+* Missing App Review permission
+* Business Manager permission
+* Embedded Signup configuration
+* Missing webhook subscription
+* Missing phone registration
+* Incorrect Graph API endpoint
+* Missing fields parameter
+* Backend bug
+* Frontend bug
+
+Identify ONE root cause only if proven by logs.
+
+Do not guess.
+
+STEP 10
+
+If a fix is required:
+
+Implement ONLY that fix.
+
+Do not change unrelated code.
+
+Do not refactor.
+
+Do not redesign UI.
+
+Deliver a final report containing:
+
+1. Where the flow failed.
+2. Exact Graph API response.
+3. Exact root cause.
+4. Why the account cannot be retrieved.
+5. What was fixed.
+6. Remaining issues, if any.
+
+The goal is to make WhatsApp Embedded Signup fully operational before continuing with any new Phase 1 features.

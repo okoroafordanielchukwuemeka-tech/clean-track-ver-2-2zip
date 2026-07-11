@@ -497,18 +497,42 @@ function OverviewTab({ onNavigateToTab }: { onNavigateToTab: (tab: string) => vo
           return;
         }
 
-        const waba = pendingWabaRef.current;
-        if (!waba) {
-          setIsConnecting(false);
-          toast.error("Could not retrieve your WhatsApp account details. Please try again.");
+        // The WABA/phone IDs arrive via a separate `window.postMessage` FINISH
+        // event from the Meta popup, which is NOT guaranteed to be processed
+        // before this fb.login callback fires (Meta does not order the two).
+        // If it hasn't landed yet, poll briefly instead of failing immediately.
+        const proceedWithWaba = (waba: { wabaId: string; phoneNumberId: string }) => {
+          metaCallbackMutation.mutate({
+            code,
+            wabaId: waba.wabaId,
+            phoneNumberId: waba.phoneNumberId,
+          });
+        };
+
+        if (pendingWabaRef.current) {
+          proceedWithWaba(pendingWabaRef.current);
           return;
         }
 
-        metaCallbackMutation.mutate({
-          code,
-          wabaId: waba.wabaId,
-          phoneNumberId: waba.phoneNumberId,
-        });
+        console.log("[whatsapp] fb.login callback fired before FINISH message — polling for WABA data");
+        const pollIntervalMs = 100;
+        const maxWaitMs = 4000;
+        let waitedMs = 0;
+        const poll = setInterval(() => {
+          if (pendingWabaRef.current) {
+            clearInterval(poll);
+            console.log("[whatsapp] FINISH message arrived after", waitedMs, "ms — proceeding");
+            proceedWithWaba(pendingWabaRef.current);
+            return;
+          }
+          waitedMs += pollIntervalMs;
+          if (waitedMs >= maxWaitMs) {
+            clearInterval(poll);
+            console.error("[whatsapp] FINISH message never arrived after", maxWaitMs, "ms — giving up");
+            setIsConnecting(false);
+            toast.error("Could not retrieve your WhatsApp account details. Please try again.");
+          }
+        }, pollIntervalMs);
       },
       {
         config_id: cfg.configId,
