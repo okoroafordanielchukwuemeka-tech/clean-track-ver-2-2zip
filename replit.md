@@ -84,13 +84,19 @@ R2_BUCKET_NAME=cleantrack-backups
 
 See `.env.example` for the full list of required and optional variables.
 
-## Replit Setup (completed 2026-07-02)
+## Replit Setup (updated 2026-07-11)
 - Dependencies installed via `pnpm install` (656 packages)
-- `JWT_SECRET` and `BACKUP_SECRET` saved as Replit Secrets
+- `JWT_SECRET` and `BACKUP_SECRET` stored as Replit Secrets (never in source)
+- `SESSION_SECRET` stored as Replit Secret
 - `DATABASE_URL` provided automatically by Replit's managed PostgreSQL
-- Database schema applied via `pnpm db:push`
+- Database schema auto-applied on every `pnpm dev` startup via `start.sh` (`pnpm db:push`)
 - Both servers start cleanly with `pnpm dev` (frontend :5000, API :3001)
-- `postgresql-16` module restored in `.replit` to keep pg tools available
+- `postgresql-16` module in `.replit` keeps pg tools (pg_dump etc.) available
+
+### First-time setup on a fresh clone
+1. Run `pnpm install`
+2. Add `JWT_SECRET`, `BACKUP_SECRET`, and `SESSION_SECRET` as Replit Secrets (min 32 chars each — generate with `openssl rand -hex 48`)
+3. Run `pnpm dev` — schema is applied automatically before servers start
 
 ## User Preferences
 - Currency displayed in Nigerian Naira (NGN)
