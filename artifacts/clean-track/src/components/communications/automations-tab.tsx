@@ -346,7 +346,7 @@ export function AutomationsTab() {
           <p className="text-xs text-blue-300/70 leading-relaxed">
             When an event occurs (e.g. order ready), CleanTrack checks if an enabled rule exists for
             that event and automatically sends the message via WhatsApp. A WhatsApp provider must be
-            connected in Settings → WhatsApp for messages to be delivered.
+            connected in Customer Hub → Overview for messages to be delivered.
           </p>
         </div>
       </div>

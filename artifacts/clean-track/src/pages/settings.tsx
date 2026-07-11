@@ -19,10 +19,6 @@ import {
   type PlanPricingConfig,
   type SubscriptionPricing,
   type WaConnectionStatus,
-  type WaMetaConfig,
-  type WaMetaCallbackInput,
-  type WaConnectInput,
-  type WaDebugResult,
 } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,9 +45,7 @@ import {
   Building2, Palette, Clock, Shield, Bell, MessageSquare, Tag,
   LayoutDashboard, Save, ImageIcon, Plus, Trash2, AlertCircle,
   RefreshCw, ChevronRight, Percent, CreditCard, Check, Zap,
-  MessageCircle, Mail, X, Smartphone, CheckCircle2, WifiOff,
-  Loader2, Link, Unlink, Calendar, Eye, EyeOff, Bot,
-} from "lucide-react";
+  MessageCircle, Mail, X, Smartphone, CheckCircle2, Loader2, Link, } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -70,7 +64,6 @@ const SECTIONS = [
   { id: "automation", label: "Automation Alerts", icon: Bell },
   { id: "templates", label: "Message Templates", icon: MessageSquare },
   { id: "whatsapp", label: "WhatsApp Business", icon: Smartphone },
-  { id: "wa-automations", label: "WhatsApp Automations", icon: Bot },
   { id: "categories", label: "Expense Categories", icon: Tag },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "billing", label: "Billing & Usage", icon: CreditCard },
@@ -1581,292 +1574,10 @@ function BillingSection() {
   );
 }
 
-// ─── WhatsApp Automations Section ────────────────────────────────────────────
-
-const TRIGGER_META: Record<string, { label: string; description: string; icon: string }> = {
-  ORDER_CREATED:    { label: "Order Received",       description: "Sent when a new order is created",             icon: "📦" },
-  PAYMENT_RECEIVED: { label: "Payment Confirmation",  description: "Sent when a payment is recorded",              icon: "💳" },
-  ORDER_READY:      { label: "Ready Notification",    description: "Sent when the order is marked ready for pickup", icon: "✅" },
-  ORDER_COMPLETED:  { label: "Order Completed",       description: "Sent when the order is fully completed",        icon: "🎉" },
-  ORDER_DELIVERED:  { label: "Delivery Confirmation", description: "Sent when all items are picked up",             icon: "🚚" },
-};
-
-const PREVIEW_VARS: Record<string, string> = {
-  customerName: "Daniel",
-  orderId: "ORD-0042",
-  businessName: "Your Laundry",
-};
-
-function interpolatePreview(template: string): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => PREVIEW_VARS[key] ?? `{{${key}}}`);
-}
-
-function AutomationRuleCard({
-  rule,
-  canEdit,
-  onUpdate,
-}: {
-  rule: import("@/lib/api").AutomationRule;
-  canEdit: boolean;
-  onUpdate: (updated: import("@/lib/api").AutomationRule) => void;
-}) {
-  const [template, setTemplate] = useState(rule.messageTemplate);
-  const [showPreview, setShowPreview] = useState(false);
-  const isDirty = template !== rule.messageTemplate;
-
-  const toggleMutation = useMutation({
-    mutationFn: () => api.automationRules.update(rule.id, { enabled: !rule.enabled }),
-    onSuccess: ({ rule: updated }) => { onUpdate(updated); toast.success(`${rule.name} ${updated.enabled ? "enabled" : "disabled"}`); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: () => api.automationRules.update(rule.id, { messageTemplate: template.trim() }),
-    onSuccess: ({ rule: updated }) => { onUpdate(updated); toast.success("Template saved"); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const meta = TRIGGER_META[rule.triggerEvent] ?? { label: rule.name, description: "", icon: "📨" };
-
-  return (
-    <div className={cn(
-      "rounded-xl border bg-card transition-all",
-      rule.enabled ? "border-green-200 dark:border-green-900" : "border-border opacity-70"
-    )}>
-      {/* Header */}
-      <div className="flex items-start gap-3 p-4">
-        <div className="text-2xl mt-0.5 shrink-0">{meta.icon}</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold">{meta.label}</p>
-            <Switch
-              checked={rule.enabled}
-              onCheckedChange={() => canEdit && toggleMutation.mutate()}
-              disabled={!canEdit || toggleMutation.isPending}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{meta.description}</p>
-        </div>
-      </div>
-
-      {/* Template editor */}
-      <div className="px-4 pb-4 space-y-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Message Template</Label>
-          <Textarea
-            value={template}
-            onChange={e => canEdit && setTemplate(e.target.value)}
-            rows={2}
-            className="text-sm font-mono resize-none"
-            readOnly={!canEdit}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Variables: <code className="bg-muted px-1 rounded">{"{{customerName}}"}</code>{" "}
-            <code className="bg-muted px-1 rounded">{"{{orderId}}"}</code>{" "}
-            <code className="bg-muted px-1 rounded">{"{{businessName}}"}</code>
-          </p>
-        </div>
-
-        {/* Preview */}
-        {showPreview && (
-          <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-3">
-            <p className="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1.5 flex items-center gap-1">
-              <Eye className="h-3 w-3" /> Preview
-            </p>
-            <p className="text-sm text-green-900 dark:text-green-200 leading-relaxed">
-              {interpolatePreview(template)}
-            </p>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 justify-between">
-          <button
-            type="button"
-            onClick={() => setShowPreview(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            {showPreview ? "Hide preview" : "Preview message"}
-          </button>
-          {canEdit && (
-            <div className="flex items-center gap-2">
-              {isDirty && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs gap-1"
-                  onClick={() => setTemplate(rule.messageTemplate)}
-                >
-                  <X className="h-3 w-3" /> Discard
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={() => saveMutation.mutate()}
-                disabled={!isDirty || saveMutation.isPending}
-                className="gap-1.5"
-              >
-                <Save className="h-3.5 w-3.5" />
-                {saveMutation.isPending ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function WhatsAppAutomationsSection() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const canEdit = user?.type === "owner" || !!(user as any)?.permissions?.canManageWhatsApp;
-
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["automation-rules"],
-    queryFn: () => api.automationRules.list(),
-  });
-
-  const initMutation = useMutation({
-    mutationFn: () => api.automationRules.initialize(),
-    onSuccess: ({ rules }) => {
-      qc.setQueryData(["automation-rules"], { rules });
-      toast.success("Default automation rules created");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const rules = data?.rules ?? [];
-  const hasRules = rules.length > 0;
-
-  function updateRule(updated: import("@/lib/api").AutomationRule) {
-    qc.setQueryData(["automation-rules"], (prev: { rules: import("@/lib/api").AutomationRule[] } | undefined) => ({
-      rules: (prev?.rules ?? []).map(r => r.id === updated.id ? updated : r),
-    }));
-  }
-
-  // Sort rules in the canonical trigger order
-  const TRIGGER_ORDER = ["ORDER_CREATED", "PAYMENT_RECEIVED", "ORDER_READY", "ORDER_COMPLETED", "ORDER_DELIVERED"];
-  const sorted = [...rules].sort(
-    (a, b) => TRIGGER_ORDER.indexOf(a.triggerEvent) - TRIGGER_ORDER.indexOf(b.triggerEvent)
-  );
-
-  const enabledCount = rules.filter(r => r.enabled).length;
-
-  return (
-    <div>
-      <div className="mb-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">WhatsApp Automations</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Send automatic WhatsApp messages to customers when key events happen.
-            </p>
-          </div>
-          {hasRules && (
-            <span className={cn(
-              "shrink-0 text-xs font-medium px-2 py-1 rounded-full border",
-              enabledCount > 0
-                ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
-                : "bg-muted text-muted-foreground border-border"
-            )}>
-              {enabledCount} of {rules.length} active
-            </span>
-          )}
-        </div>
-
-        {/* Info banner */}
-        <div className="mt-4 flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-sm">
-          <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-          <div className="text-blue-700 dark:text-blue-300">
-            <span className="font-semibold">Requires WhatsApp Business connection.</span>{" "}
-            Set up your WhatsApp number in <em>WhatsApp Business</em> settings first. Rules with no connected account are skipped silently.
-          </div>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <SkeletonRows rows={5} />
-      ) : !hasRules ? (
-        <div className="text-center py-12 space-y-4 border rounded-xl border-dashed">
-          <Bot className="h-10 w-10 mx-auto text-muted-foreground/40" />
-          <div>
-            <p className="font-medium">No automation rules yet</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create the default set of 5 rules to get started.
-            </p>
-          </div>
-          {canEdit && (
-            <Button onClick={() => initMutation.mutate()} disabled={initMutation.isPending} className="gap-2">
-              <Zap className="h-4 w-4" />
-              {initMutation.isPending ? "Creating…" : "Create Default Rules"}
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {sorted.map(rule => (
-            <AutomationRuleCard
-              key={rule.id}
-              rule={rule}
-              canEdit={canEdit}
-              onUpdate={updateRule}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Re-init button */}
-      {hasRules && canEdit && (
-        <div className="mt-6 pt-4 border-t flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Missing a rule?</p>
-            <p className="text-xs text-muted-foreground">Re-run initialization to add any missing default rules.</p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => initMutation.mutate()}
-            disabled={initMutation.isPending}
-            className="gap-1.5 shrink-0"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", initMutation.isPending && "animate-spin")} />
-            Re-initialize
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── WhatsApp Business Section ────────────────────────────────────────────────
 
 function WhatsAppBusinessSection() {
-  const qc = useQueryClient();
   const navigate = useNavigate();
-  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const pendingWabaRef = useRef<{ wabaId: string; phoneNumberId: string } | null>(null);
-  const [showManualForm, setShowManualForm] = useState(false);
-  const [manualFields, setManualFields] = useState<WaConnectInput>({
-    whatsappBusinessAccountId: "",
-    phoneNumberId: "",
-    accessToken: "",
-    displayPhoneNumber: "",
-    businessName: "",
-  });
-
-  const connectManually = useMutation({
-    mutationFn: (data: WaConnectInput) => api.whatsapp.connect(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
-      setShowManualForm(false);
-      setManualFields({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
-      toast.success("WhatsApp Business connected successfully");
-    },
-    onError: (e: Error) => toast.error(e.message || "Failed to connect. Check your credentials and try again."),
-  });
 
   const { data: status, isLoading } = useQuery<WaConnectionStatus>({
     queryKey: ["whatsapp-status"],
@@ -1874,445 +1585,90 @@ function WhatsAppBusinessSection() {
     staleTime: 30_000,
   });
 
-  const { data: metaConfig, isLoading: isMetaConfigLoading } = useQuery<WaMetaConfig>({
-    queryKey: ["whatsapp-meta-config"],
-    queryFn: () => api.whatsapp.metaConfig(),
-    staleTime: 5 * 60 * 1000, // 5 minutes — was Infinity, which meant a
-    // config change on the backend (e.g. secrets added) never got picked up
-    // by an already-open browser session without a full cache wipe.
-    refetchOnMount: "always",
-  });
-
-  const useEmbeddedSignup = metaConfig?.available === true;
-
-  // ── Load Facebook SDK when Embedded Signup is available ──────────────────
-  useEffect(() => {
-    if (!useEmbeddedSignup || !metaConfig) return;
-    if (document.getElementById("facebook-jssdk")) return;
-    const script = document.createElement("script");
-    script.id = "facebook-jssdk";
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      (window as any).FB?.init({
-        appId: (metaConfig as Extract<WaMetaConfig, { available: true }>).appId,
-        version: "v21.0",
-        cookie: true,
-      });
-    };
-    document.body.appendChild(script);
-  }, [useEmbeddedSignup, metaConfig]);
-
-  // ── Listen for Meta Embedded Signup window messages ───────────────────────
-  useEffect(() => {
-    if (!useEmbeddedSignup) return;
-
-    const handleMessage = (event: MessageEvent) => {
-      if (
-        event.origin !== "https://www.facebook.com" &&
-        event.origin !== "https://web.facebook.com"
-      ) return;
-
-      try {
-        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
-
-        if (data.event === "FINISH") {
-          pendingWabaRef.current = {
-            wabaId: data.data.waba_id,
-            phoneNumberId: data.data.phone_number_id,
-          };
-        } else if (data.event === "CANCEL") {
-          setIsConnecting(false);
-          toast.info("WhatsApp connection was cancelled.");
-        } else if (data.event === "ERROR") {
-          setIsConnecting(false);
-          toast.error("WhatsApp connection encountered an error. Please try again.");
-        }
-      } catch {
-        // ignore non-JSON messages
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [useEmbeddedSignup]);
-
-  // ── Mutations ─────────────────────────────────────────────────────────────
-
-  const metaCallbackMutation = useMutation({
-    mutationFn: (data: WaMetaCallbackInput) => api.whatsapp.metaCallback(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
-      qc.invalidateQueries({ queryKey: ["whatsapp-meta-config"] });
-      setIsConnecting(false);
-      toast.success("WhatsApp Business connected successfully");
-    },
-    onError: () => {
-      setIsConnecting(false);
-      toast.error("Your WhatsApp connection was not completed. Please try again.");
-    },
-  });
-
-  const disconnect = useMutation({
-    mutationFn: () => api.whatsapp.disconnect(),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["whatsapp-status"] });
-      qc.invalidateQueries({ queryKey: ["whatsapp-meta-config"] });
-      toast.success("WhatsApp Business disconnected");
-      setShowDisconnectDialog(false);
-    },
-    onError: () => toast.error("Failed to disconnect"),
-  });
-
-
-  // ── Embedded Signup launcher ──────────────────────────────────────────────
-
-  const launchEmbeddedSignup = () => {
-    const fb = (window as any).FB;
-    if (!fb) {
-      toast.error("WhatsApp signup is still loading. Please try again in a moment.");
-      return;
-    }
-
-    const cfg = metaConfig as Extract<WaMetaConfig, { available: true }>;
-    pendingWabaRef.current = null;
-    setIsConnecting(true);
-    api.whatsapp.metaStart().catch(() => {}); // fire-and-forget audit log
-
-    fb.login(
-      (response: any) => {
-        const code: string | undefined = response?.authResponse?.code;
-
-        if (!code) {
-          // User closed the popup without finishing
-          if (!pendingWabaRef.current) {
-            setIsConnecting(false);
-            if (response?.status !== "connected") {
-              toast.info("WhatsApp connection was not completed. Please try again.");
-            }
-          }
-          return;
-        }
-
-        const waba = pendingWabaRef.current;
-        if (!waba) {
-          setIsConnecting(false);
-          toast.error("Could not retrieve your WhatsApp account details. Please try again.");
-          return;
-        }
-
-        metaCallbackMutation.mutate({
-          code,
-          wabaId: waba.wabaId,
-          phoneNumberId: waba.phoneNumberId,
-        });
-      },
-      {
-        config_id: cfg.configId,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: "",
-          sessionInfoVersion: "3",
-        },
-      }
-    );
-  };
-
-  // ── Derived state ─────────────────────────────────────────────────────────
-
   const isConnected = status?.connected === true;
-  const connectedStatus = isConnected ? (status as Extract<WaConnectionStatus, { connected: true }>) : null;
-  const stats = connectedStatus?.stats;
+  const connectedStatus = isConnected
+    ? (status as Extract<WaConnectionStatus, { connected: true }>)
+    : null;
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="WhatsApp Business"
-        description="Connect your WhatsApp Business account to send automated order notifications to customers."
-      />
+      <div>
+        <h2 className="text-lg font-semibold">WhatsApp Business</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Connect your WhatsApp Business account to reach customers directly.
+        </p>
+      </div>
 
-      {/* Connection status card */}
       <div className={cn(
         "rounded-xl border p-5 transition-colors",
-        isConnected
-          ? "border-green-500/30 bg-green-500/5"
-          : "border-border bg-muted/30"
+        isConnected ? "border-green-500/30 bg-green-500/5" : "border-border bg-muted/30"
       )}>
-        {isLoading || isMetaConfigLoading ? (
+        {isLoading ? (
           <div className="flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              {isMetaConfigLoading && !isLoading ? "Checking WhatsApp configuration…" : "Checking connection…"}
-            </span>
+            <span className="text-sm text-muted-foreground">Checking connection…</span>
           </div>
         ) : isConnected && connectedStatus ? (
           <div className="space-y-4">
-            {/* Header row */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">WhatsApp Connected</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {connectedStatus.businessName ?? "WhatsApp Business Account"}
-                  </p>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5"
-                  onClick={() => navigate("/communications")}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  Open Inbox
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-                  onClick={() => setShowDisconnectDialog(true)}
-                >
-                  <Unlink className="h-3.5 w-3.5" />
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-
-            {/* Account info */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
-                <p className="text-xs text-muted-foreground mb-0.5">Business Number</p>
-                <p className="text-sm font-medium">
-                  {connectedStatus.displayPhoneNumber ?? "WhatsApp Business"}
-                </p>
-              </div>
-              <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
-                <p className="text-xs text-muted-foreground mb-0.5">Connected On</p>
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                  {new Date(connectedStatus.connectedAt).toLocaleDateString("en-GB", {
-                    day: "numeric", month: "short", year: "numeric",
-                  })}
+              <div className="flex-1">
+                <p className="font-semibold text-sm">WhatsApp Connected</p>
+                <p className="text-xs text-muted-foreground">
+                  {connectedStatus.businessName ?? "WhatsApp Business Account"}
                 </p>
               </div>
             </div>
-
-            {/* Stats row */}
-            {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/40">
-                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
-                  <p className="text-lg font-bold">{stats.totalMessages.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Messages</p>
-                </div>
-                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
-                  <p className="text-lg font-bold">{stats.totalConversations.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Conversations</p>
-                </div>
-                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
-                  <p className="text-lg font-bold">{stats.uniqueCustomers.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Customers</p>
-                </div>
-                <div className="rounded-lg bg-background/40 px-3 py-2 text-center">
-                  <p className="text-sm font-medium">
-                    {stats.lastActivityAt
-                      ? new Date(stats.lastActivityAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-                      : "—"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Last Activity</p>
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground mb-0.5">Business Name</p>
+                <p className="text-sm font-medium">{connectedStatus.businessName ?? "—"}</p>
               </div>
-            )}
+              <div className="rounded-lg bg-background/60 border border-border/60 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground mb-0.5">Phone Number</p>
+                <p className="text-sm font-medium">{connectedStatus.displayPhoneNumber ?? "—"}</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => navigate("/customer-hub")}
+            >
+              Manage Customer Hub
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           </div>
-        ) : useEmbeddedSignup ? (
+        ) : (
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <WifiOff className="h-5 w-5 text-muted-foreground" />
+                <Smartphone className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
                 <p className="font-semibold text-sm">Not Connected</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Connect your business WhatsApp account in one click.
+                  Set up your WhatsApp Business account in Customer Hub.
                 </p>
               </div>
             </div>
             <Button
               size="sm"
               className="gap-1.5 shrink-0"
-              onClick={launchEmbeddedSignup}
-              disabled={isConnecting || metaCallbackMutation.isPending}
+              onClick={() => navigate("/customer-hub")}
             >
-              {(isConnecting || metaCallbackMutation.isPending) ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Link className="h-3.5 w-3.5" />
-              )}
-              {isConnecting ? "Connecting…" : metaCallbackMutation.isPending ? "Saving…" : "Connect WhatsApp"}
+              Connect WhatsApp
+              <ChevronRight className="h-3.5 w-3.5" />
             </Button>
-          </div>
-        ) : (
-          /* Manual connect form — shown when Meta Embedded Signup is not configured (META_APP_ID not set) */
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <WifiOff className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Not Connected</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Enter your WhatsApp Business credentials to connect.
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 shrink-0"
-                onClick={() => {
-                  setShowManualForm(v => !v);
-                  setManualFields({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
-                }}
-              >
-                <Link className="h-3.5 w-3.5" />
-                {showManualForm ? "Cancel" : "Connect manually"}
-              </Button>
-            </div>
-
-            {showManualForm && (
-              <form
-                onSubmit={e => { e.preventDefault(); connectManually.mutate(manualFields); }}
-                className="space-y-4 rounded-lg border bg-muted/20 p-4"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">WABA ID <span className="text-destructive">*</span></Label>
-                    <Input
-                      placeholder="1234567890"
-                      value={manualFields.whatsappBusinessAccountId}
-                      onChange={e => setManualFields(f => ({ ...f, whatsappBusinessAccountId: e.target.value.trim() }))}
-                      required
-                    />
-                    <p className="text-[11px] text-muted-foreground">WhatsApp Business Account ID from Meta</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Phone Number ID <span className="text-destructive">*</span></Label>
-                    <Input
-                      placeholder="9876543210"
-                      value={manualFields.phoneNumberId}
-                      onChange={e => setManualFields(f => ({ ...f, phoneNumberId: e.target.value.trim() }))}
-                      required
-                    />
-                    <p className="text-[11px] text-muted-foreground">From WhatsApp Manager → Phone Numbers</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Permanent Access Token <span className="text-destructive">*</span></Label>
-                  <Input
-                    type="password"
-                    placeholder="EAA…"
-                    value={manualFields.accessToken}
-                    onChange={e => setManualFields(f => ({ ...f, accessToken: e.target.value.trim() }))}
-                    required
-                    minLength={10}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    System User permanent token from Meta Business Manager. Encrypted at rest — never returned to the browser after saving.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Display Phone Number <span className="text-muted-foreground">(optional)</span></Label>
-                    <Input
-                      placeholder="+234 801 234 5678"
-                      value={manualFields.displayPhoneNumber ?? ""}
-                      onChange={e => setManualFields(f => ({ ...f, displayPhoneNumber: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Business Name <span className="text-muted-foreground">(optional)</span></Label>
-                    <Input
-                      placeholder="Fresh Wash Laundry"
-                      value={manualFields.businessName ?? ""}
-                      onChange={e => setManualFields(f => ({ ...f, businessName: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1 border-t border-border/40">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => {
-                    setShowManualForm(false);
-                    setManualFields({ whatsappBusinessAccountId: "", phoneNumberId: "", accessToken: "", displayPhoneNumber: "", businessName: "" });
-                  }}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={
-                      connectManually.isPending ||
-                      !manualFields.whatsappBusinessAccountId ||
-                      !manualFields.phoneNumberId ||
-                      !manualFields.accessToken
-                    }
-                    className="gap-1.5"
-                  >
-                    {connectManually.isPending
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <Link className="h-3.5 w-3.5" />}
-                    {connectManually.isPending ? "Connecting…" : "Save Connection"}
-                  </Button>
-                </div>
-              </form>
-            )}
           </div>
         )}
       </div>
-
-      {/* Info callout — only shown when Embedded Signup is available and not connected */}
-      {!isConnected && useEmbeddedSignup && (
-        <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm space-y-1">
-          <p className="font-medium text-green-200">One-click setup via Meta</p>
-          <p className="text-xs text-green-300/80">
-            You'll be guided through a secure Meta signup flow. CleanTrack never sees your Meta
-            password — only the WhatsApp Business access needed to send notifications.
-          </p>
-        </div>
-      )}
-
-      {/* Disconnect confirmation */}
-      <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Disconnect WhatsApp?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Customers will no longer receive WhatsApp notifications for their orders. You can reconnect at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => disconnect.mutate()}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
+
 
 export default function SettingsPage() {
   const { isOwner } = useAuth();
@@ -2384,7 +1740,6 @@ export default function SettingsPage() {
               {activeSection === "automation" && <AutomationSection />}
               {activeSection === "templates" && <MessageTemplatesSection />}
               {activeSection === "whatsapp" && <WhatsAppBusinessSection />}
-              {activeSection === "wa-automations" && <WhatsAppAutomationsSection />}
               {activeSection === "categories" && <ExpenseCategoriesSection />}
               {activeSection === "dashboard" && <DashboardPreferencesSection />}
               {activeSection === "billing" && <BillingSection />}

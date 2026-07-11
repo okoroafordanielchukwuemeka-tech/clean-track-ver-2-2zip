@@ -51,7 +51,7 @@ export function Layout() {
   const { activeBranch } = useBranch();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(() => {
-    const advancedPaths = ["/operations", "/communications", "/platform-health"];
+    const advancedPaths = ["/operations", "/customer-hub", "/platform-health"];
     return advancedPaths.some((p) => location.pathname.startsWith(p));
   });
 
@@ -89,7 +89,7 @@ export function Layout() {
 
   const advancedNavItems = [
     { to: "/operations", label: "Operations", icon: Activity, badge: undefined as number | undefined },
-    { to: "/communications", label: "Communications", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined },
+    { to: "/customer-hub", label: "Customer Hub", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined },
     { to: "/platform-health", label: "Platform Health", icon: ShieldCheck, badge: undefined as number | undefined },
   ];
 

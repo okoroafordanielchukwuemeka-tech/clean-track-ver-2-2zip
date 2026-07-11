@@ -33,7 +33,7 @@ import ReceiptPrint from "@/pages/receipt-print";
 import BranchesPage from "@/pages/branches";
 import DemoLogin from "@/pages/demo-login";
 import OperationsPage from "@/pages/operations";
-import CommunicationsPage from "@/pages/communications";
+import CustomerHubPage from "@/pages/customer-hub";
 import PlatformHealthPage from "@/pages/platform-health";
 import Welcome from "@/pages/welcome";
 import Pricing from "@/pages/pricing";
@@ -122,7 +122,7 @@ export default function App() {
                 <Route path="receipts" element={<ProtectedRoute ownerOnly><Receipts /></ProtectedRoute>} />
                 <Route path="settings" element={<ProtectedRoute ownerOnly><SettingsPage /></ProtectedRoute>} />
                 <Route path="operations" element={<ProtectedRoute ownerOnly><OperationsPage /></ProtectedRoute>} />
-                <Route path="communications" element={<ProtectedRoute ownerOnly><CommunicationsPage /></ProtectedRoute>} />
+                <Route path="customer-hub" element={<ProtectedRoute ownerOnly><CustomerHubPage /></ProtectedRoute>} />
                 <Route path="platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
                 <Route path="worker-station" element={<WorkerStation />} />
                 <Route path="*" element={<NotFound />} />

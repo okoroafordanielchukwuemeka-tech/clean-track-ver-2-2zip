@@ -1,0 +1,473 @@
+PHASE: CUSTOMER HUB ARCHITECTURE REFACTOR
+
+STOP.
+
+Do NOT build any new WhatsApp features.
+
+Do NOT create additional WhatsApp components.
+
+Do NOT continue patching the existing implementation.
+
+We need to clean the architecture before building anything else.
+
+========================================================
+
+GOAL
+
+CleanTrack should become the complete operating system for laundries.
+
+WhatsApp is NOT a standalone feature.
+
+It is one communication channel inside a larger Customer Hub.
+
+We are redesigning the architecture accordingly.
+
+========================================================
+
+STEP 1
+
+Perform a COMPLETE architecture audit.
+
+Identify:
+
+• Every WhatsApp component.
+
+• Every WhatsApp page.
+
+• Every WhatsApp route.
+
+• Every WhatsApp API endpoint.
+
+• Every duplicated component.
+
+• Every duplicated render path.
+
+• Every duplicated onboarding flow.
+
+Show the complete render tree.
+
+Example:
+
+Settings
+
+↓
+
+Tabs
+
+↓
+
+WhatsApp Business
+
+↓
+
+<Component>
+
+↓
+
+Child Components
+
+Do the same for:
+
+Communications
+
+↓
+
+Inbox
+
+↓
+
+Templates
+
+↓
+
+Automations
+
+↓
+
+Activity
+
+Identify:
+
+• Active implementation
+
+• Duplicate implementation
+
+• Dead code
+
+========================================================
+
+STEP 2
+
+Rename:
+
+Communications
+
+↓
+
+Customer Hub
+
+Update:
+
+Sidebar
+
+Breadcrumbs
+
+Navigation
+
+Routes
+
+Icons
+
+Page titles
+
+Any references across the project.
+
+========================================================
+
+STEP 3
+
+Customer Hub becomes ONE unified workspace.
+
+Tabs:
+
+1.
+
+Overview
+
+Shows:
+
+• WhatsApp Connection Status
+
+• Business Name
+
+• Connected Phone Number
+
+• Messages Today
+
+• Pending Replies
+
+• Unread Conversations
+
+• Automation Status
+
+• Campaign Summary
+
+Overview is the ONLY place where connection management exists.
+
+========================================================
+
+2.
+
+Inbox
+
+Existing Inbox.
+
+Improve UI.
+
+Modern chat experience.
+
+Clean spacing.
+
+Professional appearance.
+
+Customer avatar.
+
+Order badge.
+
+Unread indicator.
+
+Reply composer.
+
+Internal notes.
+
+Worker assignment.
+
+Conversation timeline.
+
+========================================================
+
+3.
+
+Templates
+
+Existing template manager.
+
+========================================================
+
+4.
+
+Automations
+
+Existing automation rules.
+
+========================================================
+
+5.
+
+Campaigns
+
+Prepare architecture for future marketing.
+
+No implementation yet.
+
+Only create the navigation shell.
+
+========================================================
+
+6.
+
+Analytics
+
+Prepare architecture.
+
+Show:
+
+• Messages Sent
+
+• Messages Delivered
+
+• Read Rate
+
+• Response Time
+
+• Automation Success
+
+• Customer Engagement
+
+========================================================
+
+7.
+
+Activity
+
+Existing audit timeline.
+
+========================================================
+
+STEP 4
+
+Settings Page
+
+Simplify completely.
+
+Settings
+
+↓
+
+WhatsApp Business
+
+Should ONLY show:
+
+---
+
+WhatsApp Business
+
+Status
+
+Connected
+
+Business Name
+
+Phone Number
+
+Manage Customer Hub →
+
+OR
+
+Not Connected
+
+Connect WhatsApp
+
+---
+
+Nothing else.
+
+REMOVE:
+
+Business Account ID
+
+Phone Number ID
+
+Permanent Access Token
+
+WABA ID
+
+Manual onboarding dialog
+
+Technical IDs
+
+Technical fields
+
+Developer terminology
+
+========================================================
+
+STEP 5
+
+Connection Flow
+
+Owner clicks:
+
+Connect WhatsApp
+
+↓
+
+Meta Embedded Signup popup
+
+↓
+
+Login Facebook
+
+↓
+
+Select Business
+
+↓
+
+Select WhatsApp Number
+
+↓
+
+Finish
+
+↓
+
+Return to CleanTrack
+
+↓
+
+Overview updates automatically.
+
+NO manual onboarding.
+
+NO credential entry.
+
+If Embedded Signup is unavailable:
+
+Display only:
+
+"WhatsApp Business is currently unavailable."
+
+Never show technical fields.
+
+========================================================
+
+STEP 6
+
+Delete duplicated architecture.
+
+Remove:
+
+• Duplicate WhatsApp components.
+
+• Duplicate onboarding flows.
+
+• Dead pages.
+
+• Dead routes.
+
+• Dead imports.
+
+• Dead hooks.
+
+There must be exactly ONE WhatsApp implementation remaining.
+
+========================================================
+
+STEP 7
+
+UI Polish
+
+Customer Hub should feel like a premium SaaS product.
+
+Use:
+
+• Better spacing
+
+• Better cards
+
+• Consistent typography
+
+• Smooth transitions
+
+• Empty states
+
+• Skeleton loading
+
+• Better icons
+
+• Mobile responsiveness
+
+Avoid clutter.
+
+========================================================
+
+STEP 8
+
+Future Ready
+
+Prepare Customer Hub architecture for:
+
+• SMS
+
+• Email
+
+• Push Notifications
+
+• Loyalty
+
+• Customer Subscriptions
+
+• Membership Plans
+
+• Campaigns
+
+• AI Assistant
+
+Do NOT implement these features now.
+
+Only ensure the architecture can support them cleanly later.
+
+========================================================
+
+Deliver:
+
+1. Architecture before.
+
+2. Architecture after.
+
+3. Files removed.
+
+4. Files merged.
+
+5. Duplicate components removed.
+
+6. Screenshot:
+
+Settings
+
+↓
+
+WhatsApp Business
+
+7. Screenshot:
+
+Customer Hub
+
+↓
+
+Overview
+
+8. Screenshot:
+
+Customer Hub
+
+↓
+
+Inbox
+
+9. Confirm there is exactly ONE WhatsApp implementation remaining.
+
+10. Confirm the owner can no longer see any technical Meta fields.
+
+Do NOT continue to new features until this architecture cleanup is complete.
