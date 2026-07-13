@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { customers, orders, paymentRecords, pickupRecords, priceAdjustments } from "@workspace/db/schema";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
-import { eq, and, desc, ilike, or, gte, lte, inArray, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, desc, ilike, or, gte, lte, lt, inArray, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -379,47 +379,103 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
     const customerId = parseInt(req.params.id);
     const { from, to } = req.query as { from?: string; to?: string };
 
+    // ── Customer lookup ────────────────────────────────────────────────────
     const custStmtConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
     if (workerBranchId) custStmtConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.select().from(customers).where(and(...custStmtConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-    const fromDate = from ? new Date(from) : new Date(Date.now() - 90 * 86400000);
+    // ── Period boundaries ──────────────────────────────────────────────────
+    const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 86400000);
+    fromDate.setHours(0, 0, 0, 0);
     const toDate = to ? new Date(to) : new Date();
     toDate.setHours(23, 59, 59, 999);
 
-    const orderConditions: any[] = [
+    // ── Opening balance: ALL activity strictly before fromDate ─────────────
+    // This tells us what the customer owed (or was owed) at period start.
+    const preOrders = await db.select().from(orders).where(and(
       eq(orders.customerId, customerId),
       eq(orders.laundryId, laundryId),
-      gte(orders.createdAt, fromDate),
-      lte(orders.createdAt, toDate),
-    ];
-    const customerOrders = await db.select().from(orders)
-      .where(and(...orderConditions))
+      lt(orders.createdAt, fromDate),
+    ));
+    const preOrderIds = preOrders.map((o: any) => o.id);
+
+    const [prePayments, preAdjustments] = await Promise.all([
+      preOrderIds.length
+        ? db.select().from(paymentRecords).where(and(
+            inArray(paymentRecords.orderId, preOrderIds),
+            lt(paymentRecords.recordedAt, fromDate),
+            isNull(paymentRecords.deletedAt),
+          ))
+        : Promise.resolve([]),
+      preOrderIds.length
+        ? db.select().from(priceAdjustments).where(and(
+            inArray(priceAdjustments.orderId, preOrderIds),
+            lt(priceAdjustments.createdAt, fromDate),
+          ))
+        : Promise.resolve([]),
+    ]);
+
+    // Cancelled orders contribute ₦0 to balance. Adjustments on cancelled
+    // orders are also skipped — they have no financial consequence.
+    let openingBalance = 0;
+    for (const o of preOrders) {
+      if (o.status === "cancelled") continue;
+      openingBalance += parseFloat(o.price as string || "0");
+    }
+    for (const adj of preAdjustments) {
+      // Skip adjustments on cancelled pre-period orders
+      const parentOrder = preOrders.find((o: any) => o.id === adj.orderId);
+      if (parentOrder?.status === "cancelled") continue;
+      if (adj.type === "extra_charge") openingBalance += parseFloat(adj.amount as string || "0");
+      else if (adj.type === "discount") openingBalance -= parseFloat(adj.amount as string || "0");
+    }
+    for (const p of prePayments) {
+      openingBalance -= parseFloat(p.amount as string || "0");
+    }
+
+    // ── Period activity ────────────────────────────────────────────────────
+    const periodOrders = await db.select().from(orders)
+      .where(and(
+        eq(orders.customerId, customerId),
+        eq(orders.laundryId, laundryId),
+        gte(orders.createdAt, fromDate),
+        lte(orders.createdAt, toDate),
+      ))
       .orderBy(desc(orders.createdAt));
 
-    const orderIds = customerOrders.map(o => o.id);
+    const orderIds = periodOrders.map((o: any) => o.id);
 
-    const payments = orderIds.length
-      ? await db.select().from(paymentRecords)
-          .where(and(inArray(paymentRecords.orderId, orderIds), gte(paymentRecords.recordedAt, fromDate), lte(paymentRecords.recordedAt, toDate)))
-      : [];
+    const [payments, pickups, adjustments] = await Promise.all([
+      orderIds.length
+        ? db.select().from(paymentRecords).where(and(
+            inArray(paymentRecords.orderId, orderIds),
+            gte(paymentRecords.recordedAt, fromDate),
+            lte(paymentRecords.recordedAt, toDate),
+            isNull(paymentRecords.deletedAt),   // exclude voided/deleted payments
+          ))
+        : Promise.resolve([]),
+      orderIds.length
+        ? db.select().from(pickupRecords).where(and(
+            inArray(pickupRecords.orderId, orderIds),
+            gte(pickupRecords.createdAt, fromDate),
+            lte(pickupRecords.createdAt, toDate),
+          ))
+        : Promise.resolve([]),
+      orderIds.length
+        ? db.select().from(priceAdjustments).where(and(
+            inArray(priceAdjustments.orderId, orderIds),
+            gte(priceAdjustments.createdAt, fromDate),
+            lte(priceAdjustments.createdAt, toDate),
+          ))
+        : Promise.resolve([]),
+    ]);
 
-    const pickups = orderIds.length
-      ? await db.select().from(pickupRecords)
-          .where(and(inArray(pickupRecords.orderId, orderIds), gte(pickupRecords.createdAt, fromDate), lte(pickupRecords.createdAt, toDate)))
-      : [];
-
-    const adjustments = orderIds.length
-      ? await db.select().from(priceAdjustments)
-          .where(and(inArray(priceAdjustments.orderId, orderIds), gte(priceAdjustments.createdAt, fromDate), lte(priceAdjustments.createdAt, toDate)))
-      : [];
-
-    const orderMap = new Map(customerOrders.map(o => [o.id, o]));
+    const orderMap = new Map(periodOrders.map((o: any) => [o.id, o]));
 
     type Entry = {
       date: string;
-      type: "order" | "payment" | "discount" | "extra_charge" | "pickup";
+      type: "order" | "payment" | "discount" | "extra_charge" | "pickup" | "cancelled";
       description: string;
       orderId: string;
       orderDbId: number;
@@ -433,24 +489,27 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
 
     const rawEntries: Omit<Entry, "balance">[] = [];
 
-    for (const o of customerOrders) {
-      const price = parseFloat(o.price as string || "0");
-      const extra = parseFloat(o.extraCharge as string || "0");
-      const discount = parseFloat(o.discount as string || "0");
-      const baseCharge = price + extra - discount;
+    // Orders: charge = BASE PRICE only (not including adjustments).
+    // Adjustments appear as separate ledger entries below, preventing double-counting.
+    // Cancelled orders are shown as informational entries with charge = 0.
+    for (const o of periodOrders) {
+      const isCancelled = o.status === "cancelled";
       rawEntries.push({
         date: o.createdAt.toISOString(),
-        type: "order",
-        description: `Order created — ${o.serviceType} (${o.shirts}S / ${o.trousers}T)`,
+        type: isCancelled ? "cancelled" : "order",
+        description: isCancelled
+          ? `Order cancelled — ${o.serviceType} (${o.shirts}S / ${o.trousers}T)`
+          : `Order created — ${o.serviceType} (${o.shirts}S / ${o.trousers}T)`,
         orderId: o.orderId,
         orderDbId: o.id,
-        charge: baseCharge,
+        charge: isCancelled ? 0 : parseFloat(o.price as string || "0"),
         credit: 0,
         recordedBy: null,
         method: null,
       });
     }
 
+    // Payments — voided payments already excluded by isNull(deletedAt) above
     for (const p of payments) {
       const o = orderMap.get(p.orderId);
       rawEntries.push({
@@ -467,8 +526,10 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
       });
     }
 
+    // Price adjustments — skipped for cancelled orders (no financial effect)
     for (const adj of adjustments) {
       const o = orderMap.get(adj.orderId);
+      if (o?.status === "cancelled") continue;
       rawEntries.push({
         date: adj.createdAt.toISOString(),
         type: adj.type as "discount" | "extra_charge",
@@ -482,6 +543,7 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
       });
     }
 
+    // Pickups — informational only, no financial impact on running balance
     for (const pk of pickups) {
       const o = orderMap.get(pk.orderId);
       const items = [
@@ -501,27 +563,50 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
       });
     }
 
+    // Sort chronologically; running balance starts from opening balance
     rawEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    let runningBalance = 0;
+    let runningBalance = openingBalance;
     const entries: Entry[] = rawEntries.map(e => {
       runningBalance += e.charge - e.credit;
       return { ...e, balance: runningBalance };
     });
 
-    const totalCharged = rawEntries.reduce((s, e) => s + e.charge, 0);
-    const totalPaid = rawEntries.filter(e => e.type === "payment").reduce((s, e) => s + e.credit, 0);
+    // ── Summary ────────────────────────────────────────────────────────────
+    const orderEntries       = rawEntries.filter(e => e.type === "order");
+    const paymentEntries     = rawEntries.filter(e => e.type === "payment");
+    const discountEntries    = rawEntries.filter(e => e.type === "discount");
+    const extraChargeEntries = rawEntries.filter(e => e.type === "extra_charge");
+    const cancelledEntries   = rawEntries.filter(e => e.type === "cancelled");
+
+    const totalBaseCharges  = orderEntries.reduce((s, e) => s + e.charge, 0);
+    const totalExtraCharges = extraChargeEntries.reduce((s, e) => s + e.charge, 0);
+    const totalDiscounts    = discountEntries.reduce((s, e) => s + e.credit, 0);
+    const totalPaid         = paymentEntries.reduce((s, e) => s + e.credit, 0);
+    // Net charges for the period: base orders + extras − discounts
+    const totalCharged      = totalBaseCharges + totalExtraCharges - totalDiscounts;
 
     res.json({
-      customer: { id: customer.id, fullName: customer.fullName, phone: customer.phone, address: customer.address },
+      customer: {
+        id: customer.id,
+        fullName: customer.fullName,
+        phone: customer.phone,
+        address: customer.address,
+      },
       period: { from: fromDate.toISOString(), to: toDate.toISOString() },
+      openingBalance,
       entries,
       summary: {
+        openingBalance,
         totalCharged,
+        totalBaseCharges,
+        totalExtraCharges,
+        totalDiscounts,
         totalPaid,
         closingBalance: runningBalance,
-        orderCount: customerOrders.length,
-        paymentCount: payments.length,
+        orderCount: orderEntries.length,
+        cancelledOrderCount: cancelledEntries.length,
+        paymentCount: paymentEntries.length,
       },
     });
   } catch (err) {

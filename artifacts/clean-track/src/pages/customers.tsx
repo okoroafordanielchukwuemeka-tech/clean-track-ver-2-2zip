@@ -151,7 +151,7 @@ export default function Customers() {
   const [pendingTags, setPendingTags] = useState<string[]>([]);
 
   // Statement state
-  const [statementPeriod, setStatementPeriod] = useState<"30d" | "90d" | "custom">("90d");
+  const [statementPeriod, setStatementPeriod] = useState<"today" | "week" | "month" | "lastMonth" | "custom">("month");
   const [statementFrom, setStatementFrom] = useState("");
   const [statementTo, setStatementTo] = useState("");
 
@@ -224,14 +224,32 @@ export default function Customers() {
   });
 
   const stmtParams = (() => {
-    if (statementPeriod === "30d") {
-      const from = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
-      return { from, to: new Date().toISOString().split("T")[0] };
+    const now = new Date();
+    const iso = (d: Date) => d.toISOString();
+
+    if (statementPeriod === "today") {
+      const start = new Date(now); start.setHours(0, 0, 0, 0);
+      const end   = new Date(now); end.setHours(23, 59, 59, 999);
+      return { from: iso(start), to: iso(end) };
     }
-    if (statementPeriod === "90d") {
-      const from = new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
-      return { from, to: new Date().toISOString().split("T")[0] };
+    if (statementPeriod === "week") {
+      const day  = now.getDay();
+      const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+      const start = new Date(now); start.setDate(now.getDate() + diff); start.setHours(0, 0, 0, 0);
+      const end   = new Date(now); end.setHours(23, 59, 59, 999);
+      return { from: iso(start), to: iso(end) };
     }
+    if (statementPeriod === "month") {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end   = new Date(now); end.setHours(23, 59, 59, 999);
+      return { from: iso(start), to: iso(end) };
+    }
+    if (statementPeriod === "lastMonth") {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      return { from: iso(start), to: iso(end) };
+    }
+    // custom
     return { from: statementFrom || undefined, to: statementTo || undefined };
   })();
 
@@ -1077,15 +1095,22 @@ export default function Customers() {
                 {/* ── Statement Tab ── */}
                 {profileTab === "statement" && hasPermission("canViewCustomerBalances") && (
                   <div className="space-y-3">
+                    {/* Period selector */}
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex rounded-md border overflow-hidden text-xs">
-                        {(["30d", "90d", "custom"] as const).map(p => (
+                        {([
+                          { id: "today",     label: "Today" },
+                          { id: "week",      label: "This Week" },
+                          { id: "month",     label: "This Month" },
+                          { id: "lastMonth", label: "Last Month" },
+                          { id: "custom",    label: "Custom" },
+                        ] as const).map(p => (
                           <button
-                            key={p}
-                            onClick={() => setStatementPeriod(p)}
-                            className={`px-3 py-1.5 font-medium transition-colors ${statementPeriod === p ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                            key={p.id}
+                            onClick={() => setStatementPeriod(p.id)}
+                            className={`px-3 py-1.5 font-medium transition-colors ${statementPeriod === p.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                           >
-                            {p === "30d" ? "30 Days" : p === "90d" ? "90 Days" : "Custom"}
+                            {p.label}
                           </button>
                         ))}
                       </div>
@@ -1101,30 +1126,61 @@ export default function Customers() {
                         disabled={!statement}
                         onClick={() => {
                           if (!statement) return;
-                          const printWindow = window.open("", "_blank");
-                          if (!printWindow) return;
+                          const fmtCur = (v: number) => v.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 });
+                          const balColor = (b: number) => b > 0 ? "color:#dc2626" : "color:#16a34a";
                           const rows = statement.entries.map(e => `
-                            <tr>
+                            <tr style="${e.type === "pickup" || e.type === "cancelled" ? "opacity:0.6" : ""}">
                               <td>${new Date(e.date).toLocaleDateString("en-NG")}</td>
                               <td>${e.orderId}</td>
-                              <td>${e.type.replace("_", " ")}</td>
+                              <td style="text-transform:capitalize">${e.type.replace("_", " ")}</td>
                               <td>${e.description}</td>
-                              <td style="text-align:right">${e.charge > 0 ? e.charge.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
-                              <td style="text-align:right">${e.credit > 0 ? e.credit.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
-                              <td style="text-align:right;${e.balance > 0 ? "color:#dc2626" : "color:#16a34a"}">${e.balance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td>
+                              <td style="text-align:right">${e.charge > 0 ? fmtCur(e.charge) : ""}</td>
+                              <td style="text-align:right">${e.credit > 0 ? fmtCur(e.credit) : ""}</td>
+                              <td style="text-align:right;${balColor(e.balance)}">${fmtCur(Math.abs(e.balance))}${e.balance < 0 ? " CR" : ""}</td>
                             </tr>`).join("");
-                          printWindow.document.write(`<!DOCTYPE html><html><head><title>Statement — ${statement.customer.fullName}</title>
-                          <style>body{font-family:sans-serif;font-size:12px;padding:20px}h1{font-size:18px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}th{background:#f9fafb;font-weight:600}tfoot td{font-weight:700;background:#f3f4f6}</style>
-                          </head><body>
+                          const s = statement.summary;
+                          printWindow?.close();
+                          const pw = window.open("", "_blank");
+                          if (!pw) return;
+                          pw.document.write(`<!DOCTYPE html><html><head><title>Statement — ${statement.customer.fullName}</title>
+                          <style>
+                            body{font-family:sans-serif;font-size:12px;padding:24px;color:#111}
+                            h1{font-size:20px;margin:0 0 4px}
+                            .meta{color:#555;font-size:11px;margin-bottom:16px}
+                            table{width:100%;border-collapse:collapse;margin-top:12px}
+                            th,td{border:1px solid #e5e7eb;padding:5px 8px;text-align:left;font-size:11px}
+                            th{background:#f3f4f6;font-weight:600}
+                            .opening-row td{background:#eff6ff;font-weight:600}
+                            tfoot td{font-weight:700;background:#f9fafb}
+                            .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+                            .summary-box{border:1px solid #e5e7eb;padding:8px 12px;border-radius:6px}
+                            .summary-box p{margin:0;font-size:10px;color:#6b7280}
+                            .summary-box strong{display:block;font-size:13px;margin-top:2px}
+                          </style></head><body>
                           <h1>Customer Statement</h1>
-                          <p><strong>${statement.customer.fullName}</strong> · ${statement.customer.phone}</p>
-                          <p>Period: ${new Date(statement.period.from).toLocaleDateString("en-NG")} – ${new Date(statement.period.to).toLocaleDateString("en-NG")}</p>
-                          <table><thead><tr><th>Date</th><th>Order</th><th>Type</th><th>Description</th><th>Charges</th><th>Credits</th><th>Balance</th></tr></thead>
-                          <tbody>${rows}</tbody>
-                          <tfoot><tr><td colspan="4">Summary</td><td style="text-align:right">${statement.summary.totalCharged.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right">${statement.summary.totalPaid.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right;${statement.summary.closingBalance > 0 ? "color:#dc2626" : "color:#16a34a"}">${statement.summary.closingBalance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td></tr></tfoot>
-                          </table></body></html>`);
-                          printWindow.document.close();
-                          printWindow.print();
+                          <div class="meta">
+                            <strong>${statement.customer.fullName}</strong> · ${statement.customer.phone}${statement.customer.address ? " · " + statement.customer.address : ""}<br/>
+                            Period: ${new Date(statement.period.from).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })} – ${new Date(statement.period.to).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}
+                          </div>
+                          <table>
+                            <thead><tr><th>Date</th><th>Order #</th><th>Type</th><th>Description</th><th style="text-align:right">Charge</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
+                            <tbody>
+                              <tr class="opening-row"><td colspan="6">Opening Balance (brought forward)</td><td style="text-align:right;${balColor(s.openingBalance)}">${fmtCur(Math.abs(s.openingBalance))}${s.openingBalance < 0 ? " CR" : ""}</td></tr>
+                              ${rows}
+                            </tbody>
+                            <tfoot><tr><td colspan="4">Period Total</td><td style="text-align:right">${fmtCur(s.totalCharged)}</td><td style="text-align:right">${fmtCur(s.totalPaid)}</td><td style="text-align:right;${balColor(s.closingBalance)}">${fmtCur(Math.abs(s.closingBalance))}${s.closingBalance < 0 ? " CR" : ""}</td></tr></tfoot>
+                          </table>
+                          <div class="summary">
+                            <div class="summary-box"><p>Orders</p><strong>${s.orderCount}${s.cancelledOrderCount > 0 ? " (+" + s.cancelledOrderCount + " cancelled)" : ""}</strong></div>
+                            <div class="summary-box"><p>Total Charges</p><strong>${fmtCur(s.totalBaseCharges)}${s.totalExtraCharges > 0 ? " + " + fmtCur(s.totalExtraCharges) + " extra" : ""}</strong></div>
+                            <div class="summary-box"><p>Discounts</p><strong>${s.totalDiscounts > 0 ? fmtCur(s.totalDiscounts) : "—"}</strong></div>
+                            <div class="summary-box"><p>Payments Received</p><strong style="color:#16a34a">${fmtCur(s.totalPaid)}</strong></div>
+                            <div class="summary-box"><p>Opening Balance</p><strong style="${balColor(s.openingBalance)}">${fmtCur(Math.abs(s.openingBalance))}${s.openingBalance < 0 ? " CR" : ""}</strong></div>
+                            <div class="summary-box"><p>Closing Balance</p><strong style="${balColor(s.closingBalance)}">${fmtCur(Math.abs(s.closingBalance))}${s.closingBalance < 0 ? " CR" : ""}</strong></div>
+                          </div>
+                          </body></html>`);
+                          pw.document.close();
+                          pw.print();
                         }}
                       >
                         <Printer className="h-3.5 w-3.5" />Print / PDF
@@ -1134,28 +1190,53 @@ export default function Customers() {
                     {stmtLoading ? (
                       <div className="py-8 text-center text-muted-foreground text-sm animate-pulse">Loading statement…</div>
                     ) : !statement ? (
-                      <div className="py-8 text-center text-muted-foreground text-sm">Select a period to view the statement.</div>
+                      <div className="py-6 text-center text-muted-foreground text-sm">No data for this period.</div>
                     ) : (
                       <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="p-2.5 bg-muted/30 rounded-lg text-center">
-                            <p className="text-xs text-muted-foreground">Total Charged</p>
-                            <p className="font-semibold text-sm">{fmt(statement.summary.totalCharged)}</p>
+
+                        {/* Summary cards */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          <div className="p-2.5 bg-muted/30 rounded-lg">
+                            <p className="text-xs text-muted-foreground">Opening Balance</p>
+                            <p className={`font-semibold text-sm ${statement.openingBalance > 0 ? "text-amber-600" : statement.openingBalance < 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                              {statement.openingBalance === 0 ? "—" : `${fmt(Math.abs(statement.openingBalance))}${statement.openingBalance < 0 ? " CR" : ""}`}
+                            </p>
                           </div>
-                          <div className="p-2.5 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
+                          <div className="p-2.5 bg-muted/30 rounded-lg">
+                            <p className="text-xs text-muted-foreground">Total Charges</p>
+                            <p className="font-semibold text-sm">{fmt(statement.summary.totalCharged)}</p>
+                            {(statement.summary.totalExtraCharges > 0 || statement.summary.totalDiscounts > 0) && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {statement.summary.totalExtraCharges > 0 && `+${fmt(statement.summary.totalExtraCharges)} extra`}
+                                {statement.summary.totalExtraCharges > 0 && statement.summary.totalDiscounts > 0 && " · "}
+                                {statement.summary.totalDiscounts > 0 && <span className="text-green-600">−{fmt(statement.summary.totalDiscounts)} disc.</span>}
+                              </p>
+                            )}
+                          </div>
+                          <div className="p-2.5 bg-green-50 dark:bg-green-950/20 rounded-lg">
                             <p className="text-xs text-muted-foreground">Total Paid</p>
                             <p className="font-semibold text-sm text-green-700 dark:text-green-400">{fmt(statement.summary.totalPaid)}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{statement.summary.paymentCount} payment{statement.summary.paymentCount !== 1 ? "s" : ""}</p>
                           </div>
-                          <div className={`p-2.5 rounded-lg text-center ${statement.summary.closingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20"}`}>
-                            <p className="text-xs text-muted-foreground">Balance Due</p>
-                            <p className={`font-semibold text-sm ${statement.summary.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                              {fmt(statement.summary.closingBalance)}
-                            </p>
+                          <div className={`p-2.5 rounded-lg col-span-2 sm:col-span-3 ${statement.summary.closingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20"}`}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Closing Balance</p>
+                                <p className={`font-bold text-base ${statement.summary.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
+                                  {statement.summary.closingBalance === 0 ? "Settled — no balance due" : `${fmt(Math.abs(statement.summary.closingBalance))}${statement.summary.closingBalance < 0 ? " CR" : " outstanding"}`}
+                                </p>
+                              </div>
+                              <div className="text-right text-xs text-muted-foreground">
+                                <p>{statement.summary.orderCount} order{statement.summary.orderCount !== 1 ? "s" : ""}{statement.summary.cancelledOrderCount > 0 ? ` · ${statement.summary.cancelledOrderCount} cancelled` : ""}</p>
+                                <p>{new Date(statement.period.from).toLocaleDateString("en-NG", { day: "2-digit", month: "short" })} – {new Date(statement.period.to).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
+                        {/* Ledger table */}
                         {statement.entries.length === 0 ? (
-                          <div className="py-6 text-center text-muted-foreground text-sm">No activity in this period.</div>
+                          <div className="py-6 text-center text-muted-foreground text-sm">No transactions in this period.</div>
                         ) : (
                           <div className="border rounded-lg overflow-hidden">
                             <div className="overflow-x-auto">
@@ -1163,7 +1244,7 @@ export default function Customers() {
                                 <TableHeader>
                                   <TableRow className="bg-muted/30">
                                     <TableHead className="text-xs">Date</TableHead>
-                                    <TableHead className="text-xs">Order</TableHead>
+                                    <TableHead className="text-xs">Order #</TableHead>
                                     <TableHead className="text-xs">Type</TableHead>
                                     <TableHead className="text-xs">Description</TableHead>
                                     <TableHead className="text-xs text-right">Charge</TableHead>
@@ -1172,8 +1253,29 @@ export default function Customers() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
+                                  {/* Opening balance row */}
+                                  {statement.openingBalance !== 0 && (
+                                    <TableRow className="bg-blue-50/50 dark:bg-blue-950/10">
+                                      <TableCell className="text-xs text-muted-foreground" colSpan={3}>
+                                        <span className="italic">Opening balance (b/f)</span>
+                                      </TableCell>
+                                      <TableCell className="text-xs text-muted-foreground" colSpan={3} />
+                                      <TableCell className="text-xs text-right tabular-nums font-medium">
+                                        <span className={statement.openingBalance > 0 ? "text-amber-600" : "text-green-600"}>
+                                          {fmt(Math.abs(statement.openingBalance))}{statement.openingBalance < 0 ? " CR" : ""}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
                                   {statement.entries.map((e, i) => (
-                                    <TableRow key={i} className={e.type === "pickup" ? "opacity-60" : ""}>
+                                    <TableRow
+                                      key={i}
+                                      className={
+                                        e.type === "pickup" || e.type === "cancelled"
+                                          ? "opacity-60"
+                                          : ""
+                                      }
+                                    >
                                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                         {new Date(e.date).toLocaleDateString("en-NG", { day: "2-digit", month: "short" })}
                                       </TableCell>
@@ -1181,11 +1283,12 @@ export default function Customers() {
                                         <Link to={`/orders/${e.orderDbId}`} className="hover:underline" onClick={closeProfile}>{e.orderId}</Link>
                                       </TableCell>
                                       <TableCell className="text-xs">
-                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
-                                          e.type === "payment" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" :
-                                          e.type === "order" ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" :
-                                          e.type === "discount" ? "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400" :
+                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                          e.type === "payment"      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" :
+                                          e.type === "order"        ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" :
+                                          e.type === "discount"     ? "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400" :
                                           e.type === "extra_charge" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400" :
+                                          e.type === "cancelled"    ? "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400 line-through" :
                                           "bg-muted text-muted-foreground"
                                         }`}>
                                           {e.type === "extra_charge" ? "extra" : e.type}
@@ -1199,9 +1302,13 @@ export default function Customers() {
                                         {e.credit > 0 ? <span className="text-green-600">{fmt(e.credit)}</span> : ""}
                                       </TableCell>
                                       <TableCell className="text-xs text-right tabular-nums font-medium">
-                                        <span className={e.balance > 0 ? "text-red-600" : "text-green-600"}>
-                                          {fmt(Math.abs(e.balance))}{e.balance < 0 ? " CR" : ""}
-                                        </span>
+                                        {e.type === "pickup" || e.type === "cancelled" ? (
+                                          <span className="text-muted-foreground text-xs">—</span>
+                                        ) : (
+                                          <span className={e.balance > 0 ? "text-red-600" : "text-green-600"}>
+                                            {fmt(Math.abs(e.balance))}{e.balance < 0 ? " CR" : ""}
+                                          </span>
+                                        )}
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -1210,9 +1317,6 @@ export default function Customers() {
                             </div>
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground text-right">
-                          {statement.summary.orderCount} orders · {statement.summary.paymentCount} payments
-                        </p>
                       </div>
                     )}
                   </div>

@@ -1,0 +1,169 @@
+PHASE 7 — MILESTONE 7.1
+
+CUSTOMER STATEMENT ENGINE
+
+IMPORTANT
+
+Do NOT implement PDFs yet.
+
+Do NOT implement WhatsApp delivery yet.
+
+Do NOT build new unrelated features.
+
+Follow the established workflow:
+
+1. Audit
+2. Identify gaps
+3. Implement
+4. Verify
+5. Report
+
+====================================================
+
+STEP 1 — AUDIT
+
+Audit the existing customer, payment, receipt and order modules.
+
+Determine:
+
+1. Can a complete customer account statement already be generated from existing data?
+
+2. Are all transactions linked correctly to a customer?
+
+3. Verify:
+
+* Orders
+* Payments
+* Outstanding balances
+* Discounts
+* Extra charges
+* Payment reversals
+* Cancelled orders
+
+are reflected correctly.
+
+Identify any missing data required for customer statements.
+
+====================================================
+
+STEP 2 — DESIGN
+
+Design a reusable Statement Engine.
+
+The engine must return structured data that can later power:
+
+* PDF Statements
+* WhatsApp Statements
+* Email Statements
+* Customer Portal
+
+Avoid presentation logic.
+
+Return only structured statement data.
+
+====================================================
+
+Required Statement Sections
+
+Customer Information
+
+Statement Period
+
+Opening Balance
+
+Transactions
+
+Each transaction should include:
+
+* Date
+* Order Number
+* Description
+* Debit
+* Credit
+* Running Balance
+
+Summary
+
+Show:
+
+Total Orders
+
+Total Charges
+
+Total Discounts
+
+Total Extra Charges
+
+Total Payments
+
+Outstanding Balance
+
+====================================================
+
+Filtering
+
+Support:
+
+Today
+
+This Week
+
+This Month
+
+Last Month
+
+Custom Date Range
+
+====================================================
+
+Verification
+
+Run real tests using demo data.
+
+Verify:
+
+Customer with no orders
+
+Customer with unpaid balance
+
+Customer with partial payments
+
+Customer with cancelled order
+
+Customer with discounts
+
+Customer with extra charges
+
+Customer with multiple payments
+
+Customer with refunded/voided payment (if supported)
+
+Verify all balances are mathematically correct.
+
+====================================================
+
+Output
+
+Provide:
+
+1. Audit Findings
+
+2. Missing Data
+
+3. Statement Engine Design
+
+4. API Design
+
+5. Verification Results
+
+6. Failed Tests
+
+7. Remaining Risks
+
+8. Production Readiness Score
+
+Do NOT build PDF generation yet.
+
+Do NOT build WhatsApp delivery yet.
+
+Complete only the reusable Statement Engine.

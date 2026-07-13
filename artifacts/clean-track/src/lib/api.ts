@@ -926,7 +926,7 @@ export interface CustomerProfile extends CustomerWithMetrics {
 
 export interface StatementEntry {
   date: string;
-  type: "order" | "payment" | "discount" | "extra_charge" | "pickup";
+  type: "order" | "payment" | "discount" | "extra_charge" | "pickup" | "cancelled";
   description: string;
   orderId: string;
   orderDbId: number;
@@ -941,12 +941,18 @@ export interface StatementEntry {
 export interface CustomerStatement {
   customer: { id: number; fullName: string; phone: string; address?: string | null };
   period: { from: string; to: string };
+  openingBalance: number;
   entries: StatementEntry[];
   summary: {
+    openingBalance: number;
     totalCharged: number;
+    totalBaseCharges: number;
+    totalExtraCharges: number;
+    totalDiscounts: number;
     totalPaid: number;
     closingBalance: number;
     orderCount: number;
+    cancelledOrderCount: number;
     paymentCount: number;
   };
 }

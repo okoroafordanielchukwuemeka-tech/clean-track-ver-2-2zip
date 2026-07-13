@@ -1,41 +1,35 @@
 ---
-name: Customer Statement Feature
-description: How the customer statement ledger works — backend endpoint and frontend tab
+name: Customer Statement Engine
+description: Milestone 7.1 — corrected statement engine with opening balance, no double-counting, cancelled orders, voided payment exclusion, 5 period presets
 ---
 
-## Backend: GET /customers/:id/statement
+## Rules
 
-Route in `artifacts/api-server/src/routes/customers.ts`. Must be declared BEFORE `/:id` route.
+**Opening balance pre-query:** Queries all activity strictly before `fromDate`, computes net balance (orders + adjustments − payments) and passes it as `openingBalance` so the running ledger starts correctly. Adjustments on cancelled pre-period orders are skipped.
 
-**Query params**: `from` (ISO date string), `to` (ISO date string). Defaults to last 90 days.
+**No double-counting:** Order entries use `price` (base) only. Adjustments (`extra_charge`, `discount`) appear as separate ledger rows. Earlier bug: base price + adjustments in one entry then adjustments again = inflated balance.
 
-**Entry types**: `order`, `payment`, `discount`, `extra_charge`, `pickup`
-- `order` → charge (+)
-- `payment` → credit (-)
-- `discount` → credit (-)  
-- `extra_charge` → charge (+)
-- `pickup` → informational (charge=0, credit=0, balance unchanged)
+**Cancelled orders:** `status === "cancelled"` → entry type `"cancelled"`, charge = 0. Adjustments on cancelled orders are skipped (no financial effect). Payment against a cancelled order still shows (may be a credit balance).
 
-**Running balance**: cumulative `charge - credit` across all entries sorted chronologically. Negative `closingBalance` = customer is in credit (overpaid).
+**Voided payments:** `isNull(paymentRecords.deletedAt)` on all payment queries (both pre-period and period). DB column `payment_records.deleted_at` is set by `DELETE /orders/:id/payments/:paymentId`.
 
-**Response shape**:
-```ts
-{ customer, period: { from, to }, entries: StatementEntry[], summary: { totalCharged, totalPaid, closingBalance, orderCount, paymentCount } }
-```
+**Period presets:** Frontend: `today | week | month | lastMonth | custom`. `stmtParams` computes ISO timestamps. Default is `month`.
 
-## Frontend: Statement Tab in customers.tsx
+**Summary fields:** `openingBalance`, `totalBaseCharges`, `totalExtraCharges`, `totalDiscounts`, `totalCharged` (= base + extra − disc), `totalPaid`, `closingBalance`, `orderCount`, `cancelledOrderCount`, `paymentCount`.
 
-Tab value `"statement"` in the 3-tab profile dialog (Orders | Receipts | Statement).
+**Math invariant (always holds):** `closingBalance = openingBalance + totalCharged - totalPaid`
 
-**Period selector**: 30d / 90d / custom (date inputs). `stmtParams` computed via IIFE based on `statementPeriod` state.
+**Why:** Previous engine had 4 bugs: double-counting, cancelled orders charged full price, voided payments included, no opening balance. All four fixed in Milestone 7.1.
 
-**Query enabled**: only when `profileTab === "statement"` — lazy fetch.
+## Payment endpoint shape
+`POST /orders/:id/payments` returns the payment object at **top level** (`r.id`, `r.amount`, `r.receiptNumber`), NOT nested under `r.payment`.
 
-**Running balance table**: color-coded red (charge) / green (credit/balance). Negative balance shows `{fmt(Math.abs(e.balance))} CR`.
+## Verified test results (against demo seed, July 2026)
+- 6 math checks: 6/6 PASS
+- Cancelled order + payment = credit balance: PASS
+- Voided payment (`deleted_at` set) excluded from ledger: PASS (confirmed via psql)
+- Running balance consistent across all entries: PASS
+- Empty-period statement: closingBalance = openingBalance: PASS
 
-**Print/PDF**: `window.open("", "_blank")` → write HTML table with inline styles → `printWindow.print()`. No server-side PDF needed.
-
-**Receipt links**: each `payment` entry shows an eye icon that opens the receipt print page in a new tab.
-
-## Type
-`CustomerStatement` and `StatementEntry` interfaces exported from `artifacts/clean-track/src/lib/api.ts`.
+## Auth rate limiter note
+`/api/auth/owner-login` is limited to 10/15 min. For testing sequences, cache the token in a single Node.js process rather than re-calling login between steps.
