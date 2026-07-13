@@ -1,0 +1,213 @@
+# CleanTrack Phase 1 — Milestone 1
+
+## Module Audit: Service Management
+
+IMPORTANT
+
+We are no longer adding random features.
+
+From this point onward, every module must pass a complete production audit before new functionality is added.
+
+Do NOT build unrelated features.
+
+Do NOT modify unrelated modules.
+
+Focus ONLY on Service Management.
+
+---
+
+## OBJECTIVE
+
+Audit the complete Service Management module and determine whether it is production-ready for a commercial SaaS.
+
+Treat this as a real software audit.
+
+---
+
+## PART 1 — Functional Audit
+
+Determine whether owners can:
+
+1. Create a service
+
+2. Edit a service
+
+3. Archive/Deactivate a service
+
+4. Restore a service
+
+5. Prevent duplicate services
+
+6. Delete a service (only when safe)
+
+If deletion is allowed, verify that historical orders are not corrupted.
+
+If historical data would break, recommend soft-delete instead.
+
+---
+
+## PART 2 — Data Model Audit
+
+Inspect the current Service model.
+
+Report every field currently stored.
+
+Verify whether the model should support:
+
+* Name
+* Category
+* Description
+* Price
+* Estimated turnaround time
+* Active/Inactive status
+* Display order
+* Default icon
+* Optional image
+* Color tag
+
+Do not implement new fields yet unless clearly required.
+
+First report the current state.
+
+---
+
+## PART 3 — Order Dependency Audit
+
+Determine:
+
+Can existing orders safely reference services after:
+
+* price changes
+* service rename
+* service archive
+
+Verify that historical order pricing remains unchanged even if the service price changes later.
+
+This is critical.
+
+---
+
+## PART 4 — Search & Performance
+
+Audit service selection during order creation.
+
+Determine:
+
+* Is search available?
+* Is filtering instant?
+* Is keyboard navigation supported?
+* Is mobile selection easy?
+* Does it scale to hundreds of services?
+
+Report weaknesses.
+
+---
+
+## PART 5 — UX Audit
+
+Evaluate:
+
+* Add Service screen
+* Edit Service screen
+* Service list
+* Empty states
+* Validation
+* Error handling
+* Mobile responsiveness
+
+Suggest improvements.
+
+Do not redesign unrelated pages.
+
+---
+
+## PART 6 — Future Readiness
+
+Evaluate whether the architecture can support future additions such as:
+
+* Service icons
+* Optional service images
+* Service categories
+* Premium services
+* Branch-specific pricing
+* Seasonal pricing
+
+Report whether the current architecture supports these without major refactoring.
+
+---
+
+## PART 7 — Security
+
+Verify:
+
+Only owners can:
+
+* create services
+* edit services
+* archive services
+* restore services
+* delete services
+
+Workers should only view services needed for order creation.
+
+Verify there is no permission bypass.
+
+Attempt direct API access using a worker account.
+
+Expected:
+
+HTTP 403
+
+or
+
+HTTP 404
+
+---
+
+## PART 8 — Testing
+
+Create test services.
+
+Rename services.
+
+Archive services.
+
+Restore services.
+
+Change prices.
+
+Create orders before and after changes.
+
+Verify historical orders remain accurate.
+
+---
+
+## DELIVERABLE
+
+Provide:
+
+1. Current architecture
+
+2. Database structure
+
+3. Missing fields
+
+4. UX findings
+
+5. Security findings
+
+6. Performance findings
+
+7. Risks
+
+8. Recommended improvements
+
+9. Production readiness score (0–100%)
+
+10. Exact implementation plan for the approved improvements
+
+Do NOT implement improvements yet.
+
+Audit first.
+
+Wait for approval before making architectural changes.
