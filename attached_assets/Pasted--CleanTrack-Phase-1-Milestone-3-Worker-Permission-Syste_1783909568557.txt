@@ -1,0 +1,209 @@
+# CleanTrack Phase 1 — Milestone 3
+
+## Worker & Permission System Production Audit
+
+**IMPORTANT**
+
+This is a production-readiness milestone.
+
+Do **NOT** build unrelated features.
+
+Do **NOT** modify the UI until the audit is complete.
+
+First perform a complete audit of the Worker & Permission system.
+
+I want to verify that CleanTrack is secure for real multi-worker laundry businesses.
+
+---
+
+## PART 1 — Permission Audit
+
+Identify every action a worker can perform.
+
+For each action determine:
+
+* Who can access it
+* How permission is enforced
+* Whether API security matches the UI
+* Whether hidden UI actions are still accessible through direct API requests
+
+Audit permissions for:
+
+* Customers
+* Orders
+* Services
+* Payments
+* Pickups
+* Receipts
+* Analytics
+* Dashboard
+* Workers
+* Branches
+* Settings
+* Discounts
+* WhatsApp
+
+---
+
+## PART 2 — Worker Workflow Audit
+
+Simulate a normal worker shift.
+
+Test this complete workflow:
+
+* Login
+* View dashboard
+* Search customer
+* Create customer
+* Create order
+* Add services
+* Record payment
+* Update processing status
+* Mark order ready
+* Record partial pickup
+* Record final pickup
+* View receipts
+* Logout
+
+Verify:
+
+* No unnecessary steps
+* No confusing navigation
+* No duplicate actions
+* No dead ends
+* No permission errors during normal work
+
+---
+
+## PART 3 — API Security Audit
+
+Attempt direct API access as a worker.
+
+Try to:
+
+* Delete customers
+* Delete orders
+* Delete payments
+* Delete services
+* Delete receipts
+* Create workers
+* Edit workers
+* Edit owner settings
+* Access analytics
+* Access other branches
+* Modify discounts
+* Modify system configuration
+
+Expected result:
+
+* HTTP 403 or HTTP 404
+
+No sensitive data should be returned.
+
+---
+
+## PART 4 — Branch Isolation
+
+Create:
+
+* Branch A
+* Branch B
+
+Create:
+
+* Owner
+* Worker A
+* Worker B
+
+Verify:
+
+Worker A
+
+* Can only view Branch A
+* Cannot access Branch B customers
+* Cannot access Branch B orders
+* Cannot access Branch B payments
+* Cannot access Branch B receipts
+
+Worker B
+
+Repeat the same verification.
+
+Owner
+
+Verify access to:
+
+* All branches
+* Branch filters
+* Combined reporting
+
+---
+
+## PART 5 — Dashboard Audit
+
+Review the worker dashboard.
+
+Determine:
+
+* Is the information useful?
+* Is anything missing?
+* Is anything distracting?
+* Does the worker immediately know what to do?
+
+Recommend improvements if necessary.
+
+---
+
+## PART 6 — Worker Experience
+
+Evaluate the UX from a worker's perspective.
+
+Identify:
+
+* Extra clicks
+* Slow workflows
+* Confusing wording
+* Poor button placement
+* Mobile usability issues
+* Keyboard usability issues
+
+Recommend improvements only after identifying the root cause.
+
+---
+
+## PART 7 — Performance
+
+Stress test:
+
+* 20 workers
+* 5 branches
+* 1,000 orders
+* 200 customers
+* Concurrent updates
+
+Verify:
+
+* No permission leaks
+* No branch leaks
+* No race conditions
+* No duplicate records
+* No stale dashboard data
+
+---
+
+## Final Report
+
+Provide:
+
+1. Worker Permission Status
+2. API Security Status
+3. Branch Isolation Status
+4. Dashboard Audit
+5. UX Findings
+6. Performance Findings
+7. Failed Tests
+8. Fixed Issues
+9. Remaining Risks
+10. Production Readiness Score
+
+Do **NOT** implement improvements until the audit is complete and the report has been provided.
