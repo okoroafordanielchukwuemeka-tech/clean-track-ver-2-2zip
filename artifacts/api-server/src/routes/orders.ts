@@ -673,7 +673,8 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
         : sql``;
       const lockResult = await tx.execute(
         sql`SELECT id, order_id, customer_name, branch_id, price, extra_charge,
-                   discount, amount_paid, payment_status
+                   discount, amount_paid, payment_status, status,
+                   shirts, trousers, shirts_picked_up, trousers_picked_up
             FROM orders
             WHERE id = ${orderId} AND laundry_id = ${laundryId}${branchClause}
             FOR UPDATE`
@@ -711,6 +712,32 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
         updatedAt: new Date(),
       }).where(eq(orders.id, row.id));
 
+      // Auto-complete: if this payment fully settles an order that is already
+      // in partial_pickup with all items already physically collected, transition
+      // to completed inside the same transaction (avoids the deadlock where
+      // pickup route can't re-trigger because no items remain to pick up).
+      let autoCompleted = false;
+      if (paymentStatus === "paid" && row.status === "partial_pickup") {
+        const allOrderItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, row.id));
+        let allPickedUp = false;
+        if (allOrderItems.length > 0) {
+          // Item-based tracking: every item must be fully collected
+          allPickedUp = allOrderItems.every(oi => oi.quantityPickedUp >= oi.quantity);
+        } else {
+          // Legacy tracking: shirts and trousers counters must match totals
+          const shirtsTotal = (row.shirts as number) ?? 0;
+          const trousersTotal = (row.trousers as number) ?? 0;
+          const shirtsPickedUp = (row.shirts_picked_up as number) ?? 0;
+          const trousersPickedUp = (row.trousers_picked_up as number) ?? 0;
+          allPickedUp = shirtsPickedUp >= shirtsTotal && trousersPickedUp >= trousersTotal;
+        }
+        if (allPickedUp) {
+          await tx.update(orders).set({ status: "completed", updatedAt: new Date() })
+            .where(eq(orders.id, row.id));
+          autoCompleted = true;
+        }
+      }
+
       return {
         payment,
         orderId: row.id,
@@ -718,12 +745,13 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
         customerName: row.customer_name as string,
         remainingBalance,
         paymentStatus,
+        autoCompleted,
       };
     });
 
     if (!txResult) return res.status(404).json({ error: "Order not found" });
 
-    const { payment, orderId: oId, orderRef, customerName, remainingBalance, paymentStatus } = txResult;
+    const { payment, orderId: oId, orderRef, customerName, remainingBalance, paymentStatus, autoCompleted } = txResult;
 
     emitEvent({
       laundryId,
@@ -733,6 +761,26 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
       severity: remainingBalance <= 0 ? "success" : "info",
       relatedOrderId: oId,
     }).catch(() => {});
+
+    // If payment completion triggered an auto-complete of a fully-picked-up order, emit the completion event.
+    if (autoCompleted) {
+      emitEvent({
+        laundryId,
+        eventType: "pickup_completed",
+        title: "Order Completed",
+        message: `Order #${orderRef} for ${customerName} — fully paid and all items already collected. Order auto-completed.`,
+        severity: "success",
+        relatedOrderId: oId,
+      }).catch(() => {});
+
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: "order_auto_completed",
+        orderId: oId,
+        metadata: { orderId: orderRef, trigger: "payment_settled_after_full_pickup" },
+      }).catch(() => {});
+    }
 
     trackActivationEvent(laundryId, "payment_recorded");
 
@@ -747,6 +795,7 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
         remainingBalance,
         paymentStatus,
         orderId: orderRef,
+        autoCompleted: autoCompleted ?? false,
       },
     }).catch(() => {});
 

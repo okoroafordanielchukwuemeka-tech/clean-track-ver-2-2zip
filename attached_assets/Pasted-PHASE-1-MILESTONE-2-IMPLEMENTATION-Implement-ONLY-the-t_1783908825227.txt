@@ -1,0 +1,103 @@
+PHASE 1 — MILESTONE 2 IMPLEMENTATION
+
+Implement ONLY the three production-blocking issues identified in the Pickup Workflow Audit.
+
+Do NOT implement any other recommendations.
+
+Do NOT redesign the pickup workflow.
+
+Do NOT introduce new statuses.
+
+Implement ONLY:
+
+1. Auto-complete after payment
+
+Current issue:
+
+If an order has already been fully picked up and payment is later completed, the order remains stuck in `partial_pickup`.
+
+Fix:
+
+After every successful payment:
+
+* Re-evaluate the order.
+* If all items have already been picked up AND payment is now fully paid:
+
+  * automatically transition the order to `completed`.
+* Maintain all existing audit logs.
+* Maintain all existing permission checks.
+* Maintain all existing automation triggers.
+
+---
+
+2. Reject over-pickup in legacy mode
+
+Current issue:
+
+Legacy pickup silently caps quantities using `Math.min(...)`.
+
+Replace this behavior.
+
+If submitted pickup quantity exceeds the remaining quantity:
+
+* return HTTP 400
+* return a clear validation message
+* do NOT silently modify the requested quantity
+
+Legacy mode should behave consistently with item-based pickup.
+
+---
+
+3. Fix offline optimistic pickup status
+
+Current issue:
+
+Offline UI immediately shows `completed` whenever all quantities are selected, even if payment is still outstanding.
+
+Fix:
+
+Offline optimistic status should only become `completed` when:
+
+* all items are picked up
+  AND
+* payment is already fully settled.
+
+Otherwise show:
+
+`partial_pickup`
+
+to match backend behavior.
+
+---
+
+Requirements
+
+Do NOT implement:
+
+* Pickup receipts
+* Delivered status
+* Force Complete
+* Payment void reopening
+* Rate limiting
+* JSON validation improvements
+* UI redesign
+
+Those belong to later milestones.
+
+---
+
+After implementation:
+
+Run a complete verification.
+
+Provide:
+
+1. Root cause
+2. Files modified
+3. Tests executed
+4. Failed tests
+5. Fixed bugs
+6. Remaining risks
+7. Production readiness score
+
+Do not proceed to any additional features until all three fixes pass verification.

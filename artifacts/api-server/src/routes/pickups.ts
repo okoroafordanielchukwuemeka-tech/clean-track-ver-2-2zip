@@ -160,8 +160,20 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
           return { noItems: true } as const;
         }
 
-        newShirtsPickedUp = Math.min(order.shirtsPickedUp + (data.shirtsPickedUp ?? 0), order.shirts);
-        newTrousersPickedUp = Math.min(order.trousersPickedUp + (data.trousersPickedUp ?? 0), order.trousers);
+        const requestedShirts = data.shirtsPickedUp ?? 0;
+        const requestedTrousers = data.trousersPickedUp ?? 0;
+        const availableShirts = order.shirts - order.shirtsPickedUp;
+        const availableTrousers = order.trousers - order.trousersPickedUp;
+
+        if (requestedShirts > availableShirts) {
+          return { overPickup: { name: "shirts", remaining: availableShirts } } as const;
+        }
+        if (requestedTrousers > availableTrousers) {
+          return { overPickup: { name: "trousers", remaining: availableTrousers } } as const;
+        }
+
+        newShirtsPickedUp = order.shirtsPickedUp + requestedShirts;
+        newTrousersPickedUp = order.trousersPickedUp + requestedTrousers;
         remainingShirts = Math.max(0, order.shirts - newShirtsPickedUp);
         remainingTrousers = Math.max(0, order.trousers - newTrousersPickedUp);
         allPickedUp = remainingShirts <= 0 && remainingTrousers <= 0;

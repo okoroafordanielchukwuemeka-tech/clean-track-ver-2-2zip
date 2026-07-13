@@ -465,9 +465,12 @@ export default function OrderDetail() {
                 : item;
             });
             const allDone = updatedItems.every((i: any) => i.quantityPickedUp >= i.quantity);
+            // Only show completed offline when all items are collected AND payment is already settled.
+            // If payment is still outstanding, the backend will set partial_pickup — match that here.
+            const fullyPaid = old.paymentStatus === "paid";
             return {
               ...old,
-              status: allDone ? "completed" : "partial_pickup",
+              status: allDone && fullyPaid ? "completed" : "partial_pickup",
               items: updatedItems,
             };
           });
@@ -533,9 +536,12 @@ export default function OrderDetail() {
               old.trousers
             );
             const allDone = newShirts >= old.shirts && newTrousers >= old.trousers;
+            // Only show completed offline when all items are collected AND payment is already settled.
+            // If payment is still outstanding, the backend will set partial_pickup — match that here.
+            const fullyPaid = old.paymentStatus === "paid";
             return {
               ...old,
-              status: allDone ? "completed" : "partial_pickup",
+              status: allDone && fullyPaid ? "completed" : "partial_pickup",
               shirtsPickedUp: newShirts,
               trousersPickedUp: newTrousers,
             };
