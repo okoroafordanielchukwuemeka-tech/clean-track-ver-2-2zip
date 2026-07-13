@@ -1,0 +1,186 @@
+# CleanTrack Phase 1 — Milestone 2
+
+## Pickup Workflow Audit
+
+IMPORTANT
+
+Do NOT implement anything yet.
+
+This is an audit only.
+
+Read the complete pickup workflow before writing any code.
+
+---
+
+## OBJECTIVE
+
+Determine whether the pickup workflow is production-ready.
+
+Treat this as a commercial SaaS audit.
+
+---
+
+## Audit
+
+### 1. Pickup lifecycle
+
+Determine:
+
+* How pickups are currently recorded.
+* Full Pickup workflow.
+* Partial Pickup workflow.
+* Final Pickup workflow.
+
+Document every state transition.
+
+---
+
+### 2. Order status transitions
+
+Verify every possible status:
+
+Pending
+
+In Progress
+
+Ready
+
+Partially Picked Up
+
+Completed
+
+Cancelled
+
+Delivered
+
+Identify any missing states or invalid transitions.
+
+---
+
+### 3. Partial Pickup
+
+Verify:
+
+Can workers pick only selected items?
+
+Can remaining items stay active?
+
+Does the customer balance remain correct?
+
+Does inventory remain correct?
+
+Can multiple partial pickups occur?
+
+Can the final pickup automatically complete the order?
+
+---
+
+### 4. Payment interaction
+
+Verify:
+
+Outstanding balance after partial pickup.
+
+Partial payment before pickup.
+
+Full payment after pickup.
+
+No negative balances.
+
+No duplicate payment records.
+
+---
+
+### 5. Receipt behaviour
+
+Verify:
+
+Original receipt.
+
+Pickup receipt.
+
+Final receipt.
+
+Partial pickup records.
+
+Customer history.
+
+---
+
+### 6. Worker permissions
+
+Verify workers can:
+
+Record pickups.
+
+Record partial pickups.
+
+Cannot edit historical pickups.
+
+Cannot bypass completed orders.
+
+Attempt direct API access.
+
+Expected:
+
+HTTP 403
+
+or
+
+HTTP 404.
+
+---
+
+### 7. Customer experience
+
+Verify:
+
+Customer clearly understands:
+
+Items collected.
+
+Items remaining.
+
+Outstanding balance.
+
+Pickup history.
+
+---
+
+### 8. Failure scenarios
+
+Test:
+
+Picking up already collected items.
+
+Picking up cancelled items.
+
+Picking up non-existent items.
+
+Network interruption.
+
+Double submission.
+
+Concurrent workers.
+
+---
+
+## Deliverable
+
+Provide:
+
+1. Current workflow diagram.
+
+2. Missing functionality.
+
+3. UX issues.
+
+4. Security issues.
+
+5. Data integrity risks.
+
+6. Recommended improvements.
+
+7. Production Readiness Score.
+
+Do NOT implement any changes until the audit is complete.
