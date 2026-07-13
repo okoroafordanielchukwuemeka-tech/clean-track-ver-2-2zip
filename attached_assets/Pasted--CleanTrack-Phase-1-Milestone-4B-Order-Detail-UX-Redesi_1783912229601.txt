@@ -1,0 +1,158 @@
+# CleanTrack Phase 1 — Milestone 4B: Order Detail UX Redesign
+
+Implement ONLY the Order Detail page UX improvements.
+
+Do not modify business logic.
+
+Do not modify database schema.
+
+Do not change API contracts.
+
+This milestone is purely a UI/UX improvement.
+
+## Goals
+
+The Order Detail page should become much easier to navigate while preserving all existing functionality.
+
+### 1. Introduce top navigation tabs
+
+Replace the long vertical scrolling layout with tabs.
+
+Tabs:
+
+* Overview
+* Details
+* Timeline
+* Messages
+
+Each tab should load instantly without changing routes.
+
+---
+
+## Overview Tab
+
+Display only the information staff need most frequently.
+
+Include:
+
+* Order status
+* Payment status
+* Outstanding balance
+* Total paid
+* Pickup actions
+* Record Payment button
+* Inventory progress
+* SLA timer
+* Quick status actions
+
+This should become the default tab.
+
+---
+
+## Details Tab
+
+Move less frequently used information here:
+
+* Customer Information
+* Phone number
+* Address
+* Order Details
+* Service list
+* Item quantities
+* Price adjustments
+
+Workers must still NOT see pricing controls if they lack permission.
+
+---
+
+## Timeline Tab
+
+Move here:
+
+* Activity Log
+* Pickup History
+* Payment History
+
+Maintain chronological order.
+
+Do not alter audit history.
+
+---
+
+## Messages Tab
+
+Move the WhatsApp communication section here.
+
+Do not change any WhatsApp functionality.
+
+Simply relocate it.
+
+---
+
+## 2. Improve visual hierarchy
+
+The current page contains too many stacked cards.
+
+Improve spacing.
+
+Group related cards.
+
+Reduce scrolling.
+
+Maintain responsive layout.
+
+---
+
+## 3. Preserve permissions
+
+Workers:
+
+* must not see pricing controls
+* must not see owner-only actions
+
+Owners:
+
+* continue seeing all controls.
+
+---
+
+## 4. Mobile optimisation
+
+Ensure tabs are:
+
+* touch friendly
+* horizontally scrollable if needed
+* responsive on phones
+
+Avoid layout overflow.
+
+---
+
+## 5. Regression requirements
+
+Verify:
+
+* Status updates still work.
+* Payment recording still works.
+* Pickup workflow still works.
+* Timeline renders correctly.
+* WhatsApp panel still functions.
+* Permissions remain unchanged.
+* No API changes.
+* No database changes.
+
+---
+
+## Deliver a report
+
+Provide:
+
+1. Before vs after layout summary
+2. Tabs implemented
+3. Regression test results
+4. Screenshots
+5. Remaining UX issues
+
+Do NOT implement any other audit findings.
+
+Focus ONLY on the Order Detail UX redesign.
