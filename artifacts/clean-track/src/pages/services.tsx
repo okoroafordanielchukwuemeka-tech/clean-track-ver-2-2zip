@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Archive, ArchiveRestore, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 const SERVICE_CATEGORIES = [
@@ -36,6 +36,8 @@ const SERVICE_CATEGORIES = [
   "Other",
 ];
 
+type Filter = "active" | "archived" | "all";
+
 function formatCurrency(v: number | null | undefined) {
   if (v == null) return "—";
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(Number(v));
@@ -47,20 +49,25 @@ const emptyForm: Partial<ServiceInput> = {
 
 export default function Services() {
   const qc = useQueryClient();
+  const [filter, setFilter] = useState<Filter>("active");
   const [showDialog, setShowDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<ServiceInput>>(emptyForm);
   const [showDelete, setShowDelete] = useState<number | null>(null);
 
   const { data: services = [], isLoading, isViewingCache } = useCachedQuery({
-    queryKey: ["services"],
-    queryFn: () => api.services.list({ activeOnly: "false" }),
+    queryKey: ["services", filter],
+    queryFn: () => api.services.list({ filter }),
   });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["services"] });
+  };
 
   const createMutation = useMutation({
     mutationFn: (data: ServiceInput) => api.services.create(data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["services"] });
+      invalidate();
       setShowDialog(false);
       setForm(emptyForm);
       toast.success("Service created");
@@ -71,7 +78,7 @@ export default function Services() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<ServiceInput> }) => api.services.update(id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["services"] });
+      invalidate();
       setShowDialog(false);
       setEditId(null);
       setForm(emptyForm);
@@ -83,9 +90,39 @@ export default function Services() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.services.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["services"] });
+      invalidate();
       setShowDelete(null);
       toast.success("Service deleted");
+    },
+    onError: (e: Error) => {
+      setShowDelete(null);
+      toast.error(e.message);
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (id: number) => api.services.archive(id),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Service archived — it won't appear in new orders.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: number) => api.services.restore(id),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Service restored — it's available for new orders again.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: ({ id, direction }: { id: number; direction: "up" | "down" }) =>
+      api.services.reorder(id, direction),
+    onSuccess: () => {
+      invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -125,6 +162,12 @@ export default function Services() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  const TABS: { label: string; value: Filter }[] = [
+    { label: "Active", value: "active" },
+    { label: "Archived", value: "archived" },
+    { label: "All Services", value: "all" },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -137,9 +180,30 @@ export default function Services() {
         </Button>
       </div>
 
+      {/* Filter tabs */}
+      <div className="flex gap-1 border-b">
+        {TABS.map(tab => (
+          <button
+            key={tab.value}
+            onClick={() => setFilter(tab.value)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              filter === tab.value
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{services.length} service{services.length !== 1 ? "s" : ""}</CardTitle>
+          <CardTitle className="text-base">
+            {services.length} service{services.length !== 1 ? "s" : ""}
+            {filter === "active" && " (active)"}
+            {filter === "archived" && " (archived)"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -148,6 +212,7 @@ export default function Services() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16">Order</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Standard</TableHead>
@@ -158,8 +223,32 @@ export default function Services() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {services.map((svc) => (
-                  <TableRow key={svc.id}>
+                {services.map((svc, idx) => (
+                  <TableRow key={svc.id} className={!svc.isActive ? "opacity-60" : ""}>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          disabled={idx === 0 || reorderMutation.isPending}
+                          onClick={() => reorderMutation.mutate({ id: svc.id, direction: "up" })}
+                          title="Move up"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          disabled={idx === services.length - 1 || reorderMutation.isPending}
+                          onClick={() => reorderMutation.mutate({ id: svc.id, direction: "down" })}
+                          title="Move down"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
                     <TableCell className="font-medium">{svc.name}</TableCell>
                     <TableCell>{svc.category}</TableCell>
                     <TableCell>{formatCurrency(svc.standardPrice as any)}</TableCell>
@@ -167,15 +256,41 @@ export default function Services() {
                     <TableCell>{formatCurrency(svc.premiumPrice as any)}</TableCell>
                     <TableCell>
                       <Badge variant={svc.isActive ? "success" : "secondary"}>
-                        {svc.isActive ? "Active" : "Inactive"}
+                        {svc.isActive ? "Active" : "Archived"}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(svc)}>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(svc)} title="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => setShowDelete(svc.id)}>
+                        {svc.isActive ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => archiveMutation.mutate(svc.id)}
+                            disabled={archiveMutation.isPending}
+                            title="Archive"
+                          >
+                            <Archive className="h-4 w-4 text-amber-500" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => restoreMutation.mutate(svc.id)}
+                            disabled={restoreMutation.isPending}
+                            title="Restore"
+                          >
+                            <ArchiveRestore className="h-4 w-4 text-green-500" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setShowDelete(svc.id)}
+                          title="Delete"
+                        >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
@@ -184,16 +299,27 @@ export default function Services() {
                 ))}
                 {!services.length && (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <div className="text-center py-14 space-y-3">
                         <Package className="h-10 w-10 mx-auto text-muted-foreground/40" />
                         <div>
-                          <p className="font-medium text-foreground">No services yet</p>
-                          <p className="text-sm text-muted-foreground mt-1">Add your laundry services so you can attach them to orders.</p>
+                          {filter === "archived" ? (
+                            <>
+                              <p className="font-medium text-foreground">No archived services</p>
+                              <p className="text-sm text-muted-foreground mt-1">Services you archive will appear here.</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-medium text-foreground">No services yet</p>
+                              <p className="text-sm text-muted-foreground mt-1">Add your laundry services so you can attach them to orders.</p>
+                            </>
+                          )}
                         </div>
-                        <Button size="sm" onClick={() => setShowDialog(true)}>
-                          Add Your First Service
-                        </Button>
+                        {filter !== "archived" && (
+                          <Button size="sm" onClick={() => setShowDialog(true)}>
+                            Add Your First Service
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -258,15 +384,6 @@ export default function Services() {
                 <Input type="number" min={0} value={form.premiumPrice ?? ""} onChange={(e) => setForm({ ...form, premiumPrice: parseFloat(e.target.value) || undefined })} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="active-cb"
-                checked={form.isActive ?? true}
-                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-              />
-              <Label htmlFor="active-cb">Active</Label>
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowDialog(false); setEditId(null); setForm(emptyForm); }}>Cancel</Button>
@@ -282,7 +399,7 @@ export default function Services() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Service?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove this service. Existing orders using this service will not be affected.
+              This will permanently remove this service. If it has been used in past orders, you'll be prompted to archive it instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

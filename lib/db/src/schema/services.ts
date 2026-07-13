@@ -10,6 +10,7 @@ export const services = pgTable("services", {
   expressPrice: numeric("express_price", { precision: 10, scale: 2 }),
   premiumPrice: numeric("premium_price", { precision: 10, scale: 2 }),
   isActive: boolean("is_active").notNull().default(true),
+  displayOrder: integer("display_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

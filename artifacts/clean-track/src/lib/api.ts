@@ -172,6 +172,9 @@ export const api = {
     create: (data: ServiceInput) => request<Service>("POST", "/services", data),
     update: (id: number, data: Partial<ServiceInput>) => request<Service>("PATCH", `/services/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/services/${id}`),
+    archive: (id: number) => request<Service>("POST", `/services/${id}/archive`, {}),
+    restore: (id: number) => request<Service>("POST", `/services/${id}/restore`, {}),
+    reorder: (id: number, direction: "up" | "down") => request<Service[]>("POST", "/services/reorder", { id, direction }),
   },
   batches: {
     list: () => request<Batch[]>("GET", "/batches"),
@@ -761,6 +764,7 @@ export interface Service {
   expressPrice?: number | null;
   premiumPrice?: number | null;
   isActive: boolean;
+  displayOrder: number;
   createdAt: string;
   updatedAt: string;
 }

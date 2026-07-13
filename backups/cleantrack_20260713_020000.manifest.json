@@ -1,0 +1,13 @@
+{
+  "timestamp": "20260713_020000",
+  "file": "cleantrack_20260713_020000.sql.gz.enc",
+  "encrypted": true,
+  "encryption": "aes-256-cbc-pbkdf2",
+  "sizeBytes": 74320,
+  "sha256": "d6ff70bffe0ebb045692d8cd963f31c1359a0e9296b6bade95829bda00c00f25",
+  "databaseUrl": "postgresql://postgres:password@***",
+  "createdAt": "2026-07-13T02:00:00Z",
+  "hmacSignature": "fe2b7f5d193e3e6ee89afb2f459a02f403a0338b9dc3e2cd1a29edbba2bb3e78",
+  "scheduledRun": true,
+  "runAt": "2026-07-13T02:00:00.863Z"
+}

@@ -1,0 +1,193 @@
+# CleanTrack Phase 1 — Milestone 1
+
+## Service Management Final Verification
+
+IMPORTANT
+
+The approved implementation has now been completed.
+
+Do NOT implement any new features.
+
+Do NOT modify unrelated modules.
+
+This task is verification only.
+
+---
+
+## OBJECTIVE
+
+Verify that every approved improvement works correctly.
+
+Treat this as a production acceptance test.
+
+---
+
+## VERIFY
+
+### Duplicate Protection
+
+Attempt:
+
+Create duplicate services.
+
+Rename existing services to duplicate names.
+
+Verify:
+
+* Friendly validation messages
+* No duplicate records created
+* Case-insensitive matching
+
+---
+
+### Delete Protection
+
+Test:
+
+Delete unused service.
+
+Delete service used by historical orders.
+
+Verify:
+
+Unused service deletes successfully.
+
+Used service returns:
+
+HTTP 409
+
+with a friendly archive recommendation.
+
+Verify:
+
+No generic HTTP 500 errors.
+
+---
+
+### Archive Workflow
+
+Verify:
+
+Archive button
+
+Restore button
+
+Active filter
+
+Archived filter
+
+All Services filter
+
+Archived services disappear from order creation.
+
+Historical orders continue displaying archived services correctly.
+
+---
+
+### Display Order
+
+Verify:
+
+Move Up
+
+Move Down
+
+Ordering persists after refresh.
+
+Order creation follows display order.
+
+Reports follow display order.
+
+---
+
+### Historical Data
+
+Verify:
+
+Historical prices remain unchanged.
+
+Historical service names remain unchanged.
+
+Receipts remain unchanged.
+
+Invoices remain unchanged.
+
+---
+
+### Security
+
+Verify:
+
+Workers cannot:
+
+Create services
+
+Edit services
+
+Delete services
+
+Archive services
+
+Restore services
+
+Attempt direct API access.
+
+Expected:
+
+HTTP 403
+
+or
+
+HTTP 404
+
+---
+
+### Regression Test
+
+Create a complete order using:
+
+Existing services
+
+Archived services
+
+Renamed services
+
+Reordered services
+
+Verify:
+
+Order creation
+
+Payment
+
+Receipt
+
+Pickup
+
+Analytics
+
+continue working without regression.
+
+---
+
+## DELIVERABLE
+
+Provide:
+
+1. Passed tests
+
+2. Failed tests
+
+3. Screenshots
+
+4. Remaining issues
+
+5. Production Readiness Score
+
+6. Launch Readiness Decision
+
+If every test passes:
+
+Mark the Service Management module as COMPLETE.
+
+No new code unless a defect is found.
