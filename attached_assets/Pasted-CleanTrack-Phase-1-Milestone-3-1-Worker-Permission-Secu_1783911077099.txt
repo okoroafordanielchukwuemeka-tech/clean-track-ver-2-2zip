@@ -1,0 +1,108 @@
+CleanTrack — Phase 1 Milestone 3.1
+
+Worker & Permission Security Fixes
+
+We have completed the audit.
+
+Do NOT redesign the worker system.
+
+Do NOT add new features.
+
+Implement ONLY the following two improvements.
+
+---
+
+## FIX 1 — Protect Owner Financial Data
+
+Workers must NEVER have access to owner financial information.
+
+Audit every analytics endpoint.
+
+Ensure workers CANNOT access:
+
+* Total expenses
+* Salary expenses
+* Utility expenses
+* Rent
+* Profit
+* Overall financial summaries
+* Any owner-only financial metrics
+
+Workers should only receive operational analytics relevant to their own branch, such as:
+
+* Orders
+* Ready orders
+* Processing orders
+* Pickups
+* Customer counts
+* Operational workload
+
+Verify:
+
+* API returns 403 or removes owner-only fields.
+* No financial information leaks through any endpoint.
+* Owners still receive the full analytics dashboard.
+
+---
+
+## FIX 2 — New Worker Onboarding
+
+Currently, a new worker with no permissions sees an empty Worker Station.
+
+This creates confusion.
+
+Implement a proper onboarding state.
+
+When a worker logs in and has no assigned permissions:
+
+Display a clear screen explaining:
+
+"Your account is active but your manager has not assigned work permissions yet."
+
+Include:
+
+* Friendly illustration or icon
+* Status message
+* Instruction to contact the owner
+* No broken or empty dashboard
+
+Do NOT show blank screens.
+
+---
+
+## Verification
+
+After implementation:
+
+1. Create a new worker.
+2. Leave all permissions disabled.
+3. Login as that worker.
+4. Verify the onboarding screen appears.
+
+Then:
+
+1. Enable permissions.
+2. Refresh/login again.
+3. Verify Worker Station loads normally.
+
+Finally:
+
+Attempt to access analytics as a worker.
+
+Confirm:
+
+* No financial information is visible.
+* No expense data leaks.
+* Owners retain full analytics.
+
+Provide:
+
+1. Root cause
+2. Files modified
+3. Security verification
+4. UX verification
+5. Failed tests
+6. Remaining risks
+7. Updated production readiness score
+
+Do not implement any other improvements.

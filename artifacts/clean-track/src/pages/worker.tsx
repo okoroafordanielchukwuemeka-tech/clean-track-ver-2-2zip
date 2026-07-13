@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { CreateOrderDialog } from "@/components/create-order-dialog";
@@ -15,6 +15,7 @@ import { computeDueAt, getUrgency, type UrgencyInfo } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
 import { enqueueOrderStatusUpdate } from "@/lib/queue-service";
 import { getIsOnline } from "@/lib/network-state";
+import type { WorkerPermissions } from "@/context/auth-context";
 
 type OrderWithUrgency = ReturnType<typeof useQuery<any[]>>["data"] extends Array<infer T> ? T & { _urgency: UrgencyInfo } : never;
 
@@ -130,12 +131,40 @@ function UrgencySection({
   );
 }
 
+function NoPermissionsScreen({ name }: { name: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
+      <div className="rounded-full bg-muted p-6 mb-6">
+        <ShieldOff className="h-12 w-12 text-muted-foreground" />
+      </div>
+      <h1 className="text-2xl font-bold mb-2">No Permissions Assigned</h1>
+      <p className="text-muted-foreground mb-1 font-medium">Welcome, {name}</p>
+      <p className="text-muted-foreground max-w-sm mt-3">
+        Your account is active but your manager has not assigned any work permissions yet.
+      </p>
+      <p className="text-muted-foreground max-w-sm mt-2 text-sm">
+        Please contact your laundry owner to have your permissions configured before you can access the Worker Station.
+      </p>
+    </div>
+  );
+}
+
 export default function WorkerStation() {
   const { user } = useAuth();
   const { activeBranchId } = useBranch();
   const qc = useQueryClient();
   const [, setTick] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+
+  // Show onboarding screen if worker has no permissions assigned
+  const hasAnyPermission =
+    user?.type === "owner" ||
+    (user?.permissions != null &&
+      Object.values(user.permissions as WorkerPermissions).some(Boolean));
+
+  if (user?.type === "worker" && !hasAnyPermission) {
+    return <NoPermissionsScreen name={user.name} />;
+  }
 
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 60_000);

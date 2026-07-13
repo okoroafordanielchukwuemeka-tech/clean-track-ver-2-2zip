@@ -47,6 +47,7 @@ function getEffectiveBranchId(req: AuthRequest): number | null {
 analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const isOwner = req.auth!.type === "owner";
     const effectiveBranchId = getEffectiveBranchId(req);
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
@@ -84,6 +85,21 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
       !["completed", "ready"].includes(o.status) && new Date(o.createdAt) < sevenDaysAgo
     ).length;
 
+    const operationalResponse = {
+      totalOrders: allOrders.length,
+      ordersThisWeek,
+      ordersLastWeek,
+      weeklyGrowthPercent: Math.round(weeklyGrowthPercent * 10) / 10,
+      ordersThisMonth: allOrders.filter(o => new Date(o.createdAt) >= startOfMonth).length,
+      activeBatches,
+      delayedOrders,
+    };
+
+    // Workers receive operational data only — no financial information
+    if (!isOwner) {
+      return res.json(operationalResponse);
+    }
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     // expenditures are laundry-wide (no branchId column)
@@ -94,16 +110,10 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
     const collectedRevenue = allOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || "0"), 0);
 
     res.json({
-      totalOrders: allOrders.length,
+      ...operationalResponse,
       totalRevenue,
       collectedRevenue,
       pendingRevenue: allOrders.reduce((sum, o) => sum + Math.max(0, orderTotalDue(o) - parseFloat(o.amountPaid || "0")), 0),
-      ordersThisWeek,
-      ordersLastWeek,
-      weeklyGrowthPercent: Math.round(weeklyGrowthPercent * 10) / 10,
-      ordersThisMonth: allOrders.filter(o => new Date(o.createdAt) >= startOfMonth).length,
-      activeBatches,
-      delayedOrders,
       totalExpenses,
       estimatedProfit: collectedRevenue - totalExpenses,
     });
@@ -115,6 +125,7 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
 analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const isOwner = req.auth!.type === "owner";
     const effectiveBranchId = getEffectiveBranchId(req);
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
@@ -134,7 +145,15 @@ analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
         dailyMap[key].revenue += orderTotalDue(o);
       }
     }
-    res.json(Object.entries(dailyMap).map(([date, data]) => ({ date, ...data })));
+
+    const rows = Object.entries(dailyMap).map(([date, data]) => ({ date, ...data }));
+
+    // Workers receive order counts only — revenue figures are owner-only
+    if (!isOwner) {
+      return res.json(rows.map(({ date, count }) => ({ date, count })));
+    }
+
+    res.json(rows);
   } catch {
     res.status(500).json({ error: "Failed to get daily analytics" });
   }
@@ -143,6 +162,7 @@ analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
 analyticsRouter.get("/full", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const isOwner = req.auth!.type === "owner";
     const effectiveBranchId = getEffectiveBranchId(req);
     const period = (req.query.period as string) || "7d";
     const since = periodToDate(period);
@@ -157,15 +177,6 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
       const d = new Date(o.createdAt);
       return d >= prevSince && d < since;
     });
-
-    // expenditures are laundry-wide (no branchId column)
-    const expensesInPeriod = await db.select().from(expenditures)
-      .where(and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, since)));
-    const totalExpenses = expensesInPeriod.reduce((s, e) => s + parseFloat(e.amount), 0);
-    const expensesByCategory: Record<string, number> = {};
-    for (const e of expensesInPeriod) {
-      expensesByCategory[e.category] = (expensesByCategory[e.category] ?? 0) + parseFloat(e.amount);
-    }
 
     const calc = (os: typeof allOrders) => {
       const totalRevenue = os.reduce((s, o) => s + orderTotalDue(o), 0);
@@ -226,6 +237,48 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
 
     const trends = Object.values(trendMap);
 
+    const alertsPayload = {
+      delayedOrders: delayedOrders.slice(0, 5).map(o => ({
+        id: o.id,
+        orderId: o.orderId,
+        customerName: o.customerName,
+        status: o.status,
+        daysOld: Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 86400000),
+      })),
+      unpaidCount: paymentCounts.unpaid,
+      partialPickupCount: statusCounts.partial_pickup,
+    };
+
+    // Workers receive operational analytics only — financial fields are owner-only
+    if (!isOwner) {
+      return res.json({
+        period,
+        overview: {
+          totalOrders: curr.count,
+          activeOrders: activeOrders.length,
+          completedOrders: statusCounts.completed,
+          partialPickup: statusCounts.partial_pickup,
+          delayedOrders: delayedOrders.length,
+          totalRemainingItems,
+        },
+        growth: {
+          orders: pctChange(curr.count, prev.count),
+        },
+        statusCounts,
+        trends: trends.map(({ date, orders }) => ({ date, orders })),
+        alerts: alertsPayload,
+      });
+    }
+
+    // expenditures are laundry-wide (no branchId column)
+    const expensesInPeriod = await db.select().from(expenditures)
+      .where(and(eq(expenditures.laundryId, laundryId), gte(expenditures.createdAt, since)));
+    const totalExpenses = expensesInPeriod.reduce((s, e) => s + parseFloat(e.amount), 0);
+    const expensesByCategory: Record<string, number> = {};
+    for (const e of expensesInPeriod) {
+      expensesByCategory[e.category] = (expensesByCategory[e.category] ?? 0) + parseFloat(e.amount);
+    }
+
     res.json({
       period,
       overview: {
@@ -251,17 +304,7 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
       paymentCounts,
       trends,
       expenses: { total: totalExpenses, byCategory: expensesByCategory },
-      alerts: {
-        delayedOrders: delayedOrders.slice(0, 5).map(o => ({
-          id: o.id,
-          orderId: o.orderId,
-          customerName: o.customerName,
-          status: o.status,
-          daysOld: Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 86400000),
-        })),
-        unpaidCount: paymentCounts.unpaid,
-        partialPickupCount: statusCounts.partial_pickup,
-      },
+      alerts: alertsPayload,
     });
   } catch (err) {
     console.error(err);
@@ -270,6 +313,10 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
 });
 
 analyticsRouter.get("/customers", async (req: AuthRequest, res) => {
+  // Financial customer analytics are owner-only
+  if (req.auth!.type !== "owner") {
+    return res.status(403).json({ error: "Forbidden: owner access required" });
+  }
   try {
     const laundryId = req.auth!.laundryId;
     const effectiveBranchId = getEffectiveBranchId(req);
