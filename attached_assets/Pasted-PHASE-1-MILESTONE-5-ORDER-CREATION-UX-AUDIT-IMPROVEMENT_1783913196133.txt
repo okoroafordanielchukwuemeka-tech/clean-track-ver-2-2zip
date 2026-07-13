@@ -1,0 +1,231 @@
+PHASE 1 — MILESTONE 5
+ORDER CREATION UX AUDIT & IMPROVEMENT
+
+IMPORTANT
+
+This milestone focuses ONLY on the Order Creation experience.
+
+Do NOT modify:
+
+- Payments
+- Pickup
+- Worker permissions
+- Analytics
+- WhatsApp
+- Receipts
+- Customer statements
+
+Perform a complete audit of the Order Creation workflow.
+
+Audit the entire process from clicking "New Order" until the order is successfully created.
+
+Evaluate:
+
+1. Customer selection
+
+- Search speed
+- Empty state
+- Keyboard support
+- Mobile usability
+- Loading state
+
+2. Creating a new customer
+
+Evaluate:
+
+- Number of fields
+- Validation
+- Error messages
+- Required vs optional fields
+- Speed
+
+3. Service selection
+
+Verify:
+
+- Search works correctly
+- Search is instant
+- Keyboard navigation
+- Large service lists remain fast
+- Images (if available) display correctly
+- Archived services never appear
+
+4. Quantity entry
+
+Verify:
+
+- Easy to edit
+- Fast on desktop
+- Fast on mobile
+- Prevent negative values
+- Prevent invalid input
+
+5. Pricing
+
+Verify:
+
+Running total updates instantly.
+
+Discounts apply correctly.
+
+Price adjustments calculate correctly.
+
+Outstanding balance is accurate.
+
+6. Validation
+
+Attempt:
+
+Blank customer
+
+Blank service
+
+Zero quantity
+
+Negative quantity
+
+Archived service
+
+Duplicate service
+
+Very large quantity
+
+Invalid price
+
+Ensure friendly validation messages.
+
+7. Keyboard workflow
+
+A power user should be able to:
+
+Search customer
+
+Select customer
+
+Search service
+
+Select service
+
+Enter quantity
+
+Save
+
+without touching the mouse whenever possible.
+
+Verify:
+
+Tab order
+
+Arrow navigation
+
+Enter key
+
+Escape key
+
+Focus management
+
+8. Mobile workflow
+
+Verify:
+
+Large tap targets
+
+No horizontal scrolling
+
+Correct keyboard type
+
+Easy quantity editing
+
+No clipped dialogs
+
+9. Performance
+
+Simulate:
+
+500 customers
+
+300 services
+
+Large order
+
+Verify:
+
+No lag
+
+No freezes
+
+No unnecessary renders
+
+No duplicate API calls
+
+10. Empty states
+
+Verify every empty state is helpful.
+
+Examples:
+
+No customers
+
+No services
+
+No search results
+
+No internet
+
+No permissions
+
+11. Error handling
+
+Verify graceful handling for:
+
+Network loss
+
+Server error
+
+Validation error
+
+Duplicate submission
+
+12. Final UX review
+
+Score:
+
+Speed
+
+Clarity
+
+Accessibility
+
+Mobile
+
+Desktop
+
+Keyboard
+
+Owner workflow
+
+Worker workflow
+
+Deliver:
+
+1. Audit findings
+
+2. UX improvements implemented
+
+3. Bugs fixed
+
+4. Screenshots
+
+5. Regression testing
+
+6. Remaining issues
+
+7. Production Readiness Score
+
+IMPORTANT
+
+Do not change business logic.
+
+Do not modify backend calculations.
+
+Focus only on improving the Order Creation user experience while preserving all existing functionality.
