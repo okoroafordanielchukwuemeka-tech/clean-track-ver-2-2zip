@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "@/context/theme-context";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { idbPersister } from "@/lib/idb-persister";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -81,6 +82,7 @@ function RootRedirect() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <AuthProvider>
         <BranchProvider>
           <AdminProvider>
@@ -134,6 +136,7 @@ export default function App() {
           </AdminProvider>
         </BranchProvider>
       </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

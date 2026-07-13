@@ -1,0 +1,310 @@
+PHASE 6 — CUSTOMER MANAGEMENT PRODUCTION UPGRADE
+
+IMPORTANT
+
+This milestone focuses ONLY on Customer Management.
+
+Do NOT modify Orders, Payments, Receipts, WhatsApp, Statements, PDFs, or Messaging.
+
+Preserve all existing functionality.
+
+---
+
+STEP 1 — AUDIT
+
+Perform a complete audit of the Customer module.
+
+Determine:
+
+1. Current customer list UX
+2. Current search capability
+3. Current filters
+4. Current sorting
+5. Current customer profile page
+6. Current outstanding balance display
+7. Current order history display
+8. Current payment history display
+9. Current branch isolation
+10. Current worker permissions
+
+Provide screenshots.
+
+---
+
+STEP 2 — CUSTOMER LIST IMPROVEMENTS
+
+Improve the customer list.
+
+Required:
+
+✓ Fast search
+
+Search by:
+
+* Name
+* Phone number
+* Customer ID
+
+Instant filtering.
+
+---
+
+Add filters:
+
+All Customers
+
+VIP Customers
+
+Customers With Outstanding Balance
+
+Inactive Customers
+
+Archived Customers (if supported)
+
+---
+
+Sorting:
+
+Newest
+
+Oldest
+
+Most Orders
+
+Highest Spending
+
+Outstanding Balance
+
+Last Visit
+
+---
+
+STEP 3 — CUSTOMER PROFILE
+
+Redesign the customer profile.
+
+Include:
+
+Customer name
+
+Phone
+
+Address
+
+Branch
+
+Registration date
+
+Last visit
+
+Total orders
+
+Completed orders
+
+Cancelled orders
+
+Outstanding balance
+
+Total amount spent
+
+Lifetime revenue
+
+Average order value
+
+Current active orders
+
+---
+
+STEP 4 — ORDER HISTORY
+
+Improve order history.
+
+Each order card should show:
+
+Order number
+
+Status
+
+Pickup status
+
+Payment status
+
+Created date
+
+Completed date
+
+Total
+
+Outstanding balance
+
+Clicking an order opens Order Detail.
+
+---
+
+STEP 5 — PAYMENT HISTORY
+
+Display payment history.
+
+Include:
+
+Payment date
+
+Amount
+
+Method
+
+Receipt number
+
+Running balance
+
+---
+
+STEP 6 — CUSTOMER NOTES
+
+Allow owners to save private notes.
+
+Examples:
+
+"VIP customer"
+
+"Always pays late"
+
+"Call before delivery"
+
+"Prefers WhatsApp"
+
+Workers should only view notes if they already have customer viewing permission.
+
+---
+
+STEP 7 — CUSTOMER TAGS
+
+Support tags.
+
+Examples:
+
+VIP
+
+Business
+
+Hotel
+
+Restaurant
+
+Hospital
+
+School
+
+Wholesale
+
+Custom tags
+
+Tags should be searchable.
+
+---
+
+STEP 8 — QUICK ACTIONS
+
+Add quick actions.
+
+Call
+
+Copy phone
+
+Create Order
+
+View Active Orders
+
+View Payments
+
+View Receipts
+
+---
+
+STEP 9 — PERFORMANCE
+
+Customer search should remain fast with:
+
+10,000 customers
+
+Use memoization where appropriate.
+
+Avoid unnecessary re-renders.
+
+---
+
+STEP 10 — SECURITY
+
+Verify:
+
+Workers only see customers in their branch.
+
+Workers cannot edit customer identity without permission.
+
+Workers cannot delete customers.
+
+Owners retain full access.
+
+Attempt API bypass tests.
+
+---
+
+STEP 11 — VERIFICATION
+
+Run live tests.
+
+Create:
+
+100 customers
+
+Outstanding balances
+
+Completed orders
+
+Cancelled orders
+
+VIP tags
+
+Private notes
+
+Different branches
+
+Verify:
+
+Search
+
+Filters
+
+Sorting
+
+Profile
+
+History
+
+Security
+
+Performance
+
+---
+
+Deliver:
+
+1. Audit Findings
+
+2. UX Improvements
+
+3. Screenshots
+
+4. Security Results
+
+5. Performance Results
+
+6. Failed Tests
+
+7. Fixed Issues
+
+8. Remaining Risks
+
+9. Updated Production Readiness Score
+
+Do not modify any unrelated modules.

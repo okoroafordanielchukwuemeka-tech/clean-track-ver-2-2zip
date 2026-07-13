@@ -20,8 +20,11 @@ import {
   MessageSquare,
   ShieldCheck,
   ChevronDown,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useState } from "react";
+import { useTheme } from "@/context/theme-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
@@ -49,6 +52,7 @@ export function Layout() {
   const navigate = useNavigate();
   const { user, isOwner, logout } = useAuth();
   const { activeBranch } = useBranch();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(() => {
     const advancedPaths = ["/operations", "/customer-hub", "/platform-health"];
@@ -202,6 +206,15 @@ export function Layout() {
                 {isOwner ? "Owner" : user?.role === "admin" ? "Admin Worker" : "Worker"}
               </p>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent"
+              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
             <NotificationCenter />
             <Button
               variant="ghost"

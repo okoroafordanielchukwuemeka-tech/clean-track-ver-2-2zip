@@ -180,7 +180,17 @@ export default function Receipts() {
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading receipts…</div>
+            <div className="divide-y">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3">
+                  <div className="h-4 w-28 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-28 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto" />
+                  <div className="h-5 w-16 bg-muted animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
           ) : receipts.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
               {search ? `No receipts match "${search}"` : "No receipts found for this period."}

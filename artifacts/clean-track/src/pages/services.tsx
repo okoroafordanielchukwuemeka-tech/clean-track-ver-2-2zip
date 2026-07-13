@@ -207,7 +207,19 @@ export default function Services() {
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            <div className="divide-y">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3">
+                  <div className="h-4 w-40 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded ml-4" />
+                  <div className="flex gap-3 ml-auto">
+                    <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+                    <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+                    <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>

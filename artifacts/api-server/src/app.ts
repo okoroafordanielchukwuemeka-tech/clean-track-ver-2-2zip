@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import crypto from "crypto";
 import { router } from "./routes/index.js";
 import { versionMiddleware } from "./middleware/version.js";
@@ -24,6 +25,11 @@ const app = express();
 // Required for req.ip to return the real client IP (not ::1/::ffff:127.0.0.1)
 // and for express-rate-limit v8 to generate keys correctly.
 app.set("trust proxy", 1);
+
+// ── Compression ───────────────────────────────────────────────────────────
+// Gzip/deflate all responses. Excludes already-compressed binary content
+// (images, video) automatically. Saves ~60-80% on JSON API responses.
+app.use(compression());
 
 // ── Phase D: Request ID middleware ────────────────────────────────────────
 // Attach a unique request ID to every request for log correlation.

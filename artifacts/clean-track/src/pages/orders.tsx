@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
 import { PendingSyncBadge } from "@/components/pending-sync-badge";
@@ -11,13 +11,21 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "react-router-dom";
-import { Plus, Search, Eye, AlertTriangle, ArrowUpDown, ShoppingCart } from "lucide-react";
+import {
+  Plus, Search, Eye, AlertTriangle, ArrowUpDown, ShoppingCart,
+  Download, RefreshCw, CheckSquare, X, ChevronDown,
+  Package, Clock, CheckCircle, Loader,
+} from "lucide-react";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
 import { CreateOrderDialog } from "@/components/create-order-dialog";
 import { useBranch } from "@/context/branch-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import type { Order } from "@/lib/api";
 
 function statusBadge(status: string) {
   const map: Record<string, any> = {
@@ -47,6 +55,138 @@ function formatCurrency(v: number | null | undefined) {
 
 type SortKey = "urgency" | "date";
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  processing: "Processing",
+  ready: "Ready",
+  partial_pickup: "Partial Pickup",
+  completed: "Completed",
+};
+
+const BULK_STATUSES = [
+  { value: "processing", label: "Mark Processing", icon: Loader },
+  { value: "ready", label: "Mark Ready", icon: CheckCircle },
+  { value: "completed", label: "Mark Completed", icon: Package },
+];
+
+// ── Stats bar ──────────────────────────────────────────────────────────────
+function StatsBar({ orders }: { orders: (Order & { _urgency: any })[] }) {
+  const counts = orders.reduce(
+    (acc, o) => {
+      acc[o.status] = (acc[o.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+  const overdue = orders.filter(o => o._urgency.level === "overdue" && o.status !== "completed").length;
+  const revenue = orders.reduce((s, o) => s + (o.price ?? 0), 0);
+  const collected = orders.reduce((s, o) => s + (o.amountPaid ?? 0), 0);
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+      {[
+        { label: "Pending", count: counts.pending ?? 0, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" },
+        { label: "Processing", count: counts.processing ?? 0, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800" },
+        { label: "Ready", count: counts.ready ?? 0, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" },
+        { label: "Completed", count: counts.completed ?? 0, color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700" },
+        { label: "Overdue", count: overdue, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800" },
+        {
+          label: "Revenue",
+          count: null,
+          value: formatCurrency(revenue),
+          sub: `${formatCurrency(collected)} collected`,
+          color: "text-primary",
+          bg: "bg-primary/5 border-primary/20",
+        },
+      ].map(({ label, count, value, sub, color, bg }) => (
+        <div key={label} className={`rounded-lg border px-3 py-2.5 ${bg}`}>
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className={`text-xl font-bold ${color}`}>{value ?? count}</p>
+          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── CSV export ─────────────────────────────────────────────────────────────
+function exportToCSV(orders: (Order & { _urgency: any })[], filename = "orders.csv") {
+  const headers = [
+    "Order ID", "Customer", "Phone", "Service", "Status", "Payment",
+    "Items", "Price (₦)", "Paid (₦)", "Created At",
+  ];
+  const rows = orders.map(o => [
+    o.orderId,
+    o.customerName,
+    o.phone,
+    o.serviceType,
+    STATUS_LABELS[o.status] ?? o.status,
+    o.paymentStatus,
+    o.itemSummary ?? `${o.shirts}S/${o.trousers}T`,
+    o.price ?? 0,
+    o.amountPaid ?? 0,
+    new Date(o.createdAt).toLocaleString("en-NG"),
+  ]);
+
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ── Bulk action toolbar ───────────────────────────────────────────────────
+function BulkActionBar({
+  selectedCount,
+  onClearSelection,
+  onBulkUpdate,
+  isUpdating,
+}: {
+  selectedCount: number;
+  onClearSelection: () => void;
+  onBulkUpdate: (status: string) => void;
+  isUpdating: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap bg-primary/10 border border-primary/30 rounded-lg px-4 py-2.5">
+      <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+      <span className="text-sm font-medium text-primary">
+        {selectedCount} order{selectedCount !== 1 ? "s" : ""} selected
+      </span>
+      <div className="flex items-center gap-2 ml-2 flex-wrap">
+        {BULK_STATUSES.map(({ value, label }) => (
+          <Button
+            key={value}
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            disabled={isUpdating}
+            onClick={() => onBulkUpdate(value)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0 ml-auto"
+        onClick={onClearSelection}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 export default function Orders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -54,7 +194,10 @@ export default function Orders() {
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("urgency");
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const { activeBranchId } = useBranch();
+  const queryClient = useQueryClient();
 
   const { data: orders = [], isLoading, isViewingCache } = useCachedQuery({
     queryKey: ["orders", activeBranchId],
@@ -94,8 +237,63 @@ export default function Orders() {
   const overdueCount = ordersWithUrgency.filter(o => o._urgency.level === "overdue" && o.status !== "completed").length;
   const urgentCount = ordersWithUrgency.filter(o => o._urgency.level === "urgent" && o.status !== "completed").length;
 
+  // ── Selection helpers ──────────────────────────────────────────────────
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectableIds = sorted.filter(o => o.status !== "completed").map(o => o.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableIds));
+    }
+  }, [allSelected, selectableIds]);
+
+  // ── Bulk status update ─────────────────────────────────────────────────
+  const handleBulkUpdate = useCallback(async (status: string) => {
+    if (selectedIds.size === 0) return;
+    setIsBulkUpdating(true);
+    const ids = [...selectedIds];
+    let successCount = 0;
+    let failCount = 0;
+    await Promise.allSettled(
+      ids.map(async id => {
+        try {
+          await api.orders.update(id, { status: status as any });
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      })
+    );
+    setIsBulkUpdating(false);
+    setSelectedIds(new Set());
+    await queryClient.invalidateQueries({ queryKey: ["orders"] });
+    if (successCount > 0) toast.success(`Updated ${successCount} order${successCount !== 1 ? "s" : ""} to ${STATUS_LABELS[status] ?? status}`);
+    if (failCount > 0) toast.error(`${failCount} order${failCount !== 1 ? "s" : ""} failed to update`);
+  }, [selectedIds, queryClient]);
+
+  // ── CSV export ─────────────────────────────────────────────────────────
+  const handleExport = () => {
+    const toExport = someSelected
+      ? sorted.filter(o => selectedIds.has(o.id))
+      : sorted;
+    const dateStr = new Date().toISOString().split("T")[0];
+    exportToCSV(toExport, `cleantrack-orders-${dateStr}.csv`);
+    toast.success(`Exported ${toExport.length} order${toExport.length !== 1 ? "s" : ""} to CSV`);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -117,13 +315,41 @@ export default function Orders() {
             </div>
           )}
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">New Order</span>
-          <span className="sm:hidden">New</span>
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={sorted.length === 0}
+            className="gap-2 hidden sm:flex"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export{someSelected ? ` (${selectedIds.size})` : ""}
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New Order</span>
+            <span className="sm:hidden">New</span>
+          </Button>
+        </div>
       </div>
 
+      {/* Stats bar */}
+      {!isLoading && ordersWithUrgency.length > 0 && (
+        <StatsBar orders={ordersWithUrgency} />
+      )}
+
+      {/* Bulk action toolbar */}
+      {someSelected && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          onClearSelection={() => setSelectedIds(new Set())}
+          onBulkUpdate={handleBulkUpdate}
+          isUpdating={isBulkUpdating}
+        />
+      )}
+
+      {/* Filters */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
@@ -175,23 +401,76 @@ export default function Orders() {
               <ArrowUpDown className="h-3.5 w-3.5" />
               {sortKey === "urgency" ? "By Urgency" : "By Date"}
             </Button>
+            {(search || statusFilter !== "all" || paymentFilter !== "all" || urgencyFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-muted-foreground"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("all");
+                  setPaymentFilter("all");
+                  setUrgencyFilter("all");
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
+      {/* Table */}
       <Card>
-        <CardHeader className="pb-0">
+        <CardHeader className="pb-0 flex-row items-center justify-between">
           <CardTitle className="text-base">{sorted.length} order{sorted.length !== 1 ? "s" : ""}</CardTitle>
+          {/* Mobile export */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleExport}
+            disabled={sorted.length === 0}
+            className="gap-1.5 text-muted-foreground sm:hidden"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading orders...</div>
+            <div className="divide-y">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+                  <div className="h-2 w-2 rounded-full bg-muted animate-pulse shrink-0" />
+                  <div className="h-4 w-20 bg-muted animate-pulse rounded font-mono" />
+                  <div className="flex-1 space-y-1">
+                    <div className="h-4 w-36 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                  </div>
+                  <div className="h-5 w-16 bg-muted animate-pulse rounded hidden sm:block" />
+                  <div className="h-5 w-14 bg-muted animate-pulse rounded hidden sm:block" />
+                  <div className="h-4 w-20 bg-muted animate-pulse rounded hidden sm:block" />
+                  <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8"></TableHead>
+                    <TableHead className="w-10 pl-4">
+                      {selectableIds.length > 0 && (
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Select all"
+                        />
+                      )}
+                    </TableHead>
+                    <TableHead className="w-6 pl-0"></TableHead>
                     <TableHead>Order ID</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead className="hidden sm:table-cell">Type</TableHead>
@@ -206,9 +485,8 @@ export default function Orders() {
                 <TableBody>
                   {pendingOrders.map(o => (
                     <TableRow key={o.localId} className="bg-blue-50/40 dark:bg-blue-950/20 opacity-90">
-                      <TableCell className="pr-0">
-                        <span className="block h-2 w-2 rounded-full mx-auto bg-blue-400" />
-                      </TableCell>
+                      <TableCell className="pl-4"><span className="block h-2 w-2 rounded-full mx-auto bg-blue-400" /></TableCell>
+                      <TableCell className="pl-0"></TableCell>
                       <TableCell className="font-mono text-xs">{o.orderId ?? o.localId.slice(0, 12)}</TableCell>
                       <TableCell className="font-medium">
                         <span className="block">{o.customerName}</span>
@@ -229,9 +507,26 @@ export default function Orders() {
                     const urg = order._urgency;
                     const isActive = !["completed", "partial_pickup"].includes(order.status);
                     const hasItems = (order.itemCount ?? 0) > 0;
+                    const isSelected = selectedIds.has(order.id);
+                    const isSelectable = order.status !== "completed";
                     return (
-                      <TableRow key={order.id} className={cn(isActive ? urg.rowClass : "")}>
-                        <TableCell className="pr-0">
+                      <TableRow
+                        key={order.id}
+                        className={cn(
+                          isActive ? urg.rowClass : "",
+                          isSelected && "bg-primary/5 dark:bg-primary/10"
+                        )}
+                      >
+                        <TableCell className="pl-4">
+                          {isSelectable && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(order.id)}
+                              aria-label={`Select order ${order.orderId}`}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="pl-0">
                           {isActive && <span className={cn("block h-2 w-2 rounded-full mx-auto", urg.dotClass)} />}
                         </TableCell>
                         <TableCell className="font-mono text-xs">{order.orderId}</TableCell>
@@ -269,9 +564,9 @@ export default function Orders() {
                       </TableRow>
                     );
                   })}
-                  {!sorted.length && (
+                  {!sorted.length && !pendingOrders.length && (
                     <TableRow>
-                      <TableCell colSpan={10}>
+                      <TableCell colSpan={11}>
                         {orders.length === 0 ? (
                           <div className="text-center py-14 space-y-3">
                             <ShoppingCart className="h-10 w-10 mx-auto text-muted-foreground/40" />
@@ -285,7 +580,18 @@ export default function Orders() {
                           </div>
                         ) : (
                           <div className="text-center py-10 text-muted-foreground text-sm">
-                            No orders match the current filters. Try adjusting or clearing the filters.
+                            No orders match the current filters.{" "}
+                            <button
+                              className="underline text-foreground hover:text-primary"
+                              onClick={() => {
+                                setSearch("");
+                                setStatusFilter("all");
+                                setPaymentFilter("all");
+                                setUrgencyFilter("all");
+                              }}
+                            >
+                              Clear filters
+                            </button>
                           </div>
                         )}
                       </TableCell>
