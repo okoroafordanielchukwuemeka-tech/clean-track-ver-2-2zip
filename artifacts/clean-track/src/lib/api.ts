@@ -209,6 +209,7 @@ export const api = {
   pickups: {
     list: (orderId: number) => request<PickupRecord[]>("GET", `/orders/${orderId}/pickups`),
     record: (orderId: number, data: PickupInput, idempotencyKey?: string) => request<PickupResponse>("POST", `/orders/${orderId}/pickups`, data, idempotencyKey),
+    getReceipt: (orderId: number, pickupId: number) => request<import("@/components/pickup-receipt-view").PickupReceiptData>("GET", `/orders/${orderId}/pickups/${pickupId}/receipt`),
   },
   customers: {
     list: (params?: { search?: string; tag?: string; branchId?: number | null; sort?: string; archived?: boolean }) => {

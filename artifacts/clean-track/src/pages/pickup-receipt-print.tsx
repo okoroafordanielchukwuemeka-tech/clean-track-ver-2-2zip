@@ -1,41 +1,33 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ReceiptView } from "@/components/receipt-view";
+import { PickupReceiptView } from "@/components/pickup-receipt-view";
 import { api } from "@/lib/api";
 
 type PrintFormat = "80mm" | "58mm" | "a4";
 
-export default function ReceiptPrint() {
-  const { receiptNumber } = useParams<{ receiptNumber: string }>();
+export default function PickupReceiptPrint() {
+  const { orderId, pickupId } = useParams<{ orderId: string; pickupId: string }>();
   const [format, setFormat] = useState<PrintFormat>("80mm");
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["receipt", receiptNumber],
-    queryFn: () => api.receipts.getByNumber(receiptNumber!),
-    enabled: !!receiptNumber,
+    queryKey: ["pickup-receipt", orderId, pickupId],
+    queryFn: () => api.pickups.getReceipt(parseInt(orderId!), parseInt(pickupId!)),
+    enabled: !!orderId && !!pickupId,
   });
 
   useEffect(() => {
     if (data) {
-      document.title = `Receipt ${data.receipt?.receiptNumber ?? receiptNumber}`;
+      document.title = `Pickup Receipt ${data.pickup.pickupNumber}`;
     }
-  }, [data, receiptNumber]);
+  }, [data]);
 
   if (isLoading) {
-    return (
-      <div className="receipt-print-loading">
-        Loading receipt...
-      </div>
-    );
+    return <div className="receipt-print-loading">Loading pickup receipt...</div>;
   }
 
   if (isError || !data) {
-    return (
-      <div className="receipt-print-loading">
-        Receipt not found.
-      </div>
-    );
+    return <div className="receipt-print-loading">Pickup receipt not found.</div>;
   }
 
   return (
@@ -58,7 +50,7 @@ export default function ReceiptPrint() {
           Close
         </button>
       </div>
-      <ReceiptView data={data} showAllPayments />
+      <PickupReceiptView data={data} />
     </div>
   );
 }

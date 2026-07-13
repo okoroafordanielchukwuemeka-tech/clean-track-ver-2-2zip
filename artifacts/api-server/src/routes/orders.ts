@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, notificationMessages, notificationEvents } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
+import { computeOrderPricing } from "../lib/order-financials.js";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -974,12 +975,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
     const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
     const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
 
-    const basePrice = parseFloat(order.price || "0");
-    const extraCharge = parseFloat(order.extraCharge || "0");
-    const discount = parseFloat(order.discount || "0");
-    const totalDue = basePrice + extraCharge - discount;
-    const amountPaid = parseFloat(order.amountPaid || "0");
-    const balance = Math.max(0, totalDue - amountPaid);
+    const { basePrice, extraCharge, discount, totalDue, amountPaid, balance } = computeOrderPricing(order);
 
     res.json({
       receipt: latestPayment ? {

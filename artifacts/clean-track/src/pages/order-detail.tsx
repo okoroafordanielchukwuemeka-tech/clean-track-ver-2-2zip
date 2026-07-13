@@ -1307,6 +1307,7 @@ export default function OrderDetail() {
                         <TableHead>Processed By</TableHead>
                         <TableHead>Notes</TableHead>
                         <TableHead>Date & Time</TableHead>
+                        <TableHead className="text-right">Receipt</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1330,6 +1331,7 @@ export default function OrderDetail() {
                           <TableCell className="text-xs text-muted-foreground">
                             {new Date(p.createdAt).toLocaleDateString()}
                           </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
                         </TableRow>
                       ))}
                       {pendingPickups.map((p) => (
@@ -1348,6 +1350,7 @@ export default function OrderDetail() {
                           <TableCell className="text-xs text-muted-foreground">
                             {new Date(p.createdAt).toLocaleDateString()}
                           </TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">—</TableCell>
                         </TableRow>
                       ))}
                       {pickups.map((p) => (
@@ -1366,6 +1369,16 @@ export default function OrderDetail() {
                           <TableCell className="text-muted-foreground">{p.notes || "—"}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {new Date(p.createdAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => window.open(`/orders/${orderId}/pickups/${p.id}/print`, "_blank")}
+                            >
+                              <Printer className="h-3 w-3" />Print
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}

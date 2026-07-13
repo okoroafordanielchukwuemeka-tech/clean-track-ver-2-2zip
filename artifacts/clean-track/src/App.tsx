@@ -31,6 +31,7 @@ import NotFound from "@/pages/not-found";
 import DiscountApprovals from "@/pages/discount-approvals";
 import Receipts from "@/pages/receipts";
 import ReceiptPrint from "@/pages/receipt-print";
+import PickupReceiptPrint from "@/pages/pickup-receipt-print";
 import BranchesPage from "@/pages/branches";
 import DemoLogin from "@/pages/demo-login";
 import OperationsPage from "@/pages/operations";
@@ -130,6 +131,7 @@ export default function App() {
                 <Route path="*" element={<NotFound />} />
               </Route>
               <Route path="/receipts/:receiptNumber/print" element={<ReceiptPrint />} />
+              <Route path="/orders/:orderId/pickups/:pickupId/print" element={<PickupReceiptPrint />} />
             </Routes>
           </BrowserRouter>
           <Toaster richColors />

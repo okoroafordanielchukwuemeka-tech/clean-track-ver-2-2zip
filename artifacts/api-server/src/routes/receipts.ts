@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { orders, paymentRecords, orderItems, customers, laundries, priceAdjustments, branches, workers } from "@workspace/db/schema";
 import { eq, desc, and, count, ilike, or, gte, lte, sql } from "drizzle-orm";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { computeOrderPricing } from "../lib/order-financials.js";
 
 export const receiptsRouter = Router();
 
@@ -154,12 +155,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
     const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
 
-    const basePrice = parseFloat(order.price || "0");
-    const extraCharge = parseFloat(order.extraCharge || "0");
-    const discount = parseFloat(order.discount || "0");
-    const totalDue = basePrice + extraCharge - discount;
-    const amountPaid = parseFloat(order.amountPaid || "0");
-    const balance = Math.max(0, totalDue - amountPaid);
+    const { basePrice, extraCharge, discount, totalDue, amountPaid, balance } = computeOrderPricing(order);
 
     res.json({
       receipt: {

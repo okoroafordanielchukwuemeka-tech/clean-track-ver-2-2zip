@@ -223,6 +223,21 @@ export default function Customers() {
     enabled: profile != null && profileTab === "payments",
   });
 
+  // Branding used to keep the printed Statement visually consistent with
+  // Order/Payment Receipts (same header, logo, footer text).
+  const { data: businessProfile } = useQuery({
+    queryKey: ["settings", "business-profile"],
+    queryFn: () => api.settings.getBusinessProfile(),
+    enabled: profile != null && profileTab === "statement",
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: brandingSettings } = useQuery({
+    queryKey: ["settings", "branding"],
+    queryFn: () => api.settings.getBranding(),
+    enabled: profile != null && profileTab === "statement",
+    staleTime: 5 * 60 * 1000,
+  });
+
   const stmtParams = (() => {
     const now = new Date();
     const iso = (d: Date) => d.toISOString();
@@ -1139,13 +1154,27 @@ export default function Customers() {
                               <td style="text-align:right;${balColor(e.balance)}">${fmtCur(Math.abs(e.balance))}${e.balance < 0 ? " CR" : ""}</td>
                             </tr>`).join("");
                           const s = statement.summary;
+                          const headerName = brandingSettings?.receiptHeaderName || businessProfile?.businessName || "Clean Track";
+                          const bizAddress = businessProfile?.address ?? "";
+                          const bizPhone = businessProfile?.phone ?? "";
+                          const bizEmail = businessProfile?.email ?? "";
+                          const logoUrl = businessProfile?.logoUrl ?? "";
+                          const footerText = brandingSettings?.receiptFooterText ?? "";
                           printWindow?.close();
                           const pw = window.open("", "_blank");
                           if (!pw) return;
+                          // Same header/footer/typography language as ReceiptView (receipt-view.tsx)
+                          // so every printable CleanTrack document reads as one product.
                           pw.document.write(`<!DOCTYPE html><html><head><title>Statement — ${statement.customer.fullName}</title>
                           <style>
-                            body{font-family:sans-serif;font-size:12px;padding:24px;color:#111}
-                            h1{font-size:20px;margin:0 0 4px}
+                            @page { size: A4; margin: 15mm; }
+                            body{font-family:sans-serif;font-size:12px;padding:0;color:#111}
+                            .doc-header{text-align:center;margin-bottom:14px}
+                            .doc-header img{max-width:80px;max-height:60px;margin:0 auto 8px;display:block}
+                            .doc-header h2{font-size:18px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;margin:0 0 4px}
+                            .doc-header p{font-size:11px;color:#555;margin:1px 0}
+                            .doc-divider{border:none;border-top:1px dashed #999;margin:10px 0}
+                            h1{font-size:16px;letter-spacing:2px;text-transform:uppercase;text-align:center;color:#555;margin:0 0 12px;font-weight:bold}
                             .meta{color:#555;font-size:11px;margin-bottom:16px}
                             table{width:100%;border-collapse:collapse;margin-top:12px}
                             th,td{border:1px solid #e5e7eb;padding:5px 8px;text-align:left;font-size:11px}
@@ -1156,7 +1185,18 @@ export default function Customers() {
                             .summary-box{border:1px solid #e5e7eb;padding:8px 12px;border-radius:6px}
                             .summary-box p{margin:0;font-size:10px;color:#6b7280}
                             .summary-box strong{display:block;font-size:13px;margin-top:2px}
+                            .doc-footer{text-align:center;font-size:11px;color:#888;font-style:italic;margin:16px 0 4px}
+                            .doc-generated{text-align:center;font-size:9px;color:#bbb;margin-top:8px;letter-spacing:0.5px}
+                            tr{break-inside:avoid}
                           </style></head><body>
+                          <div class="doc-header">
+                            ${logoUrl ? `<img src="${logoUrl}" alt="${headerName}" />` : ""}
+                            <h2>${headerName}</h2>
+                            ${bizAddress ? `<p>${bizAddress}</p>` : ""}
+                            ${bizPhone ? `<p>${bizPhone}</p>` : ""}
+                            ${bizEmail ? `<p>${bizEmail}</p>` : ""}
+                          </div>
+                          <div class="doc-divider"></div>
                           <h1>Customer Statement</h1>
                           <div class="meta">
                             <strong>${statement.customer.fullName}</strong> · ${statement.customer.phone}${statement.customer.address ? " · " + statement.customer.address : ""}<br/>
@@ -1178,6 +1218,8 @@ export default function Customers() {
                             <div class="summary-box"><p>Opening Balance</p><strong style="${balColor(s.openingBalance)}">${fmtCur(Math.abs(s.openingBalance))}${s.openingBalance < 0 ? " CR" : ""}</strong></div>
                             <div class="summary-box"><p>Closing Balance</p><strong style="${balColor(s.closingBalance)}">${fmtCur(Math.abs(s.closingBalance))}${s.closingBalance < 0 ? " CR" : ""}</strong></div>
                           </div>
+                          ${footerText ? `<div class="doc-footer">${footerText}</div>` : ""}
+                          <p class="doc-generated">Generated by Clean Track · ${new Date().toLocaleDateString("en-NG")}</p>
                           </body></html>`);
                           pw.document.close();
                           pw.print();

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { pickupRecords, orders, orderItems, customers } from "@workspace/db/schema";
+import { pickupRecords, orders, orderItems, customers, laundries, branches, priceAdjustments, paymentRecords, workers } from "@workspace/db/schema";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { checkPermission } from "../middleware/permissions.js";
 import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 import { fireAutomation } from "../lib/automation-service.js";
+import { computeOrderPricing } from "../lib/order-financials.js";
 
 export const pickupsRouter = Router({ mergeParams: true });
 
@@ -40,6 +41,103 @@ pickupsRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, 
     res.json(records);
   } catch {
     res.status(500).json({ error: "Failed to list pickups" });
+  }
+});
+
+// Pickup Receipt — printable slip confirming a single pickup event.
+// Reuses computeOrderPricing() so the outstanding balance shown here always
+// matches Order/Payment Receipts and the Customer Statement.
+pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const workerBranchId = req.auth!.branchId;
+    const orderId = parseInt(req.params.orderId);
+    const pickupId = parseInt(req.params.pickupId);
+
+    const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
+    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
+    const [order] = await db.select().from(orders).where(and(...orderConditions));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const [pickup] = await db.select().from(pickupRecords)
+      .where(and(eq(pickupRecords.id, pickupId), eq(pickupRecords.orderId, orderId)));
+    if (!pickup) return res.status(404).json({ error: "Pickup record not found" });
+
+    const [laundry] = await db.select().from(laundries).where(eq(laundries.id, laundryId));
+    const [customer] = order.customerId
+      ? await db.select().from(customers).where(eq(customers.id, order.customerId))
+      : [null];
+
+    const [items, allPayments, orderBranch, processedByWorker] = await Promise.all([
+      db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
+      db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)),
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
+        : Promise.resolve(null),
+      pickup.processedBy
+        ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, pickup.processedBy)).then(r => r[0] ?? null)
+        : Promise.resolve(null),
+    ]);
+
+    const amountPaid = allPayments.reduce((s, p) => s + parseFloat(p.amount || "0"), 0);
+    const { basePrice, extraCharge, discount, totalDue, balance } = computeOrderPricing({ ...order, amountPaid: String(amountPaid) });
+
+    const itemsCollected = pickup.itemPickups && pickup.itemPickups.length > 0
+      ? pickup.itemPickups.map(ip => ({ name: ip.name, quantity: ip.quantity }))
+      : [
+          ...(pickup.shirtsPickedUp > 0 ? [{ name: "Shirts", quantity: pickup.shirtsPickedUp }] : []),
+          ...(pickup.trousersPickedUp > 0 ? [{ name: "Trousers", quantity: pickup.trousersPickedUp }] : []),
+        ];
+
+    const itemsRemaining = items.length > 0
+      ? items
+          .map(oi => ({ name: oi.name, quantity: Math.max(0, oi.quantity - oi.quantityPickedUp) }))
+          .filter(oi => oi.quantity > 0)
+      : [
+          ...(Math.max(0, order.shirts - order.shirtsPickedUp) > 0 ? [{ name: "Shirts", quantity: Math.max(0, order.shirts - order.shirtsPickedUp) }] : []),
+          ...(Math.max(0, order.trousers - order.trousersPickedUp) > 0 ? [{ name: "Trousers", quantity: Math.max(0, order.trousers - order.trousersPickedUp) }] : []),
+        ];
+
+    const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
+    const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
+
+    res.json({
+      pickup: {
+        id: pickup.id,
+        pickupNumber: `PU-${String(pickup.id).padStart(6, "0")}`,
+        createdAt: pickup.createdAt,
+        notes: pickup.notes,
+        recordedBy: processedByWorker?.name ?? pickup.recordedBy ?? null,
+      },
+      laundry: {
+        businessName: laundry?.businessName ?? "",
+        phone: laundry?.phone ?? "",
+        address: businessProfile.address ?? "",
+        email: businessProfile.email ?? "",
+        logoUrl: businessProfile.logoUrl ?? "",
+        receiptHeaderName: brandingSettings.receiptHeaderName ?? laundry?.businessName ?? "",
+        receiptFooterText: brandingSettings.receiptFooterText ?? "",
+        brandColor: brandingSettings.brandColor ?? "",
+      },
+      branch: orderBranch ? { id: orderBranch.id, name: orderBranch.name, address: orderBranch.address ?? "" } : null,
+      customer: {
+        fullName: order.customerName,
+        phone: order.phone,
+        address: order.address ?? customer?.address ?? "",
+      },
+      order: {
+        id: order.id,
+        orderId: order.orderId,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+      },
+      itemsCollected,
+      itemsRemaining,
+      pricing: { basePrice, extraCharge, discount, totalDue, amountPaid, balance },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to get pickup receipt" });
   }
 });
 
@@ -103,8 +201,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
         return { badStatus: true } as const;
       }
 
-      const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
-      const amountPaid = parseFloat(order.amountPaid || "0");
+      const { totalDue, amountPaid } = computeOrderPricing(order);
       const fullyPaid = totalDue <= 0 || amountPaid >= totalDue;
 
       // Read order items inside the transaction (consistent with the locked order row)
