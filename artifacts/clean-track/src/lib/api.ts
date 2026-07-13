@@ -211,8 +211,8 @@ export const api = {
     record: (orderId: number, data: PickupInput, idempotencyKey?: string) => request<PickupResponse>("POST", `/orders/${orderId}/pickups`, data, idempotencyKey),
   },
   customers: {
-    list: (params?: { search?: string; tag?: string; branchId?: number | null }) => {
-      const cleaned = params ? Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) : {};
+    list: (params?: { search?: string; tag?: string; branchId?: number | null; sort?: string; archived?: boolean }) => {
+      const cleaned = params ? Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== false).map(([k, v]) => [k, String(v)])) : {};
       const qs = Object.keys(cleaned).length ? "?" + new URLSearchParams(cleaned).toString() : "";
       return request<CustomerWithMetrics[]>("GET", `/customers${qs}`);
     },
@@ -220,6 +220,7 @@ export const api = {
     create: (data: CustomerInput, idempotencyKey?: string) => request<CustomerWithMetrics>("POST", "/customers", data, idempotencyKey),
     update: (id: number, data: CustomerUpdateInput) => request<Customer>("PATCH", `/customers/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/customers/${id}`),
+    restore: (id: number) => request<Customer>("POST", `/customers/${id}/restore`),
     backfill: () => request<{ created: number; linked: number; message: string }>("POST", "/customers/backfill"),
     statement: (id: number, params?: { from?: string; to?: string }) => {
       const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as any)).toString() : "";
@@ -888,17 +889,20 @@ export interface WorkerAnalytics {
 export interface Customer {
   id: number;
   laundryId: number;
+  branchId?: number | null;
   fullName: string;
   phone: string;
   address?: string | null;
   notes?: string | null;
   createdAt: string;
   lastActivityAt: string;
+  deletedAt?: string | null;
 }
 
 export interface CustomerMetrics {
   totalOrders: number;
   completedOrders: number;
+  cancelledOrders: number;
   activeOrders: number;
   totalSpending: number;
   totalPaid: number;
@@ -910,7 +914,8 @@ export interface CustomerMetrics {
   isRepeat: boolean;
   hasBalance: boolean;
   hasRemainingPickups: boolean;
-  tags: string[];
+  tags: string[];           // auto-computed tags (vip, repeat, has_balance, has_pickups)
+  customTags: string[];     // owner-set custom tags (VIP, Business, Hotel, …)
 }
 
 export interface CustomerWithMetrics extends Customer, CustomerMetrics {}
@@ -958,6 +963,7 @@ export interface CustomerUpdateInput {
   phone?: string;
   address?: string | null;
   notes?: string | null;
+  tags?: string[] | null;
 }
 
 export interface Worker {

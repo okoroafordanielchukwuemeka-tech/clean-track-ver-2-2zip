@@ -10,6 +10,7 @@ export const customers = pgTable("customers", {
   phone: text("phone").notNull(),
   address: text("address"),
   notes: text("notes"),
+  tags: text("tags"), // JSON array string e.g. '["VIP","Business"]'
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastActivityAt: timestamp("last_activity_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),

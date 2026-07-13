@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
@@ -9,30 +9,44 @@ import { getIsOnline } from "@/lib/network-state";
 import { localDb, type LocalCustomer } from "@/lib/local-db";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
-import { api, type CustomerWithMetrics, type CustomerProfile, type CustomerInput, type CustomerUpdateInput, type CustomerStatement } from "@/lib/api";
+import { useBranch } from "@/context/branch-context";
+import {
+  api,
+  type CustomerWithMetrics,
+  type CustomerProfile,
+  type CustomerInput,
+  type CustomerUpdateInput,
+  type CustomerStatement,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReceiptView } from "@/components/receipt-view";
 import {
   Users, Search, Plus, Eye, Phone, AlertTriangle,
   ShoppingBag, Crown, RefreshCw, ArrowRight, Pencil, Trash2, CheckCircle,
-  Printer, FileText, Calendar, TrendingDown, TrendingUp, Download, Clock,
+  Printer, FileText, Calendar, TrendingUp, Download, Clock, Copy,
+  Tag, X, ExternalLink, CreditCard, Building2, MapPin, Banknote,
+  UserX, Archive, Filter, SortAsc, Undo2, Star, Zap, PackageCheck,
+  ChevronRight, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useBranch } from "@/context/branch-context";
 
-function fmt(v: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-function timeAgo(dateStr: string) {
+const fmt = (v: number) =>
+  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
+
+const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "numeric" });
+
+function timeAgo(dateStr: string | null) {
+  if (!dateStr) return "—";
   const diff = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(diff / 86400000);
   if (days === 0) return "Today";
@@ -42,54 +56,160 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-function statusBadge(status: string) {
+const PRESET_TAGS = ["VIP", "Business", "Hotel", "Restaurant", "Hospital", "School", "Wholesale", "Wholesale"];
+const UNIQUE_PRESET_TAGS = ["VIP", "Business", "Hotel", "Restaurant", "Hospital", "School", "Wholesale"];
+
+const SORT_OPTIONS = [
+  { value: "newest",             label: "Newest First" },
+  { value: "oldest",             label: "Oldest First" },
+  { value: "most_orders",        label: "Most Orders" },
+  { value: "highest_spending",   label: "Highest Spending" },
+  { value: "outstanding_balance",label: "Outstanding Balance" },
+  { value: "last_visit",         label: "Last Visit" },
+];
+
+const FILTER_TABS = [
+  { value: "all",         label: "All" },
+  { value: "has_balance", label: "Balance" },
+  { value: "has_pickups", label: "Pickups" },
+  { value: "vip",         label: "VIP" },
+  { value: "repeat",      label: "Repeat" },
+  { value: "inactive",    label: "Inactive" },
+  { value: "archived",    label: "Archived" },
+];
+
+// ─── Helper components ────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
   const map: Record<string, any> = {
     pending: "warning", processing: "info", ready: "success",
     partial_pickup: "warning", completed: "success",
   };
-  const label: Record<string, string> = { partial_pickup: "Partial Pickup" };
+  const label: Record<string, string> = { partial_pickup: "Part. Pickup" };
   return <Badge variant={map[status] || "outline"} className="text-xs">{label[status] ?? status}</Badge>;
 }
 
-function CustomerTags({ c }: { c: CustomerWithMetrics }) {
+function PaymentBadge({ status }: { status: string }) {
+  const map: Record<string, any> = { paid: "success", partial: "warning", unpaid: "destructive" };
+  return <Badge variant={map[status] || "outline"} className="text-xs capitalize">{status}</Badge>;
+}
+
+function AutoTags({ c }: { c: CustomerWithMetrics }) {
   return (
     <div className="flex flex-wrap gap-1">
       {c.isVip && <Badge variant="warning" className="text-xs gap-1"><Crown className="h-2.5 w-2.5" />VIP</Badge>}
       {c.isRepeat && <Badge variant="info" className="text-xs gap-1"><RefreshCw className="h-2.5 w-2.5" />Repeat</Badge>}
       {c.hasBalance && <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-2.5 w-2.5" />Balance</Badge>}
       {c.hasRemainingPickups && <Badge variant="outline" className="text-xs gap-1"><ShoppingBag className="h-2.5 w-2.5" />Pickups</Badge>}
+      {(c.customTags ?? []).map(t => (
+        <Badge key={t} variant="secondary" className="text-xs gap-1"><Tag className="h-2.5 w-2.5" />{t}</Badge>
+      ))}
     </div>
   );
 }
+
+function StatTile({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+  return (
+    <div className="p-3 bg-muted/40 rounded-lg">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p className={`text-lg font-bold leading-tight ${color ?? ""}`}>{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Customers() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { isOwner, laundryId, hasPermission } = useAuth();
+  const { activeBranchId, branches } = useBranch();
+
+  // List state
   const [search, setSearch] = useState("");
-  const [tag, setTag] = useState("all");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+  const [filter, setFilter] = useState("all");
+
+  // Profile / dialog state
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [profileTab, setProfileTab] = useState<"orders" | "payments" | "statement">("orders");
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [createForm, setCreateForm] = useState<CustomerInput>({ fullName: "", phone: "" });
   const [editForm, setEditForm] = useState<CustomerUpdateInput & { id?: number }>({});
-  const [profileTab, setProfileTab] = useState<"orders" | "receipts" | "statement">("orders");
-  const [statementPeriod, setStatementPeriod] = useState<"30d" | "90d" | "custom">("90d");
-  const [statementFrom, setStatementFrom] = useState<string>("");
-  const [statementTo, setStatementTo] = useState<string>("");
 
-  const { activeBranchId } = useBranch();
+  // Notes inline editing
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+
+  // Tags editing
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const [pendingTags, setPendingTags] = useState<string[]>([]);
+
+  // Statement state
+  const [statementPeriod, setStatementPeriod] = useState<"30d" | "90d" | "custom">("90d");
+  const [statementFrom, setStatementFrom] = useState("");
+  const [statementTo, setStatementTo] = useState("");
+
   const pendingCustomers = usePendingLocalCustomers(laundryId);
 
+  // Debounce search
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleSearchChange = useCallback((val: string) => {
+    setSearch(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(val), 300);
+  }, []);
+
+  // ── Data queries ─────────────────────────────────────────────────────────────
+
+  const showArchived = filter === "archived";
+
   const { data: customers = [], isLoading, isViewingCache } = useCachedQuery({
-    queryKey: ["customers", search, tag, activeBranchId],
+    queryKey: ["customers", debouncedSearch, activeBranchId, showArchived],
     queryFn: () => api.customers.list({
-      search: search || undefined,
-      tag: tag !== "all" ? tag : undefined,
+      search: debouncedSearch || undefined,
       branchId: activeBranchId,
+      archived: showArchived || undefined,
     }),
   });
+
+  // Client-side filter + sort with useMemo for instant UI response
+  const displayed = useMemo(() => {
+    let result = [...customers];
+
+    if (!showArchived) {
+      if (filter === "has_balance")  result = result.filter(c => c.hasBalance);
+      else if (filter === "has_pickups") result = result.filter(c => c.hasRemainingPickups);
+      else if (filter === "vip")     result = result.filter(c => c.isVip || (c.customTags ?? []).some(t => t.toLowerCase() === "vip"));
+      else if (filter === "repeat")  result = result.filter(c => c.isRepeat);
+      else if (filter === "inactive") {
+        const cutoff = Date.now() - 90 * 86400000;
+        result = result.filter(c => !c.lastOrderDate || new Date(c.lastOrderDate).getTime() < cutoff);
+      }
+    }
+
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":             return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "most_orders":        return b.totalOrders - a.totalOrders;
+        case "highest_spending":   return b.totalSpending - a.totalSpending;
+        case "outstanding_balance":return b.outstandingBalance - a.outstandingBalance;
+        case "last_visit": {
+          const at = a.lastOrderDate ? new Date(a.lastOrderDate).getTime() : 0;
+          const bt = b.lastOrderDate ? new Date(b.lastOrderDate).getTime() : 0;
+          return bt - at;
+        }
+        default: return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+
+    return result;
+  }, [customers, filter, sortBy, showArchived]);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["customers", selectedId],
@@ -97,10 +217,10 @@ export default function Customers() {
     enabled: selectedId != null,
   });
 
-  const { data: customerReceiptsData, isLoading: receiptsLoading } = useQuery({
-    queryKey: ["customerReceipts", profile?.id],
+  const { data: customerPaymentsData, isLoading: paymentsLoading } = useQuery({
+    queryKey: ["customerPayments", profile?.id],
     queryFn: () => api.receipts.getCustomerReceipts(profile!.id),
-    enabled: profile != null && profileTab === "receipts",
+    enabled: profile != null && profileTab === "payments",
   });
 
   const stmtParams = (() => {
@@ -121,43 +241,30 @@ export default function Customers() {
     enabled: profile != null && profileTab === "statement",
   });
 
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+
   const backfillMutation = useMutation({
     mutationFn: () => api.customers.backfill(),
-    onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["customers"] });
-      toast.success(r.message);
-    },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["customers"] }); toast.success(r.message); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const createMutation = useMutation<CustomerWithMetrics | null, Error, CustomerInput>({
     mutationFn: async (data: CustomerInput) => {
       if (!getIsOnline()) {
-        if (!laundryId) {
-          throw new Error("Session data is missing. Please reload and try again.");
-        }
+        if (!laundryId) throw new Error("Session data is missing. Please reload and try again.");
         const localId = crypto.randomUUID();
         const now = new Date().toISOString();
         const record: LocalCustomer = {
-          localId,
-          serverId: null,
-          laundryId: laundryId,
-          branchId: activeBranchId,
-          fullName: data.fullName,
-          phone: data.phone,
-          address: data.address ?? null,
-          notes: data.notes ?? null,
-          syncStatus: "pending_create",
-          createdAt: now,
-          updatedAt: now,
+          localId, serverId: null, laundryId, branchId: activeBranchId,
+          fullName: data.fullName, phone: data.phone,
+          address: data.address ?? null, notes: data.notes ?? null,
+          syncStatus: "pending_create", createdAt: now, updatedAt: now,
         };
         await enqueueCustomerCreate(localId, record, {
-          fullName: data.fullName,
-          phone: data.phone,
-          address: data.address ?? null,
-          notes: data.notes ?? null,
-          branchId: activeBranchId,
-          laundryId,
+          fullName: data.fullName, phone: data.phone,
+          address: data.address ?? null, notes: data.notes ?? null,
+          branchId: activeBranchId, laundryId,
         });
         return null;
       }
@@ -187,28 +294,103 @@ export default function Customers() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const updateNotesMutation = useMutation({
+    mutationFn: ({ id, notes }: { id: number; notes: string }) => api.customers.update(id, { notes: notes || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers", selectedId] });
+      setEditingNotes(false);
+      toast.success("Notes saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateTagsMutation = useMutation({
+    mutationFn: ({ id, tags }: { id: number; tags: string[] }) => api.customers.update(id, { tags }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["customers", selectedId] });
+      setEditingTags(false);
+      toast.success("Tags updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.customers.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["customers"] });
       setSelectedId(null);
       setShowDelete(false);
-      toast.success("Customer deleted");
+      toast.success("Customer archived");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const totals = {
-    total: customers.length,
+  const restoreMutation = useMutation({
+    mutationFn: (id: number) => api.customers.restore(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      setSelectedId(null);
+      toast.success("Customer restored");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // ── Derived values ─────────────────────────────────────────────────────────────
+
+  const totals = useMemo(() => ({
+    total: customers.filter(c => !showArchived).length,
     withBalance: customers.filter(c => c.hasBalance).length,
     withPickups: customers.filter(c => c.hasRemainingPickups).length,
-    vip: customers.filter(c => c.isVip).length,
-  };
+    vip: customers.filter(c => c.isVip || (c.customTags ?? []).includes("VIP")).length,
+  }), [customers, showArchived]);
 
-  const currentCustomer = customers.find(c => c.id === selectedId);
+  const branchName = useMemo(() => {
+    if (!profile?.branchId) return null;
+    return branches.find(b => b.id === profile.branchId)?.name ?? `Branch #${profile.branchId}`;
+  }, [profile?.branchId, branches]);
+
+  function openProfile(id: number) {
+    setSelectedId(id);
+    setProfileTab("orders");
+    setEditingNotes(false);
+    setEditingTags(false);
+  }
+
+  function closeProfile() {
+    setSelectedId(null);
+    setProfileTab("orders");
+    setEditingNotes(false);
+    setEditingTags(false);
+  }
+
+  function startTagEdit() {
+    setPendingTags(profile?.customTags ?? []);
+    setTagInput("");
+    setEditingTags(true);
+  }
+
+  function addTag(tag: string) {
+    const trimmed = tag.trim();
+    if (!trimmed || pendingTags.includes(trimmed)) return;
+    setPendingTags(prev => [...prev, trimmed]);
+    setTagInput("");
+  }
+
+  function removeTag(tag: string) {
+    setPendingTags(prev => prev.filter(t => t !== tag));
+  }
+
+  function copyPhone(phone: string) {
+    navigator.clipboard.writeText(phone).then(() => toast.success("Phone number copied"));
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+
+      {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -218,8 +400,7 @@ export default function Customers() {
         </div>
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="outline" size="sm"
             onClick={() => backfillMutation.mutate()}
             disabled={backfillMutation.isPending}
             title="Link existing orders to customer profiles"
@@ -235,58 +416,87 @@ export default function Customers() {
         </div>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setTag("all")}>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Customers</p>
-            <p className="text-2xl font-bold">{totals.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setTag("has_balance")}>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">With Balance</p>
-            <p className="text-2xl font-bold text-red-600">{totals.withBalance}</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setTag("has_pickups")}>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Remaining Pickups</p>
-            <p className="text-2xl font-bold text-orange-600">{totals.withPickups}</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setTag("vip")}>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">VIP Customers</p>
-            <p className="text-2xl font-bold text-yellow-600">{totals.vip}</p>
-          </CardContent>
-        </Card>
+        {[
+          { label: "Total Customers", value: totals.total, color: "", onClick: () => setFilter("all") },
+          { label: "With Balance", value: totals.withBalance, color: "text-red-600", onClick: () => setFilter("has_balance") },
+          { label: "Remaining Pickups", value: totals.withPickups, color: "text-orange-600", onClick: () => setFilter("has_pickups") },
+          { label: "VIP Customers", value: totals.vip, color: "text-yellow-600", onClick: () => setFilter("vip") },
+        ].map(card => (
+          <Card
+            key={card.label}
+            className={`cursor-pointer hover:bg-muted/30 transition-colors ${filter === "all" && card.label === "Total Customers" ? "ring-2 ring-primary/20" : ""}`}
+            onClick={card.onClick}
+          >
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground mb-1">{card.label}</p>
+              <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
+      {/* Search + Filter + Sort */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or phone..."
-                className="pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+        <CardContent className="p-4 space-y-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, phone, or customer ID…"
+              className="pl-9"
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
+            {search && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => { setSearch(""); setDebouncedSearch(""); }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter tabs + Sort */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex flex-wrap gap-1">
+              {FILTER_TABS.map(tab => (
+                <button
+                  key={tab.value}
+                  onClick={() => setFilter(tab.value)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    filter === tab.value
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.value === "has_balance" && totals.withBalance > 0 && (
+                    <span className="ml-1 text-xs opacity-80">({totals.withBalance})</span>
+                  )}
+                </button>
+              ))}
             </div>
-            <Tabs value={tag} onValueChange={setTag}>
-              <TabsList>
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="has_balance">Balance</TabsTrigger>
-                <TabsTrigger value="has_pickups">Pickups</TabsTrigger>
-                <TabsTrigger value="vip">VIP</TabsTrigger>
-                <TabsTrigger value="repeat">Repeat</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="sm:ml-auto">
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="h-8 text-xs w-44 gap-1">
+                  <SortAsc className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Pending Offline Customers */}
       {pendingCustomers.length > 0 && (
         <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-900 dark:bg-blue-950/20">
           <CardHeader className="pb-2 pt-4 px-4">
@@ -303,9 +513,7 @@ export default function Customers() {
                     <TableCell className="font-medium py-3 pl-4">{c.fullName}</TableCell>
                     <TableCell className="text-sm text-muted-foreground py-3">{c.phone}</TableCell>
                     <TableCell className="text-sm text-muted-foreground py-3 hidden sm:table-cell">{c.address ?? "—"}</TableCell>
-                    <TableCell className="py-3 pr-4 text-right">
-                      <PendingSyncBadge />
-                    </TableCell>
+                    <TableCell className="py-3 pr-4 text-right"><PendingSyncBadge /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -314,13 +522,55 @@ export default function Customers() {
         </Card>
       )}
 
+      {/* Customer List */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{customers.length} customer{customers.length !== 1 ? "s" : ""}</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">
+            {isLoading ? "Loading…" : `${displayed.length} customer${displayed.length !== 1 ? "s" : ""}`}
+            {filter !== "all" && filter !== "archived" && (
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                · filtered by {FILTER_TABS.find(t => t.value === filter)?.label}
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading customers...</div>
+            <div className="divide-y">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <div className="h-9 w-9 rounded-full bg-muted animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                  </div>
+                  <div className="h-4 w-20 bg-muted animate-pulse rounded hidden sm:block" />
+                  <div className="h-5 w-16 bg-muted animate-pulse rounded" />
+                  <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
+          ) : displayed.length === 0 ? (
+            <div className="text-center py-14 space-y-3">
+              {search || filter !== "all" ? (
+                <>
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">No customers match your search or filter.</p>
+                  <Button variant="outline" size="sm" onClick={() => { setSearch(""); setDebouncedSearch(""); setFilter("all"); }}>
+                    Clear filters
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                  <div>
+                    <p className="font-medium text-foreground">No customers yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">Adding your first customer takes less than 30 seconds.</p>
+                  </div>
+                  <Button size="sm" onClick={() => setShowCreate(true)}>Add Your First Customer</Button>
+                </>
+              )}
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -331,23 +581,26 @@ export default function Customers() {
                   <TableHead className="hidden lg:table-cell">Total Spent</TableHead>
                   <TableHead>Balance</TableHead>
                   <TableHead className="hidden md:table-cell">Remaining</TableHead>
-                  <TableHead className="hidden lg:table-cell">Last Order</TableHead>
+                  <TableHead className="hidden lg:table-cell">Last Visit</TableHead>
                   <TableHead className="hidden md:table-cell">Tags</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customers.map((c) => (
-                  <TableRow key={c.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setSelectedId(c.id)}>
+                {displayed.map((c) => (
+                  <TableRow key={c.id} className="cursor-pointer hover:bg-muted/30" onClick={() => openProfile(c.id)}>
                     <TableCell className="font-medium">
-                      <span className="block">{c.fullName}</span>
+                      <span className="flex items-center gap-1.5">
+                        {c.isVip && <Crown className="h-3.5 w-3.5 text-yellow-500 shrink-0" />}
+                        <span className="truncate max-w-[140px]">{c.fullName}</span>
+                      </span>
                       <span className="sm:hidden text-xs text-muted-foreground font-mono">{c.phone}</span>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell font-mono text-sm">{c.phone}</TableCell>
                     <TableCell className="hidden md:table-cell">
                       <span className="font-medium">{c.totalOrders}</span>
                       {c.activeOrders > 0 && (
-                        <span className="ml-1 text-xs text-muted-foreground">({c.activeOrders} active)</span>
+                        <span className="ml-1 text-xs text-blue-600">({c.activeOrders} active)</span>
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">{fmt(c.totalSpending)}</TableCell>
@@ -366,231 +619,362 @@ export default function Customers() {
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {c.lastOrderDate ? timeAgo(c.lastOrderDate) : "—"}
+                      {timeAgo(c.lastOrderDate)}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell"><CustomerTags c={c} /></TableCell>
+                    <TableCell className="hidden md:table-cell"><AutoTags c={c} /></TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => setSelectedId(c.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => openProfile(c.id)}>
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {!customers.length && (
-                  <TableRow>
-                    <TableCell colSpan={9}>
-                      {search ? (
-                        <div className="text-center py-10 text-sm text-muted-foreground">
-                          No customers match your search.
-                        </div>
-                      ) : (
-                        <div className="text-center py-14 space-y-3">
-                          <Users className="h-10 w-10 mx-auto text-muted-foreground/40" />
-                          <div>
-                            <p className="font-medium text-foreground">No customers yet</p>
-                            <p className="text-sm text-muted-foreground mt-1">Adding your first customer takes less than 30 seconds.</p>
-                          </div>
-                          <Button size="sm" onClick={() => setShowCreate(true)}>
-                            Add Your First Customer
-                          </Button>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={selectedId != null} onOpenChange={(open) => { if (!open) { setSelectedId(null); setProfileTab("orders"); } }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      {/* ── Customer Profile Modal ─────────────────────────────────────────────── */}
+      <Dialog open={selectedId != null} onOpenChange={(open) => { if (!open) closeProfile(); }}>
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
           {profileLoading || !profile ? (
-            <div className="p-8 text-center text-muted-foreground">Loading profile...</div>
+            <div className="p-8 space-y-4">
+              <div className="flex gap-3">
+                <div className="h-12 w-12 bg-muted animate-pulse rounded-full shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-6 w-48 bg-muted animate-pulse rounded" />
+                  <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
+                ))}
+              </div>
+              <div className="h-40 bg-muted animate-pulse rounded-lg" />
+            </div>
           ) : (
             <>
-              <DialogHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <DialogTitle className="text-xl flex items-center gap-2">
-                      {profile.isVip && <Crown className="h-5 w-5 text-yellow-500" />}
-                      {profile.fullName}
-                    </DialogTitle>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <a
-                        href={`tel:${profile.phone}`}
-                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Phone className="h-3.5 w-3.5" />
-                        {profile.phone}
-                      </a>
-                      {profile.address && (
-                        <span className="text-sm text-muted-foreground">· {profile.address}</span>
+              {/* Profile Header */}
+              <div className="p-5 border-b bg-muted/20">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {profile.isVip && <Crown className="h-5 w-5 text-yellow-500 shrink-0" />}
+                      <h2 className="text-xl font-bold truncate">{profile.fullName}</h2>
+                      {profile.deletedAt && (
+                        <Badge variant="destructive" className="text-xs">Archived</Badge>
                       )}
                     </div>
-                    <div className="mt-1.5">
-                      <CustomerTags c={profile} />
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-sm text-muted-foreground">
+                      <a href={`tel:${profile.phone}`} className="flex items-center gap-1 hover:text-primary transition-colors font-mono">
+                        <Phone className="h-3.5 w-3.5 shrink-0" />{profile.phone}
+                      </a>
+                      {profile.address && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" />{profile.address}
+                        </span>
+                      )}
+                      {branchName && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="h-3.5 w-3.5 shrink-0" />{branchName}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" />
+                        Since {fmtDate(profile.createdAt)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        Last visit: {timeAgo(profile.lastOrderDate)}
+                      </span>
+                    </div>
+
+                    {/* Auto tags */}
+                    <div className="mt-2">
+                      <AutoTags c={profile} />
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    {isOwner && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditForm({
-                            id: profile.id,
-                            fullName: profile.fullName,
-                            phone: profile.phone,
-                            address: profile.address ?? "",
-                            notes: profile.notes ?? "",
-                          });
-                          setShowEdit(true);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Edit
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 flex-wrap shrink-0">
+                    {profile.deletedAt ? (
+                      isOwner && (
+                        <Button size="sm" variant="outline" onClick={() => restoreMutation.mutate(profile.id)} disabled={restoreMutation.isPending}>
+                          <Undo2 className="h-3.5 w-3.5" />Restore
+                        </Button>
+                      )
+                    ) : (
+                      <>
+                        {isOwner && (
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setEditForm({ id: profile.id, fullName: profile.fullName, phone: profile.phone, address: profile.address ?? "", notes: profile.notes ?? "" });
+                            setShowEdit(true);
+                          }}>
+                            <Pencil className="h-3.5 w-3.5" />Edit
+                          </Button>
+                        )}
+                        <Button size="sm" onClick={() => { closeProfile(); navigate(`/orders?phone=${encodeURIComponent(profile.phone)}`); }}>
+                          <Plus className="h-3.5 w-3.5" />New Order
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Actions Row */}
+                {!profile.deletedAt && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" asChild>
+                      <a href={`tel:${profile.phone}`}>
+                        <Phone className="h-3.5 w-3.5" />Call
+                      </a>
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyPhone(profile.phone)}>
+                      <Copy className="h-3.5 w-3.5" />Copy Phone
+                    </Button>
+                    {profile.activeOrders > 0 && (
+                      <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => { closeProfile(); navigate(`/orders?phone=${encodeURIComponent(profile.phone)}&status=active`); }}>
+                        <Zap className="h-3.5 w-3.5" />Active Orders ({profile.activeOrders})
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setProfileTab("payments")}>
+                      <CreditCard className="h-3.5 w-3.5" />Payments
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setProfileTab("statement")}>
+                      <FileText className="h-3.5 w-3.5" />Statement
+                    </Button>
+                    {isOwner && (
+                      <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={startTagEdit}>
+                        <Tag className="h-3.5 w-3.5" />Tags
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Metrics Grid */}
+              <div className="p-5 border-b space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className={`p-3 rounded-lg text-center ${profile.outstandingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20"}`}>
+                    <p className={`text-2xl font-bold ${profile.outstandingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
+                      {fmt(profile.outstandingBalance)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Outstanding</p>
+                  </div>
+                  <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">{fmt(profile.totalSpending)}</p>
+                    <p className="text-xs text-muted-foreground">Lifetime Revenue</p>
+                  </div>
+                  <div className="p-3 bg-muted/40 rounded-lg text-center">
+                    <p className="text-2xl font-bold">{profile.totalOrders}</p>
+                    <p className="text-xs text-muted-foreground">Total Orders</p>
+                  </div>
+                  <div className={`p-3 rounded-lg text-center ${profile.remainingItems > 0 ? "bg-orange-50 dark:bg-orange-950/20" : "bg-muted/40"}`}>
+                    <p className={`text-2xl font-bold ${profile.remainingItems > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+                      {profile.remainingItems}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Items Remaining</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <StatTile label="Avg Order Value" value={fmt(profile.avgOrderValue)} />
+                  <StatTile label="Completed" value={profile.completedOrders} sub={`of ${profile.totalOrders} orders`} color="text-green-600" />
+                  <StatTile label="Cancelled" value={profile.cancelledOrders ?? 0} />
+                  <StatTile label="Active Now" value={profile.activeOrders} color={profile.activeOrders > 0 ? "text-blue-600" : ""} />
+                </div>
+              </div>
+
+              {/* Tags Editor */}
+              {editingTags && isOwner && (
+                <div className="p-5 border-b bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Edit Tags</p>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingTags(false)}>
+                      <X className="h-3.5 w-3.5" />Cancel
+                    </Button>
+                  </div>
+
+                  {/* Preset tags */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {UNIQUE_PRESET_TAGS.map(pt => {
+                      const active = pendingTags.includes(pt);
+                      return (
+                        <button
+                          key={pt}
+                          onClick={() => active ? removeTag(pt) : addTag(pt)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            active ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
+                          }`}
+                        >
+                          {pt}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom tag input */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Custom tag…"
+                      className="h-8 text-sm"
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                    />
+                    <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => addTag(tagInput)}>Add</Button>
+                  </div>
+
+                  {/* Current tags */}
+                  {pendingTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {pendingTags.map(t => (
+                        <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                          {t}
+                          <button onClick={() => removeTag(t)} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
                     <Button
                       size="sm"
-                      onClick={() => {
-                        setSelectedId(null);
-                        navigate(`/orders?phone=${encodeURIComponent(profile.phone)}`);
-                      }}
+                      onClick={() => updateTagsMutation.mutate({ id: profile.id, tags: pendingTags })}
+                      disabled={updateTagsMutation.isPending}
                     >
-                      <Plus className="h-3.5 w-3.5" />
-                      New Order
+                      {updateTagsMutation.isPending ? "Saving…" : "Save Tags"}
                     </Button>
                   </div>
                 </div>
-              </DialogHeader>
+              )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
-                <div className="p-3 bg-muted/50 rounded-lg text-center">
-                  <p className="text-2xl font-bold">{profile.totalOrders}</p>
-                  <p className="text-xs text-muted-foreground">Total Orders</p>
-                </div>
-                <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">{fmt(profile.totalSpending)}</p>
-                  <p className="text-xs text-muted-foreground">Total Spent</p>
-                </div>
-                <div className={`p-3 rounded-lg text-center ${profile.outstandingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-muted/50"}`}>
-                  <p className={`text-2xl font-bold ${profile.outstandingBalance > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                    {fmt(profile.outstandingBalance)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Outstanding</p>
-                </div>
-                <div className={`p-3 rounded-lg text-center ${profile.remainingItems > 0 ? "bg-orange-50 dark:bg-orange-950/20" : "bg-muted/50"}`}>
-                  <p className={`text-2xl font-bold ${profile.remainingItems > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
-                    {profile.remainingItems}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Items Remaining</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="p-2.5 bg-muted/30 rounded-lg">
-                  <p className="text-muted-foreground text-xs">Avg Order</p>
-                  <p className="font-medium">{fmt(profile.avgOrderValue)}</p>
-                </div>
-                <div className="p-2.5 bg-muted/30 rounded-lg">
-                  <p className="text-muted-foreground text-xs">Completed</p>
-                  <p className="font-medium">{profile.completedOrders} / {profile.totalOrders}</p>
-                </div>
-                <div className="p-2.5 bg-muted/30 rounded-lg">
-                  <p className="text-muted-foreground text-xs">Customer Since</p>
-                  <p className="font-medium">{new Date(profile.createdAt).toLocaleDateString()}</p>
-                </div>
-              </div>
-
-              {profile.notes && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
-                  <p className="font-medium text-amber-800 dark:text-amber-400 text-xs mb-1">Notes</p>
-                  <p className="text-amber-900 dark:text-amber-300">{profile.notes}</p>
+              {/* Notes Section */}
+              {(isOwner || profile.notes) && (
+                <div className="px-5 py-3 border-b">
+                  {editingNotes ? (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Private Notes</Label>
+                      <Textarea
+                        value={notesValue}
+                        onChange={e => setNotesValue(e.target.value)}
+                        placeholder='e.g. "VIP customer", "Always pays late", "Call before delivery"'
+                        className="text-sm min-h-[80px] resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => updateNotesMutation.mutate({ id: profile.id, notes: notesValue })} disabled={updateNotesMutation.isPending}>
+                          {updateNotesMutation.isPending ? "Saving…" : "Save Notes"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : profile.notes ? (
+                    <div
+                      className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg cursor-pointer group"
+                      onClick={() => { if (isOwner) { setNotesValue(profile.notes ?? ""); setEditingNotes(true); } }}
+                    >
+                      <MessageSquare className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-amber-800 dark:text-amber-400 mb-0.5">Notes</p>
+                        <p className="text-sm text-amber-900 dark:text-amber-300">{profile.notes}</p>
+                      </div>
+                      {isOwner && <Pencil className="h-3.5 w-3.5 text-amber-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5" />}
+                    </div>
+                  ) : isOwner ? (
+                    <button
+                      className="flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors py-1"
+                      onClick={() => { setNotesValue(""); setEditingNotes(true); }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />Add private notes
+                    </button>
+                  ) : null}
                 </div>
               )}
 
-              <Tabs value={profileTab} onValueChange={(v) => setProfileTab(v as "orders" | "receipts" | "statement")}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="orders" className="flex-1 gap-1.5">
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    Orders ({profile.orders.length})
-                  </TabsTrigger>
-                  {hasPermission("canViewCustomerBalances") && (
-                    <TabsTrigger value="receipts" className="flex-1 gap-1.5">
-                      <FileText className="h-3.5 w-3.5" />
-                      Receipts
-                    </TabsTrigger>
-                  )}
-                  {hasPermission("canViewCustomerBalances") && (
-                    <TabsTrigger value="statement" className="flex-1 gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
-                      Statement
-                    </TabsTrigger>
-                  )}
-                </TabsList>
+              {/* Tab Navigation */}
+              <div className="flex border-b">
+                {(["orders", "payments", "statement"] as const).map((tab) => {
+                  const labels = { orders: `Orders (${profile.orders.length})`, payments: "Payment History", statement: "Statement" };
+                  const icons = { orders: ShoppingBag, payments: CreditCard, statement: FileText };
+                  const Icon = icons[tab];
+                  const show = tab !== "payments" && tab !== "statement" ? true : hasPermission("canViewCustomerBalances");
+                  if (!show) return null;
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setProfileTab(tab)}
+                      className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        profileTab === tab
+                          ? "border-primary text-primary"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />{labels[tab]}
+                    </button>
+                  );
+                })}
+              </div>
 
-                {/* Orders Tab */}
-                <div className={profileTab === "orders" ? "mt-3" : "hidden"}>
-                  {profile.orders.length > 0 ? (
-                    <div>
-                      <div className="border rounded-lg overflow-hidden">
+              {/* Tab Content */}
+              <div className="p-5">
+
+                {/* ── Orders Tab ── */}
+                {profileTab === "orders" && (
+                  profile.orders.length > 0 ? (
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-xs">Order ID</TableHead>
-                              <TableHead className="text-xs">Service</TableHead>
-                              <TableHead className="text-xs">Items</TableHead>
+                            <TableRow className="bg-muted/30">
+                              <TableHead className="text-xs">Order #</TableHead>
                               <TableHead className="text-xs">Status</TableHead>
-                              <TableHead className="text-xs">Price</TableHead>
-                              <TableHead className="text-xs">Balance</TableHead>
-                              <TableHead className="text-xs">Date</TableHead>
+                              <TableHead className="text-xs">Pickup</TableHead>
+                              <TableHead className="text-xs">Payment</TableHead>
+                              <TableHead className="text-xs">Created</TableHead>
+                              <TableHead className="text-xs text-right">Total</TableHead>
+                              <TableHead className="text-xs text-right">Balance</TableHead>
                               <TableHead className="text-xs"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {profile.orders.slice(0, 10).map((o) => {
+                            {profile.orders.map((o) => {
                               const totalDue = (Number(o.price) || 0) + (Number(o.extraCharge) || 0) - (Number(o.discount) || 0);
                               const balance = Math.max(0, totalDue - Number(o.amountPaid || 0));
-                              const remainingS = Math.max(0, o.shirts - (o.shirtsPickedUp || 0));
-                              const remainingT = Math.max(0, o.trousers - (o.trousersPickedUp || 0));
+                              const pickupDone = o.status === "completed";
+                              const pickupPartial = o.status === "partial_pickup";
                               return (
-                                <TableRow key={o.id}>
-                                  <TableCell className="font-mono text-xs">{o.orderId}</TableCell>
-                                  <TableCell className="text-xs capitalize">{o.serviceType}</TableCell>
-                                  <TableCell className="text-xs">
-                                    {o.shirts}S / {o.trousers}T
-                                    {(remainingS > 0 || remainingT > 0) && (
-                                      <span className="text-orange-500 ml-1">({remainingS}S/{remainingT}T left)</span>
+                                <TableRow key={o.id} className="hover:bg-muted/20">
+                                  <TableCell className="font-mono text-xs text-primary">{o.orderId}</TableCell>
+                                  <TableCell><StatusBadge status={o.status} /></TableCell>
+                                  <TableCell>
+                                    {pickupDone ? (
+                                      <Badge variant="success" className="text-xs gap-1"><PackageCheck className="h-3 w-3" />Done</Badge>
+                                    ) : pickupPartial ? (
+                                      <Badge variant="warning" className="text-xs">Partial</Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-xs text-muted-foreground">Pending</Badge>
                                     )}
                                   </TableCell>
-                                  <TableCell>{statusBadge(o.status)}</TableCell>
-                                  <TableCell className="text-xs">{fmt(totalDue)}</TableCell>
-                                  <TableCell className="text-xs">
+                                  <TableCell><PaymentBadge status={o.paymentStatus} /></TableCell>
+                                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {new Date(o.createdAt).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "2-digit" })}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-right tabular-nums">{fmt(totalDue)}</TableCell>
+                                  <TableCell className="text-xs text-right tabular-nums">
                                     {balance > 0 ? (
-                                      <span className="text-red-600">{fmt(balance)}</span>
+                                      <span className="text-red-600 font-medium">{fmt(balance)}</span>
                                     ) : (
-                                      <span className="text-green-600 flex items-center gap-0.5">
+                                      <span className="text-green-600 flex items-center justify-end gap-0.5">
                                         <CheckCircle className="h-3 w-3" />Paid
                                       </span>
                                     )}
                                   </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {new Date(o.createdAt).toLocaleDateString()}
-                                  </TableCell>
                                   <TableCell>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      asChild
-                                      onClick={() => setSelectedId(null)}
-                                    >
-                                      <Link to={`/orders/${o.id}`}>
-                                        <ArrowRight className="h-3.5 w-3.5" />
-                                      </Link>
+                                    <Button variant="ghost" size="icon" asChild onClick={closeProfile}>
+                                      <Link to={`/orders/${o.id}`}><ChevronRight className="h-4 w-4" /></Link>
                                     </Button>
                                   </TableCell>
                                 </TableRow>
@@ -599,276 +983,255 @@ export default function Customers() {
                           </TableBody>
                         </Table>
                       </div>
-                      {profile.orders.length > 10 && (
-                        <p className="text-xs text-muted-foreground text-center mt-2">
-                          Showing 10 of {profile.orders.length} orders
-                        </p>
-                      )}
                     </div>
                   ) : (
-                    <div className="text-center py-6 text-muted-foreground text-sm">
-                      No orders linked to this customer yet
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      No orders linked to this customer yet.
                     </div>
-                  )}
-                </div>
+                  )
+                )}
 
-                {/* Statement Tab */}
-                <div className={profileTab === "statement" ? "mt-3 space-y-3" : "hidden"}>
-                  {/* Period selector */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex rounded-md border overflow-hidden text-xs">
-                      {(["30d", "90d", "custom"] as const).map(p => (
-                        <button
-                          key={p}
-                          onClick={() => setStatementPeriod(p)}
-                          className={`px-3 py-1.5 font-medium transition-colors ${statementPeriod === p ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                        >
-                          {p === "30d" ? "30 Days" : p === "90d" ? "90 Days" : "Custom"}
-                        </button>
+                {/* ── Payment History Tab ── */}
+                {profileTab === "payments" && hasPermission("canViewCustomerBalances") && (
+                  paymentsLoading ? (
+                    <div className="divide-y border rounded-lg overflow-hidden">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className="flex items-center gap-4 px-4 py-3">
+                          <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                          <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+                          <div className="h-4 w-16 bg-muted animate-pulse rounded ml-auto" />
+                        </div>
                       ))}
                     </div>
-                    {statementPeriod === "custom" && (
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <Input
-                          type="date"
-                          className="h-7 text-xs w-36"
-                          value={statementFrom}
-                          onChange={e => setStatementFrom(e.target.value)}
-                        />
-                        <span className="text-muted-foreground">to</span>
-                        <Input
-                          type="date"
-                          className="h-7 text-xs w-36"
-                          value={statementTo}
-                          onChange={e => setStatementTo(e.target.value)}
-                        />
-                      </div>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="ml-auto h-7 text-xs gap-1"
-                      onClick={() => {
-                        const printWindow = window.open("", "_blank");
-                        if (!printWindow || !statement) return;
-                        const rows = statement.entries.map(e => `
-                          <tr>
-                            <td>${new Date(e.date).toLocaleDateString("en-NG")}</td>
-                            <td>${e.orderId}</td>
-                            <td>${e.type.replace("_", " ")}</td>
-                            <td>${e.description}</td>
-                            <td style="text-align:right">${e.charge > 0 ? e.charge.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
-                            <td style="text-align:right">${e.credit > 0 ? e.credit.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
-                            <td style="text-align:right;${e.balance > 0 ? "color:#dc2626" : "color:#16a34a"}">${e.balance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td>
-                          </tr>`).join("");
-                        printWindow.document.write(`<!DOCTYPE html><html><head><title>Statement — ${statement.customer.fullName}</title>
-                        <style>body{font-family:sans-serif;font-size:12px;padding:20px}h1{font-size:18px;margin-bottom:4px}p{color:#666;margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}th{background:#f9fafb;font-weight:600}tfoot td{font-weight:700;background:#f3f4f6}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px}</style>
-                        </head><body>
-                        <h1>Customer Statement</h1>
-                        <p><strong>${statement.customer.fullName}</strong> · ${statement.customer.phone}</p>
-                        <p>Period: ${new Date(statement.period.from).toLocaleDateString("en-NG")} – ${new Date(statement.period.to).toLocaleDateString("en-NG")}</p>
-                        <table><thead><tr><th>Date</th><th>Order</th><th>Type</th><th>Description</th><th>Charges</th><th>Credits</th><th>Balance</th></tr></thead>
-                        <tbody>${rows}</tbody>
-                        <tfoot><tr><td colspan="4">Summary</td><td style="text-align:right">${statement.summary.totalCharged.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right">${statement.summary.totalPaid.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right;${statement.summary.closingBalance > 0 ? "color:#dc2626" : "color:#16a34a"}">${statement.summary.closingBalance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td></tr></tfoot>
-                        </table></body></html>`);
-                        printWindow.document.close();
-                        printWindow.print();
-                      }}
-                      disabled={!statement}
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      Print / PDF
-                    </Button>
-                  </div>
-
-                  {stmtLoading ? (
-                    <div className="py-8 text-center text-muted-foreground text-sm">Loading statement…</div>
-                  ) : !statement ? (
-                    <div className="py-8 text-center text-muted-foreground text-sm">Select a period to view the statement</div>
+                  ) : !customerPaymentsData?.receipts?.length ? (
+                    <div className="py-8 text-center text-muted-foreground text-sm">No payments recorded for this customer.</div>
                   ) : (
-                    <div className="space-y-3">
-                      {/* Summary cards */}
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="p-2.5 bg-muted/30 rounded-lg text-center">
-                          <p className="text-xs text-muted-foreground">Total Charged</p>
-                          <p className="font-semibold text-sm">{fmt(statement.summary.totalCharged)}</p>
-                        </div>
-                        <div className="p-2.5 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
+                    <div className="space-y-2">
+                      {/* Summary */}
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
                           <p className="text-xs text-muted-foreground">Total Paid</p>
-                          <p className="font-semibold text-sm text-green-700 dark:text-green-400">{fmt(statement.summary.totalPaid)}</p>
+                          <p className="font-bold text-green-700 dark:text-green-400">
+                            {fmt(customerPaymentsData.receipts.reduce((s, r) => s + Number(r.amount), 0))}
+                          </p>
                         </div>
-                        <div className={`p-2.5 rounded-lg text-center ${statement.summary.closingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20"}`}>
-                          <p className="text-xs text-muted-foreground">Balance Due</p>
-                          <p className={`font-semibold text-sm ${statement.summary.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                            {fmt(statement.summary.closingBalance)}
+                        <div className="p-3 bg-muted/40 rounded-lg text-center">
+                          <p className="text-xs text-muted-foreground">Payments</p>
+                          <p className="font-bold">{customerPaymentsData.receipts.length}</p>
+                        </div>
+                        <div className={`p-3 rounded-lg text-center ${profile.outstandingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-muted/40"}`}>
+                          <p className="text-xs text-muted-foreground">Outstanding</p>
+                          <p className={`font-bold ${profile.outstandingBalance > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                            {fmt(profile.outstandingBalance)}
                           </p>
                         </div>
                       </div>
 
-                      {statement.entries.length === 0 ? (
-                        <div className="py-6 text-center text-muted-foreground text-sm">No activity in this period</div>
-                      ) : (
-                        <div className="border rounded-lg overflow-hidden">
-                          <div className="overflow-x-auto">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/30">
-                                  <TableHead className="text-xs">Date</TableHead>
-                                  <TableHead className="text-xs">Order</TableHead>
-                                  <TableHead className="text-xs">Type</TableHead>
-                                  <TableHead className="text-xs">Description</TableHead>
-                                  <TableHead className="text-xs text-right">Charge</TableHead>
-                                  <TableHead className="text-xs text-right">Credit</TableHead>
-                                  <TableHead className="text-xs text-right">Balance</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {statement.entries.map((e, i) => (
-                                  <TableRow key={i} className={e.type === "pickup" ? "opacity-60" : ""}>
-                                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                      {new Date(e.date).toLocaleDateString("en-NG", { day: "2-digit", month: "short" })}
-                                    </TableCell>
-                                    <TableCell className="font-mono text-xs text-primary">
-                                      <Link to={`/orders/${e.orderDbId}`} className="hover:underline" onClick={() => setSelectedId(null)}>
-                                        {e.orderId}
-                                      </Link>
-                                    </TableCell>
-                                    <TableCell className="text-xs">
-                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
-                                        e.type === "payment" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" :
-                                        e.type === "order" ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" :
-                                        e.type === "discount" ? "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400" :
-                                        e.type === "extra_charge" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400" :
-                                        "bg-muted text-muted-foreground"
-                                      }`}>
-                                        {e.type === "extra_charge" ? "extra" : e.type}
-                                      </span>
-                                    </TableCell>
-                                    <TableCell className="text-xs max-w-[140px] truncate" title={e.description}>
-                                      {e.description}
-                                      {e.receiptNumber && (
-                                        <button
-                                          className="ml-1.5 text-primary hover:underline"
-                                          onClick={() => window.open(`/receipts/${encodeURIComponent(e.receiptNumber!)}/print`, "_blank")}
-                                          title="View receipt"
-                                        >
-                                          <Eye className="h-3 w-3 inline" />
-                                        </button>
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">
-                                      {e.charge > 0 ? <span className="text-red-600">{fmt(e.charge)}</span> : ""}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums">
-                                      {e.credit > 0 ? <span className="text-green-600">{fmt(e.credit)}</span> : ""}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-right tabular-nums font-medium">
-                                      <span className={e.balance > 0 ? "text-red-600" : "text-green-600"}>
-                                        {fmt(Math.abs(e.balance))}
-                                        {e.balance < 0 ? " CR" : ""}
-                                      </span>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/30">
+                              <TableHead className="text-xs">Date</TableHead>
+                              <TableHead className="text-xs">Order</TableHead>
+                              <TableHead className="text-xs">Method</TableHead>
+                              <TableHead className="text-xs">Receipt #</TableHead>
+                              <TableHead className="text-xs text-right">Amount</TableHead>
+                              <TableHead className="text-xs text-right">Remaining</TableHead>
+                              <TableHead className="text-xs"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {customerPaymentsData.receipts.map((r, idx) => (
+                              <TableRow key={r.receiptNumber ?? idx}>
+                                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {new Date(r.recordedAt).toLocaleDateString("en-NG", { day: "2-digit", month: "short", year: "2-digit" })}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">{r.orderId}</TableCell>
+                                <TableCell className="text-xs capitalize">{r.method.replace(/_/g, " ")}</TableCell>
+                                <TableCell className="font-mono text-xs text-primary">{r.receiptNumber ?? "—"}</TableCell>
+                                <TableCell className="text-xs text-right tabular-nums font-semibold text-green-600">
+                                  {fmt(Number(r.amount))}
+                                </TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">
+                                  {Number(r.remainingBalance) > 0
+                                    ? <span className="text-red-600">{fmt(Number(r.remainingBalance))}</span>
+                                    : <span className="text-green-600">Clear</span>}
+                                </TableCell>
+                                <TableCell>
+                                  {r.receiptNumber && (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Print receipt"
+                                      onClick={() => window.open(`/receipts/${encodeURIComponent(r.receiptNumber!)}/print`, "_blank")}>
+                                      <Printer className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* ── Statement Tab ── */}
+                {profileTab === "statement" && hasPermission("canViewCustomerBalances") && (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex rounded-md border overflow-hidden text-xs">
+                        {(["30d", "90d", "custom"] as const).map(p => (
+                          <button
+                            key={p}
+                            onClick={() => setStatementPeriod(p)}
+                            className={`px-3 py-1.5 font-medium transition-colors ${statementPeriod === p ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                          >
+                            {p === "30d" ? "30 Days" : p === "90d" ? "90 Days" : "Custom"}
+                          </button>
+                        ))}
+                      </div>
+                      {statementPeriod === "custom" && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Input type="date" className="h-7 text-xs w-36" value={statementFrom} onChange={e => setStatementFrom(e.target.value)} />
+                          <span className="text-muted-foreground">to</span>
+                          <Input type="date" className="h-7 text-xs w-36" value={statementTo} onChange={e => setStatementTo(e.target.value)} />
                         </div>
                       )}
-                      <p className="text-xs text-muted-foreground text-right">
-                        {statement.summary.orderCount} orders · {statement.summary.paymentCount} payments
-                      </p>
+                      <Button
+                        variant="outline" size="sm" className="ml-auto h-7 text-xs gap-1"
+                        disabled={!statement}
+                        onClick={() => {
+                          if (!statement) return;
+                          const printWindow = window.open("", "_blank");
+                          if (!printWindow) return;
+                          const rows = statement.entries.map(e => `
+                            <tr>
+                              <td>${new Date(e.date).toLocaleDateString("en-NG")}</td>
+                              <td>${e.orderId}</td>
+                              <td>${e.type.replace("_", " ")}</td>
+                              <td>${e.description}</td>
+                              <td style="text-align:right">${e.charge > 0 ? e.charge.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
+                              <td style="text-align:right">${e.credit > 0 ? e.credit.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }) : ""}</td>
+                              <td style="text-align:right;${e.balance > 0 ? "color:#dc2626" : "color:#16a34a"}">${e.balance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td>
+                            </tr>`).join("");
+                          printWindow.document.write(`<!DOCTYPE html><html><head><title>Statement — ${statement.customer.fullName}</title>
+                          <style>body{font-family:sans-serif;font-size:12px;padding:20px}h1{font-size:18px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}th{background:#f9fafb;font-weight:600}tfoot td{font-weight:700;background:#f3f4f6}</style>
+                          </head><body>
+                          <h1>Customer Statement</h1>
+                          <p><strong>${statement.customer.fullName}</strong> · ${statement.customer.phone}</p>
+                          <p>Period: ${new Date(statement.period.from).toLocaleDateString("en-NG")} – ${new Date(statement.period.to).toLocaleDateString("en-NG")}</p>
+                          <table><thead><tr><th>Date</th><th>Order</th><th>Type</th><th>Description</th><th>Charges</th><th>Credits</th><th>Balance</th></tr></thead>
+                          <tbody>${rows}</tbody>
+                          <tfoot><tr><td colspan="4">Summary</td><td style="text-align:right">${statement.summary.totalCharged.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right">${statement.summary.totalPaid.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td><td style="text-align:right;${statement.summary.closingBalance > 0 ? "color:#dc2626" : "color:#16a34a"}">${statement.summary.closingBalance.toLocaleString("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 })}</td></tr></tfoot>
+                          </table></body></html>`);
+                          printWindow.document.close();
+                          printWindow.print();
+                        }}
+                      >
+                        <Printer className="h-3.5 w-3.5" />Print / PDF
+                      </Button>
                     </div>
-                  )}
-                </div>
 
-                {/* Receipts Tab — all authenticated users (workers via customer profile, owners via /receipts page) */}
-                <div className={profileTab === "receipts" ? "mt-3" : "hidden"}>
-                    {receiptsLoading ? (
-                      <div className="py-8 text-center text-muted-foreground text-sm">Loading receipts…</div>
-                    ) : !customerReceiptsData?.receipts?.length ? (
-                      <div className="py-8 text-center text-muted-foreground text-sm">
-                        No receipts found for this customer
-                      </div>
+                    {stmtLoading ? (
+                      <div className="py-8 text-center text-muted-foreground text-sm animate-pulse">Loading statement…</div>
+                    ) : !statement ? (
+                      <div className="py-8 text-center text-muted-foreground text-sm">Select a period to view the statement.</div>
                     ) : (
                       <div className="space-y-3">
-                        <div className="border rounded-lg overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-xs">Receipt #</TableHead>
-                                <TableHead className="text-xs">Order</TableHead>
-                                <TableHead className="text-xs">Amount</TableHead>
-                                <TableHead className="text-xs">Method</TableHead>
-                                <TableHead className="text-xs">Date</TableHead>
-                                <TableHead className="text-xs"></TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {customerReceiptsData.receipts.map((r) => (
-                                <TableRow key={r.receiptNumber}>
-                                  <TableCell className="font-mono text-xs text-primary">{r.receiptNumber}</TableCell>
-                                  <TableCell className="font-mono text-xs">{r.orderId}</TableCell>
-                                  <TableCell className="text-xs font-semibold">{fmt(Number(r.amount))}</TableCell>
-                                  <TableCell className="text-xs capitalize">{r.method.replace("_", " ")}</TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {new Date(r.recordedAt).toLocaleDateString()}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex gap-1">
-                                      {r.receiptNumber && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          title="View receipt"
-                                          onClick={() => window.open(`/receipts/${encodeURIComponent(r.receiptNumber!)}/print`, "_blank")}
-                                        >
-                                          <Eye className="h-3.5 w-3.5" />
-                                        </Button>
-                                      )}
-                                      {r.receiptNumber && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          title="Print / Download PDF"
-                                          onClick={() => window.open(`/receipts/${encodeURIComponent(r.receiptNumber!)}/print`, "_blank")}
-                                        >
-                                          <Printer className="h-3.5 w-3.5" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="p-2.5 bg-muted/30 rounded-lg text-center">
+                            <p className="text-xs text-muted-foreground">Total Charged</p>
+                            <p className="font-semibold text-sm">{fmt(statement.summary.totalCharged)}</p>
+                          </div>
+                          <div className="p-2.5 bg-green-50 dark:bg-green-950/20 rounded-lg text-center">
+                            <p className="text-xs text-muted-foreground">Total Paid</p>
+                            <p className="font-semibold text-sm text-green-700 dark:text-green-400">{fmt(statement.summary.totalPaid)}</p>
+                          </div>
+                          <div className={`p-2.5 rounded-lg text-center ${statement.summary.closingBalance > 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-green-50 dark:bg-green-950/20"}`}>
+                            <p className="text-xs text-muted-foreground">Balance Due</p>
+                            <p className={`font-semibold text-sm ${statement.summary.closingBalance > 0 ? "text-red-600" : "text-green-600"}`}>
+                              {fmt(statement.summary.closingBalance)}
+                            </p>
+                          </div>
                         </div>
-                        {customerReceiptsData.total > 50 && (
-                          <p className="text-xs text-muted-foreground text-center">
-                            Showing 50 of {customerReceiptsData.total} receipts
-                          </p>
+
+                        {statement.entries.length === 0 ? (
+                          <div className="py-6 text-center text-muted-foreground text-sm">No activity in this period.</div>
+                        ) : (
+                          <div className="border rounded-lg overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted/30">
+                                    <TableHead className="text-xs">Date</TableHead>
+                                    <TableHead className="text-xs">Order</TableHead>
+                                    <TableHead className="text-xs">Type</TableHead>
+                                    <TableHead className="text-xs">Description</TableHead>
+                                    <TableHead className="text-xs text-right">Charge</TableHead>
+                                    <TableHead className="text-xs text-right">Credit</TableHead>
+                                    <TableHead className="text-xs text-right">Balance</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {statement.entries.map((e, i) => (
+                                    <TableRow key={i} className={e.type === "pickup" ? "opacity-60" : ""}>
+                                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                        {new Date(e.date).toLocaleDateString("en-NG", { day: "2-digit", month: "short" })}
+                                      </TableCell>
+                                      <TableCell className="font-mono text-xs text-primary">
+                                        <Link to={`/orders/${e.orderDbId}`} className="hover:underline" onClick={closeProfile}>{e.orderId}</Link>
+                                      </TableCell>
+                                      <TableCell className="text-xs">
+                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
+                                          e.type === "payment" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" :
+                                          e.type === "order" ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" :
+                                          e.type === "discount" ? "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400" :
+                                          e.type === "extra_charge" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400" :
+                                          "bg-muted text-muted-foreground"
+                                        }`}>
+                                          {e.type === "extra_charge" ? "extra" : e.type}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="text-xs max-w-[140px] truncate" title={e.description}>{e.description}</TableCell>
+                                      <TableCell className="text-xs text-right tabular-nums">
+                                        {e.charge > 0 ? <span className="text-red-600">{fmt(e.charge)}</span> : ""}
+                                      </TableCell>
+                                      <TableCell className="text-xs text-right tabular-nums">
+                                        {e.credit > 0 ? <span className="text-green-600">{fmt(e.credit)}</span> : ""}
+                                      </TableCell>
+                                      <TableCell className="text-xs text-right tabular-nums font-medium">
+                                        <span className={e.balance > 0 ? "text-red-600" : "text-green-600"}>
+                                          {fmt(Math.abs(e.balance))}{e.balance < 0 ? " CR" : ""}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
                         )}
+                        <p className="text-xs text-muted-foreground text-right">
+                          {statement.summary.orderCount} orders · {statement.summary.paymentCount} payments
+                        </p>
                       </div>
                     )}
                   </div>
-              </Tabs>
+                )}
+              </div>
 
-              <div className="flex justify-between items-center pt-2 border-t">
-                {isOwner ? (
+              {/* Profile Footer */}
+              <div className="flex justify-between items-center px-5 py-3 border-t bg-muted/10">
+                {isOwner && !profile.deletedAt ? (
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant="ghost" size="sm"
                     className="text-destructive hover:text-destructive"
                     onClick={() => setShowDelete(true)}
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete Customer
+                    <Archive className="h-3.5 w-3.5 mr-1" />Archive Customer
                   </Button>
-                ) : (
-                  <span />
-                )}
+                ) : <span />}
                 <p className="text-xs text-muted-foreground">
-                  Last active: {timeAgo(profile.lastActivityAt)}
+                  ID #{profile.id} · Last active: {timeAgo(profile.lastActivityAt)}
                 </p>
               </div>
             </>
@@ -876,40 +1239,31 @@ export default function Customers() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Create Dialog ───────────────────────────────────────────────────────── */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>New Customer</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Full Name *</Label>
-              <Input
-                value={createForm.fullName}
-                onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
-                placeholder="Customer name"
-              />
+              <Input value={createForm.fullName} onChange={e => setCreateForm({ ...createForm, fullName: e.target.value })} placeholder="Customer name" />
             </div>
             <div>
               <Label>Phone *</Label>
-              <Input
-                value={createForm.phone}
-                onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                placeholder="+234..."
-              />
+              <Input value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} placeholder="+234…" />
             </div>
             <div>
               <Label>Address</Label>
-              <Input
-                value={createForm.address ?? ""}
-                onChange={(e) => setCreateForm({ ...createForm, address: e.target.value })}
-                placeholder="Optional"
-              />
+              <Input value={createForm.address ?? ""} onChange={e => setCreateForm({ ...createForm, address: e.target.value })} placeholder="Optional" />
             </div>
             <div>
               <Label>Notes</Label>
-              <Input
+              <Textarea
                 value={createForm.notes ?? ""}
-                onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
-                placeholder="Preferences, instructions, fabric warnings..."
+                onChange={e => setCreateForm({ ...createForm, notes: e.target.value })}
+                placeholder='Preferences, delivery instructions, fabric warnings…'
+                className="resize-none"
+                rows={3}
               />
             </div>
           </div>
@@ -917,52 +1271,42 @@ export default function Customers() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                if (!createForm.fullName || !createForm.phone) {
-                  toast.error("Name and phone are required");
-                  return;
-                }
+                if (!createForm.fullName || !createForm.phone) { toast.error("Name and phone are required"); return; }
                 createMutation.mutate(createForm);
               }}
               disabled={createMutation.isPending}
             >
-              {createMutation.isPending ? "Creating..." : "Create Customer"}
+              {createMutation.isPending ? "Creating…" : "Create Customer"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ── Edit Dialog ─────────────────────────────────────────────────────────── */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Edit Customer</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Full Name</Label>
-              <Input
-                value={editForm.fullName ?? ""}
-                onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
-              />
+              <Input value={editForm.fullName ?? ""} onChange={e => setEditForm({ ...editForm, fullName: e.target.value })} />
             </div>
             <div>
               <Label>Phone</Label>
-              <Input
-                value={editForm.phone ?? ""}
-                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-              />
+              <Input value={editForm.phone ?? ""} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} />
             </div>
             <div>
               <Label>Address</Label>
-              <Input
-                value={editForm.address ?? ""}
-                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                placeholder="Optional"
-              />
+              <Input value={editForm.address ?? ""} onChange={e => setEditForm({ ...editForm, address: e.target.value })} placeholder="Optional" />
             </div>
             <div>
               <Label>Notes</Label>
-              <Input
+              <Textarea
                 value={editForm.notes ?? ""}
-                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                placeholder="Clothing preferences, delivery instructions, warnings..."
+                onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                placeholder='Clothing preferences, delivery instructions, warnings…'
+                className="resize-none"
+                rows={3}
               />
             </div>
           </div>
@@ -976,29 +1320,27 @@ export default function Customers() {
               }}
               disabled={updateMutation.isPending}
             >
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* ── Archive Dialog ──────────────────────────────────────────────────────── */}
       <Dialog open={showDelete} onOpenChange={setShowDelete}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Delete Customer</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Archive Customer</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Delete <strong>{currentCustomer?.fullName || profile?.fullName}</strong>? Their orders will remain but will no longer be linked to a customer profile.
+            Archive <strong>{profile?.fullName}</strong>? Their orders and payment history are preserved. You can restore them later.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDelete(false)}>Cancel</Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                const id = selectedId ?? editForm.id;
-                if (id) deleteMutation.mutate(id);
-              }}
+              onClick={() => { if (selectedId) deleteMutation.mutate(selectedId); }}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Archiving…" : "Archive Customer"}
             </Button>
           </DialogFooter>
         </DialogContent>

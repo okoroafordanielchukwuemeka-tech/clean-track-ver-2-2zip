@@ -23,11 +23,13 @@ const customerUpdateSchema = z.object({
   phone: z.string().min(1).optional(),
   address: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional().nullable(),
 });
 
 function computeMetrics(customerOrders: any[]) {
   const totalOrders = customerOrders.length;
   const completedOrders = customerOrders.filter(o => o.status === "completed").length;
+  const cancelledOrders = customerOrders.filter(o => o.status === "cancelled").length;
   const activeOrders = customerOrders.filter(o =>
     ["pending", "processing", "ready", "partial_pickup"].includes(o.status)
   ).length;
@@ -71,6 +73,7 @@ function computeMetrics(customerOrders: any[]) {
   return {
     totalOrders,
     completedOrders,
+    cancelledOrders,
     activeOrders,
     totalSpending,
     totalPaid,
@@ -155,23 +158,31 @@ customersRouter.post("/backfill", requireOwner, async (req: AuthRequest, res) =>
 customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const { search, tag, branchId: branchParam } = req.query;
+    const { search, tag, branchId: branchParam, sort, archived } = req.query;
 
     const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
 
-    const baseConditions: any[] = [eq(customers.laundryId, laundryId), isNull(customers.deletedAt)];
+    const showArchived = archived === "true";
+    const baseConditions: any[] = [eq(customers.laundryId, laundryId)];
+    if (showArchived) {
+      baseConditions.push(isNotNull(customers.deletedAt));
+    } else {
+      baseConditions.push(isNull(customers.deletedAt));
+    }
     if (effectiveBranchId) baseConditions.push(eq(customers.branchId, effectiveBranchId));
 
     let query = db.select().from(customers).where(and(...baseConditions)).$dynamic();
 
     if (search) {
-      query = query.where(and(
-        ...baseConditions,
-        or(
-          ilike(customers.fullName, `%${search}%`),
-          ilike(customers.phone, `%${search}%`)
-        )
-      ));
+      const trimmed = (search as string).trim();
+      // support searching by numeric customer ID
+      const numericId = /^\d+$/.test(trimmed) ? parseInt(trimmed) : null;
+      const searchConditions = [
+        ilike(customers.fullName, `%${trimmed}%`),
+        ilike(customers.phone, `%${trimmed}%`),
+      ];
+      if (numericId) searchConditions.push(eq(customers.id, numericId));
+      query = query.where(and(...baseConditions, or(...searchConditions)));
     }
 
     const allCustomers = await query.orderBy(desc(customers.lastActivityAt));
@@ -189,16 +200,41 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
 
     let result = allCustomers.map(c => ({
       ...c,
+      customTags: c.tags ? (JSON.parse(c.tags) as string[]) : [] as string[],
       ...computeMetrics(ordersByCustomer.get(c.id) || []),
     }));
 
+    // Tag filter
     if (tag && tag !== "all") {
+      const now = Date.now();
+      const ninetyDays = 90 * 86400000;
       result = result.filter(c => {
         if (tag === "vip") return c.isVip;
         if (tag === "repeat") return c.isRepeat;
         if (tag === "has_balance") return c.hasBalance;
         if (tag === "has_pickups") return c.hasRemainingPickups;
-        return true;
+        if (tag === "inactive") {
+          if (!c.lastOrderDate) return true;
+          return now - new Date(c.lastOrderDate).getTime() > ninetyDays;
+        }
+        // custom tag filter
+        return c.customTags.some((t: string) => t.toLowerCase() === (tag as string).toLowerCase());
+      });
+    }
+
+    // Sort
+    if (sort && sort !== "newest") {
+      result.sort((a, b) => {
+        if (sort === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (sort === "most_orders") return b.totalOrders - a.totalOrders;
+        if (sort === "highest_spending") return b.totalSpending - a.totalSpending;
+        if (sort === "outstanding_balance") return b.outstandingBalance - a.outstandingBalance;
+        if (sort === "last_visit") {
+          const at = a.lastOrderDate ? new Date(a.lastOrderDate).getTime() : 0;
+          const bt = b.lastOrderDate ? new Date(b.lastOrderDate).getTime() : 0;
+          return bt - at;
+        }
+        return 0;
       });
     }
 
@@ -263,14 +299,21 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
     const workerBranchId = req.auth!.branchId;
-    const data = customerUpdateSchema.parse(req.body);
+    const parsed = customerUpdateSchema.parse(req.body);
 
-    if (data.phone) {
+    if (parsed.phone) {
       const [conflict] = await db.select().from(customers)
-        .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, data.phone)));
+        .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, parsed.phone)));
       if (conflict && conflict.id !== customerId) {
         return res.status(409).json({ error: "Another customer already has this phone number" });
       }
+    }
+
+    // Serialize tags array to JSON string for storage
+    const { tags: tagsArray, ...rest } = parsed;
+    const data: any = { ...rest };
+    if (tagsArray !== undefined) {
+      data.tags = tagsArray === null ? null : JSON.stringify(tagsArray);
     }
 
     const custPatchConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
@@ -279,7 +322,12 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
       .where(and(...custPatchConditions))
       .returning();
     if (!customer) return res.status(404).json({ error: "Customer not found" });
-    res.json(customer);
+
+    // Return with parsed customTags
+    res.json({
+      ...customer,
+      customTags: customer.tags ? JSON.parse(customer.tags) : [],
+    });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to update customer" });

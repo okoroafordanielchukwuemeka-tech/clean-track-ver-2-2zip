@@ -7,6 +7,7 @@
 - [WhatsApp Shared Inbox](whatsapp-shared-inbox.md) — Phase 3 complete; InboxTab in inbox-tab.tsx; conversations list + chat bubbles + resolve/archive; sidebar green badge; notifications.relatedConversationId added; seed must set customerName explicitly
 - [Receipt Number Generation](receipt-number-generation.md) — generateReceiptNumber uses sql.raw() for SUBSTRING FROM position; plain ${n} in Drizzle sql template silently fails the integer cast
 - [Branch Filtering Pattern](branch-filtering-pattern.md) — frontend pages must pass activeBranchId from useBranch() into queryKey AND queryFn; api.ts functions accept branchId? param; /orders/recent was missing backend route (added)
+- [Customer Module Phase 6](customer-module-phase6.md) — tags col (JSON text), sort/inactive/archived, inline notes, payment history tab, cancelledOrders metric
 - [Customer Statement Feature](customer-statement.md) — GET /customers/:id/statement returns chronological ledger with running balance; all 5 entry types; credit balance shows negative closingBalance; frontend Statement tab with print-to-PDF via window.open
 - [Orders Pagination](orders-pagination.md) — GET /orders default limit is 500 (was 50); all 1000 orders tested with 0 financial errors; branch filtering adds branchId condition via getEffectiveBranchId()
 - [Receipt Endpoint Consistency](receipt-endpoint-consistency.md) — GET /receipts/:num includes branch object; GET /orders/:id/receipt also must include branch + cashierName; order sub-object in both must include branchId
