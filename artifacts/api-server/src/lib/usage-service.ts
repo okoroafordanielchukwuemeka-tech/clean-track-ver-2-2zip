@@ -84,7 +84,7 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
       .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt))),
     db.select({ activeCustomers: count() })
       .from(customers)
-      .where(and(eq(customers.laundryId, laundryId), eq(customers.isActive, true))),
+      .where(and(eq(customers.laundryId, laundryId), isNull(customers.deletedAt))),
     db.select({ totalOrders: count() })
       .from(orders)
       .where(eq(orders.laundryId, laundryId)),
@@ -205,7 +205,7 @@ export async function checkLimit(
     if (!isFinite(max)) return null;
     const [{ cnt }] = await db.select({ cnt: count() })
       .from(customers)
-      .where(and(eq(customers.laundryId, laundryId), eq(customers.isActive, true)));
+      .where(and(eq(customers.laundryId, laundryId), isNull(customers.deletedAt)));
     if (Number(cnt) >= max) {
       return {
         code: "PLAN_LIMIT_CUSTOMERS_REACHED",

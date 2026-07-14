@@ -32,8 +32,17 @@ subscriptionRouter.get("/status", requireOwner, async (req: AuthRequest, res) =>
     if (!laundry) return res.status(404).json({ error: "Not found" });
 
     const features = getEffectivePlanFeatures(laundry.subscriptionTier, laundry.subscriptionStatus);
-    const limits = getEffectivePlanLimits(laundry.subscriptionTier, laundry.subscriptionStatus);
+    const rawLimits = getEffectivePlanLimits(laundry.subscriptionTier, laundry.subscriptionStatus);
     const planDisplayName = (PLAN_DISPLAY_NAMES as any)[laundry.subscriptionTier] ?? laundry.subscriptionTier;
+
+    // JSON.stringify(Infinity) → "null", which is indistinguishable from missing data.
+    // Normalize: Infinity → null (meaning "unlimited") so clients can reliably detect unlimited plans.
+    const limits = {
+      maxBranches:       isFinite(rawLimits.maxBranches)       ? rawLimits.maxBranches       : null,
+      maxWorkers:        isFinite(rawLimits.maxWorkers)        ? rawLimits.maxWorkers        : null,
+      maxOrdersPerMonth: isFinite(rawLimits.maxOrdersPerMonth) ? rawLimits.maxOrdersPerMonth : null,
+      maxCustomers:      isFinite(rawLimits.maxCustomers)      ? rawLimits.maxCustomers      : null,
+    };
 
     let trialDaysRemaining: number | null = null;
     if (laundry.subscriptionStatus === "trial" && laundry.trialEndsAt) {
