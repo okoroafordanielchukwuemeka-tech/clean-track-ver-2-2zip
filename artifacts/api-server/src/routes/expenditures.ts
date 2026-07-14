@@ -4,8 +4,10 @@ import { expenditures, expenseCategories } from "@workspace/db/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/subscription.js";
 
 export const expendituresRouter = Router();
+expendituresRouter.use(requireEntitlement("HAS_EXPENSE_TRACKING"));
 
 const expenditureSchema = z.object({
   category: z.string().min(1, "Category required"),

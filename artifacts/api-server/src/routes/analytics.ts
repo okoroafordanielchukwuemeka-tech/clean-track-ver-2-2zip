@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { orders, batches, workers, customers, pickupRecords, expenditures, laundries } from "@workspace/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/subscription.js";
 
 export const analyticsRouter = Router();
 
@@ -159,7 +160,7 @@ analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
   }
 });
 
-analyticsRouter.get("/full", async (req: AuthRequest, res) => {
+analyticsRouter.get("/full", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -312,7 +313,7 @@ analyticsRouter.get("/full", async (req: AuthRequest, res) => {
   }
 });
 
-analyticsRouter.get("/customers", async (req: AuthRequest, res) => {
+analyticsRouter.get("/customers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async (req: AuthRequest, res) => {
   // Financial customer analytics are owner-only
   if (req.auth!.type !== "owner") {
     return res.status(403).json({ error: "Forbidden: owner access required" });
@@ -387,7 +388,7 @@ analyticsRouter.get("/customers", async (req: AuthRequest, res) => {
   }
 });
 
-analyticsRouter.get("/workers", async (req: AuthRequest, res) => {
+analyticsRouter.get("/workers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const effectiveBranchId = getEffectiveBranchId(req);
@@ -437,7 +438,7 @@ analyticsRouter.get("/workers", async (req: AuthRequest, res) => {
   }
 });
 
-analyticsRouter.get("/sla", async (req: AuthRequest, res) => {
+analyticsRouter.get("/sla", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const effectiveBranchId = getEffectiveBranchId(req);
