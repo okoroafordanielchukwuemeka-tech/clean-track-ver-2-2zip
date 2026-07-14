@@ -41,6 +41,7 @@ export interface PickupReceiptData {
     totalDue: number;
     amountPaid: number;
     balance: number;
+    isCancelled?: boolean;
   };
 }
 
@@ -178,6 +179,11 @@ export function PickupReceiptView({ data }: PickupReceiptViewProps) {
           {isFullyCollected ? "✓ ALL ITEMS COLLECTED" : "PARTIAL COLLECTION"}
         </span>
       </div>
+      {order.status === "cancelled" && (
+        <div className="receipt-status-row">
+          <span className="receipt-status-unpaid">✕ ORDER SINCE CANCELLED</span>
+        </div>
+      )}
 
       {pickup.notes && (
         <>

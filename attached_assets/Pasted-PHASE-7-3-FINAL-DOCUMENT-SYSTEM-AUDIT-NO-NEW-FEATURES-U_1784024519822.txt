@@ -1,0 +1,343 @@
+PHASE 7.3 — FINAL DOCUMENT SYSTEM AUDIT (NO NEW FEATURES UNTIL AUDIT IS COMPLETE)
+
+IMPORTANT
+
+Do NOT assume anything is complete.
+
+Audit every document in CleanTrack before making changes.
+
+Do NOT build Billing, Subscription, Academy, or Marketing features yet.
+
+Your goal is to ensure every printable/customer-facing document is production ready and visually consistent.
+
+---
+
+DOCUMENTS TO AUDIT
+
+Audit every document currently available:
+
+1. Order Receipt
+2. Payment Receipt
+3. Pickup Receipt
+4. Customer Statement
+5. Receipt List
+6. Any print/PDF pages
+
+For each document verify:
+
+• branding
+• typography
+• spacing
+• print layout
+• financial accuracy
+• mobile print compatibility
+• A4 compatibility
+• 58mm compatibility
+• 80mm compatibility
+
+---
+
+SECTION 1 — BRANDING CONSISTENCY
+
+Verify every document contains:
+
+✓ Laundry Logo
+✓ Laundry Name
+✓ Branch Name (if multi-branch)
+✓ Address
+✓ Phone
+✓ Email
+✓ Receipt Number
+✓ Order Number
+✓ Customer Name
+✓ Customer Phone
+✓ Date
+✓ Footer
+
+Verify all documents use identical:
+
+• fonts
+• spacing
+• headers
+• colors
+• dividers
+
+No document should look like it belongs to another application.
+
+---
+
+SECTION 2 — FINANCIAL AUDIT
+
+Verify every amount comes from ONE shared pricing utility.
+
+Confirm consistency for:
+
+Subtotal
+
+Extra Charges
+
+Discounts
+
+Taxes (if disabled should remain zero)
+
+Total
+
+Amount Paid
+
+Outstanding Balance
+
+Opening Balance
+
+Closing Balance
+
+Cancelled Orders
+
+Voided Payments
+
+Negative balances
+
+Refund scenarios
+
+Run live verification.
+
+Compare:
+
+Order Receipt
+
+Payment Receipt
+
+Pickup Receipt
+
+Customer Statement
+
+Every balance must reconcile.
+
+---
+
+SECTION 3 — PICKUP RECEIPT
+
+Verify Pickup Receipt contains:
+
+Items Collected
+
+Items Remaining
+
+Collected By
+
+Collection Time
+
+Outstanding Balance
+
+Customer Signature
+
+Worker Signature
+
+Barcode placeholder
+
+Receipt Number
+
+Order Number
+
+Verify partial pickup and final pickup produce correct receipts.
+
+---
+
+SECTION 4 — CUSTOMER STATEMENT
+
+Audit statement professionally.
+
+Verify:
+
+Opening Balance
+
+Running Balance
+
+Closing Balance
+
+Payment History
+
+Order History
+
+Discounts
+
+Extra Charges
+
+Cancelled Orders
+
+Voided Payments excluded
+
+Summary cards
+
+Period filters
+
+Custom date range
+
+Print layout
+
+Professional formatting
+
+Verify calculations using sample customers.
+
+---
+
+SECTION 5 — PRINT QUALITY
+
+Print preview every document.
+
+Verify:
+
+No clipped text
+
+No page overflow
+
+No broken tables
+
+No split rows
+
+Correct margins
+
+Correct scaling
+
+Correct page breaks
+
+Correct @page CSS
+
+Test:
+
+58mm
+
+80mm
+
+A4
+
+Landscape (where appropriate)
+
+---
+
+SECTION 6 — MOBILE
+
+Verify documents render correctly from mobile browser printing.
+
+Buttons remain usable.
+
+No overlapping UI.
+
+---
+
+SECTION 7 — PDF
+
+Verify browser Save as PDF produces:
+
+Clean formatting
+
+Correct margins
+
+No missing images
+
+No cutoff footer
+
+Consistent fonts
+
+---
+
+SECTION 8 — BARCODE
+
+Verify barcode placeholder appears consistently on:
+
+Order Receipt
+
+Payment Receipt
+
+Pickup Receipt
+
+If QR support already exists, verify it.
+
+Otherwise do NOT add QR yet.
+
+---
+
+SECTION 9 — SECURITY
+
+Verify workers only print documents they have permission to access.
+
+Attempt:
+
+Cross-branch receipt
+
+Cross-branch statement
+
+Deleted order
+
+Cancelled order
+
+Voided payment
+
+Expected:
+
+403
+
+404
+
+No data leakage.
+
+---
+
+SECTION 10 — PERFORMANCE
+
+Generate:
+
+500 customers
+
+5,000 orders
+
+10,000 payments
+
+2,000 pickups
+
+Generate:
+
+Customer Statements
+
+Receipts
+
+Pickup Receipts
+
+Verify:
+
+No timeout
+
+No memory issues
+
+No layout degradation
+
+---
+
+SECTION 11 — DOCUMENT CHECKLIST
+
+Provide final report:
+
+1. Order Receipt Status
+
+2. Payment Receipt Status
+
+3. Pickup Receipt Status
+
+4. Customer Statement Status
+
+5. Branding Consistency
+
+6. Financial Accuracy
+
+7. Print Quality
+
+8. Security Results
+
+9. Failed Tests
+
+10. Fixed Issues
+
+11. Remaining Risks
+
+12. Production Readiness Score
+
+DO NOT proceed to Billing & Subscription until every document passes.

@@ -80,7 +80,7 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
     ]);
 
     const amountPaid = allPayments.reduce((s, p) => s + parseFloat(p.amount || "0"), 0);
-    const { basePrice, extraCharge, discount, totalDue, balance } = computeOrderPricing({ ...order, amountPaid: String(amountPaid) });
+    const { basePrice, extraCharge, discount, totalDue, balance, isCancelled } = computeOrderPricing({ ...order, amountPaid: String(amountPaid) });
 
     const itemsCollected = pickup.itemPickups && pickup.itemPickups.length > 0
       ? pickup.itemPickups.map(ip => ({ name: ip.name, quantity: ip.quantity }))
@@ -133,7 +133,7 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
       },
       itemsCollected,
       itemsRemaining,
-      pricing: { basePrice, extraCharge, discount, totalDue, amountPaid, balance },
+      pricing: { basePrice, extraCharge, discount, totalDue, amountPaid, balance, isCancelled },
     });
   } catch (err) {
     console.error(err);

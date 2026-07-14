@@ -975,7 +975,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
     const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
     const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
 
-    const { basePrice, extraCharge, discount, totalDue, amountPaid, balance } = computeOrderPricing(order);
+    const { basePrice, extraCharge, discount, totalDue, amountPaid, balance, isCancelled } = computeOrderPricing(order);
 
     res.json({
       receipt: latestPayment ? {
@@ -1029,6 +1029,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
         totalDue,
         amountPaid,
         balance,
+        isCancelled,
       },
       allPayments: allPayments.map(p => ({
         id: p.id,

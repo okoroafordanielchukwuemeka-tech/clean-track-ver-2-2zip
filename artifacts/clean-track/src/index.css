@@ -453,7 +453,12 @@
     max-width: none;
   }
 
+  /* A4 page content area is ~190mm wide after margins — previously this was
+     capped at 480px (a leftover receipt-width value), which meant switching
+     to A4 never actually used the extra page width and rendered as a narrow
+     column with large empty margins. */
   .print-format-a4 .receipt-root {
-    max-width: 480px;
+    max-width: 190mm;
+    font-size: 14px;
   }
 }

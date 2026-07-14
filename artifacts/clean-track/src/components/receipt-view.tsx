@@ -65,6 +65,7 @@ export interface ReceiptData {
     totalDue: number;
     amountPaid: number;
     balance: number;
+    isCancelled?: boolean;
   };
   allPayments: {
     id: number;
@@ -269,8 +270,17 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
       </div>
 
       <div className="receipt-status-row">
-        <StatusBadge status={order.paymentStatus} />
+        {order.status === "cancelled" ? (
+          <span className="receipt-status-unpaid">✕ ORDER CANCELLED</span>
+        ) : (
+          <StatusBadge status={order.paymentStatus} />
+        )}
       </div>
+      {order.status === "cancelled" && (
+        <p className="receipt-contact" style={{ textAlign: "center" }}>
+          This order was cancelled. Charges shown above reflect ₦0 due; any amount paid prior to cancellation remains on record.
+        </p>
+      )}
 
       {showAllPayments && allPayments.length > 1 && (
         <>

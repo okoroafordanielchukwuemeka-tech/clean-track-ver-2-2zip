@@ -155,7 +155,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     const businessProfile = (laundry?.businessProfile ?? {}) as Record<string, string>;
     const brandingSettings = (laundry?.brandingSettings ?? {}) as Record<string, string>;
 
-    const { basePrice, extraCharge, discount, totalDue, amountPaid, balance } = computeOrderPricing(order);
+    const { basePrice, extraCharge, discount, totalDue, amountPaid, balance, isCancelled } = computeOrderPricing(order);
 
     res.json({
       receipt: {
@@ -209,6 +209,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
         totalDue,
         amountPaid,
         balance,
+        isCancelled,
       },
       allPayments: allPayments.map(p => ({
         id: p.id,

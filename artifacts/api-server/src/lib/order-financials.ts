@@ -22,17 +22,21 @@ export interface OrderFinancialInput {
   extraCharge: string | number | null | undefined;
   discount: string | number | null | undefined;
   amountPaid: string | number | null | undefined;
+  /** Optional — when "cancelled", pricing zeroes out per the rule documented below. */
+  status?: string | null;
 }
 
 export interface OrderPricing {
   basePrice: number;
   extraCharge: number;
   discount: number;
-  /** basePrice + extraCharge - discount */
+  /** basePrice + extraCharge - discount (0 for cancelled orders) */
   totalDue: number;
   amountPaid: number;
   /** max(0, totalDue - amountPaid) — never negative */
   balance: number;
+  /** True when the source order's status was "cancelled" */
+  isCancelled: boolean;
 }
 
 function toNumber(v: string | number | null | undefined): number {
@@ -43,18 +47,25 @@ function toNumber(v: string | number | null | undefined): number {
 
 /**
  * Computes the canonical price breakdown for a single order.
- * Cancelled orders should be treated as ₦0 by the caller (as the Customer
- * Statement engine does) — this function computes the raw stored values;
- * it does not special-case order status since receipts are only ever
- * generated for non-cancelled orders.
+ *
+ * Cancelled orders are zeroed out (basePrice/extraCharge/discount/totalDue = 0,
+ * balance = 0) to exactly match how the Customer Statement engine treats them
+ * (artifacts/api-server/src/routes/customers.ts — "Cancelled orders contribute
+ * ₦0 to balance"). Before this, Order/Payment/Pickup receipts ignored order
+ * status entirely and would show the pre-cancellation totalDue/balance, which
+ * could never reconcile against the Statement for the same order. amountPaid
+ * is preserved as-is (it is a historical fact — money that was actually
+ * collected — not something cancellation erases); any refund process for that
+ * money is a separate, out-of-scope workflow.
  */
 export function computeOrderPricing(order: OrderFinancialInput): OrderPricing {
-  const basePrice = toNumber(order.price);
-  const extraCharge = toNumber(order.extraCharge);
-  const discount = toNumber(order.discount);
+  const isCancelled = order.status === "cancelled";
+  const basePrice = isCancelled ? 0 : toNumber(order.price);
+  const extraCharge = isCancelled ? 0 : toNumber(order.extraCharge);
+  const discount = isCancelled ? 0 : toNumber(order.discount);
   const totalDue = basePrice + extraCharge - discount;
   const amountPaid = toNumber(order.amountPaid);
   const balance = Math.max(0, totalDue - amountPaid);
 
-  return { basePrice, extraCharge, discount, totalDue, amountPaid, balance };
+  return { basePrice, extraCharge, discount, totalDue, amountPaid, balance, isCancelled };
 }
