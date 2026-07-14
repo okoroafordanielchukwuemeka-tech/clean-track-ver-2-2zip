@@ -1,0 +1,459 @@
+# PHASE 7.6 — SUBSCRIPTION, BILLING & FEATURE GATE VALIDATION
+
+IMPORTANT
+
+This phase is an audit and validation phase.
+
+Do NOT build new features.
+
+Do NOT refactor unrelated code.
+
+Do NOT change UI unless a bug is discovered.
+
+Your objective is to prove that the subscription system is production-ready.
+
+Everything must be verified using real data, not assumptions.
+
+---
+
+## PART 1 — PLAN AUDIT
+
+Audit every plan currently configured.
+
+Confirm the following values exactly.
+
+### Trial
+
+* 14-day duration
+* Full Enterprise features enabled
+* Trial countdown visible
+* Correct expiry date stored
+
+---
+
+### Starter — ₦10,000/month
+
+Verify:
+
+* 1 Branch
+* 2 Workers
+* 500 Customers
+* 500 Orders per month
+* Transactional WhatsApp enabled
+* AI Marketing disabled
+* Advanced Analytics disabled
+* Expense Tracking disabled
+* Customer Segmentation disabled
+* API disabled
+
+---
+
+### Professional — ₦30,000/month
+
+Verify:
+
+* 5 Branches
+* 15 Workers
+* Unlimited Customers
+* Unlimited Orders
+* Transactional WhatsApp enabled
+* Marketing Campaigns enabled
+* AI Marketing enabled
+* Advanced Analytics enabled
+* Expense Tracking enabled
+* Customer Segmentation enabled
+* API disabled
+
+---
+
+### Enterprise — ₦50,000/month
+
+Verify:
+
+Unlimited everything.
+
+Verify every Enterprise feature is enabled.
+
+---
+
+## PART 2 — FEATURE GATE AUDIT
+
+Create one account for each plan.
+
+Trial
+
+Starter
+
+Professional
+
+Enterprise
+
+For every feature below verify BOTH:
+
+1. UI access
+
+2. API access
+
+Feature list:
+
+* Dashboard
+* Orders
+* Customers
+* Statements
+* Receipts
+* Workers
+* Branches
+* Expense Tracking
+* Advanced Analytics
+* AI Marketing
+* Customer Segmentation
+* Marketing Campaigns
+* WhatsApp Messaging
+* API Access
+* Settings
+
+Expected:
+
+Hidden features should also be blocked at API level.
+
+Attempt direct API requests using Starter tokens against Professional-only endpoints.
+
+Expected:
+
+403 Forbidden
+
+or
+
+404
+
+Never 200.
+
+---
+
+## PART 3 — LIMIT TESTING
+
+Starter
+
+Attempt:
+
+Create 501st customer
+
+Expected:
+
+Rejected
+
+Delete one customer
+
+Create again
+
+Expected:
+
+Allowed
+
+Repeat for:
+
+Workers
+
+Branches
+
+Orders
+
+Verify limits recover correctly after deleting records where applicable.
+
+---
+
+## PART 4 — TRIAL LIFECYCLE
+
+Create a Trial account.
+
+Verify:
+
+Day 1
+
+Enterprise access
+
+Day 13
+
+Upgrade reminder
+
+Day 14
+
+Trial expires
+
+Enterprise features removed
+
+Starter/Free restrictions applied
+
+Owner notified
+
+No hidden Enterprise endpoints remain accessible.
+
+---
+
+## PART 5 — BILLING LIFECYCLE
+
+Verify:
+
+Upgrade
+
+Downgrade
+
+Cancel subscription
+
+Resume subscription
+
+Expired subscription
+
+Renew subscription
+
+For each scenario verify:
+
+Plan updates correctly
+
+Permissions update correctly
+
+Feature gates update immediately
+
+Usage limits update correctly
+
+History recorded
+
+Emails triggered
+
+---
+
+## PART 6 — EMAIL LIFECYCLE
+
+Verify all lifecycle emails.
+
+Signup
+
+Welcome email
+
+Day 2
+
+Educational email
+
+Day 4
+
+Educational email
+
+Day 6
+
+Educational email
+
+Day 8
+
+Educational email
+
+Day 10
+
+Educational email
+
+Day 12
+
+Educational email
+
+Day 13
+
+Upgrade reminder
+
+Day 14
+
+Trial expired
+
+Renewal:
+
+7 days before
+
+3 days before
+
+1 day before
+
+Cancellation email
+
+Failed payment email
+
+Verify every email sends only once.
+
+No duplicate sends.
+
+---
+
+## PART 7 — WHATSAPP ENTITLEMENTS
+
+Starter
+
+Verify:
+
+Order Created
+
+Order Ready
+
+Pickup Reminder
+
+Payment Reminder
+
+Delivery Reminder
+
+All work.
+
+Attempt:
+
+Marketing Campaign
+
+Expected:
+
+Blocked.
+
+Professional
+
+Verify Campaigns work.
+
+Enterprise
+
+Verify Campaigns work.
+
+---
+
+## PART 8 — AI MARKETING
+
+Professional
+
+Enterprise
+
+Verify:
+
+AI Marketing page visible
+
+Generation works
+
+Fallback works when no OpenAI key exists
+
+Copy buttons work
+
+Starter
+
+Verify:
+
+Feature hidden
+
+API blocked
+
+---
+
+## PART 9 — SECURITY
+
+Attempt using Starter token:
+
+Professional analytics
+
+Enterprise endpoints
+
+AI Marketing API
+
+Customer Segmentation API
+
+Expense API
+
+API endpoints
+
+Expected:
+
+403
+
+404
+
+Never 200.
+
+---
+
+## PART 10 — PERFORMANCE
+
+Generate:
+
+5 branches
+
+20 workers
+
+2,000 customers
+
+10,000 orders
+
+20,000 payments
+
+Run:
+
+Billing
+
+Feature checks
+
+Statements
+
+Analytics
+
+Verify response times remain acceptable.
+
+---
+
+## PART 11 — BUG HUNT
+
+Look specifically for:
+
+Permission bypass
+
+Hidden Enterprise features
+
+Broken email triggers
+
+Broken trial countdown
+
+Incorrect billing math
+
+Customer limit bypass
+
+Worker limit bypass
+
+Branch limit bypass
+
+Order limit bypass
+
+Feature gate inconsistencies
+
+Duplicate lifecycle emails
+
+UI/API mismatch
+
+Anything that would cause financial loss.
+
+---
+
+## REQUIRED REPORT
+
+Provide:
+
+1. Plan Audit
+
+2. Feature Gate Results
+
+3. Billing Results
+
+4. Trial Results
+
+5. Lifecycle Email Results
+
+6. WhatsApp Results
+
+7. AI Marketing Results
+
+8. Security Results
+
+9. Failed Tests
+
+10. Bugs Fixed
+
+11. Remaining Risks
+
+12. Production Readiness Score
+
+Do not begin Phase 8 until every critical issue has been resolved.
