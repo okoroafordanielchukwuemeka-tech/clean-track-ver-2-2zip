@@ -12,6 +12,7 @@ async function getLaundrySubscription(laundryId: number) {
       subscriptionStatus: laundries.subscriptionStatus,
       subscriptionTier: laundries.subscriptionTier,
       subscriptionRenewsAt: laundries.subscriptionRenewsAt,
+      trialEndsAt: laundries.trialEndsAt,
     })
     .from(laundries)
     .where(eq(laundries.id, laundryId));
@@ -28,6 +29,19 @@ function isWithinGracePeriod(renewsAt: Date | null): boolean {
   return new Date() <= new Date(renewsAt);
 }
 
+/**
+ * Returns true when an account is in "trial" status but trial_ends_at has passed.
+ * These accounts must be treated like the free/base tier — no premium feature access
+ * and operations are blocked until they upgrade.
+ */
+function isTrialExpired(sub: { subscriptionStatus: string; trialEndsAt: Date | null }): boolean {
+  return (
+    sub.subscriptionStatus === "trial" &&
+    sub.trialEndsAt !== null &&
+    new Date() > new Date(sub.trialEndsAt)
+  );
+}
+
 export async function requireOperational(
   req: AuthRequest,
   res: Response,
@@ -39,6 +53,17 @@ export async function requireOperational(
   try {
     const sub = await getLaundrySubscription(laundryId);
     if (!sub) return next();
+
+    // Block operations when trial has expired but subscription_status is still "trial"
+    // (status is updated async by the scheduler; check trial_ends_at as ground truth)
+    if (isTrialExpired(sub)) {
+      return res.status(403).json({
+        error: "Trial expired",
+        code: "TRIAL_EXPIRED",
+        message:
+          "Your 14-day trial has ended. Upgrade to a paid plan to continue creating orders, workers, and customers.",
+      });
+    }
 
     if (sub.subscriptionStatus === "suspended") {
       return res.status(403).json({
@@ -83,8 +108,12 @@ export function requireEntitlement(feature: PlanFeature) {
       const sub = await getLaundrySubscription(laundryId);
       if (!sub) return next();
 
-      // During trial, users get Growth-level features
-      const effectiveTier = sub.subscriptionStatus === "trial" ? TRIAL_FEATURE_TIER : sub.subscriptionTier;
+      // During an active trial users get Growth-level features;
+      // once trial_ends_at has passed, fall back to their base tier (free)
+      const effectiveTier =
+        sub.subscriptionStatus === "trial" && !isTrialExpired(sub)
+          ? TRIAL_FEATURE_TIER
+          : sub.subscriptionTier;
 
       if (!hasFeature(effectiveTier, feature)) {
         return res.status(403).json({
@@ -117,8 +146,11 @@ export function requirePlanLimit(limitType: "orders" | "workers" | "branches" | 
       const sub = await getLaundrySubscription(laundryId);
       if (!sub) return next();
 
-      // During trial, enforce Growth (pro) limits instead of free limits
-      const effectiveTier = sub.subscriptionStatus === "trial" ? TRIAL_FEATURE_TIER : sub.subscriptionTier;
+      // During an active trial enforce Growth (pro) limits; expired trials use base (free) limits
+      const effectiveTier =
+        sub.subscriptionStatus === "trial" && !isTrialExpired(sub)
+          ? TRIAL_FEATURE_TIER
+          : sub.subscriptionTier;
 
       const limitError = await checkLimit(laundryId, effectiveTier, limitType);
       if (limitError) {

@@ -1,0 +1,510 @@
+PHASE 7.7 — COMMERCIAL VERIFICATION & LAUNCH CERTIFICATION
+
+IMPORTANT
+
+This is NOT a feature-building task.
+
+Do NOT redesign anything.
+
+Do NOT refactor.
+
+Do NOT improve UI unless a bug prevents verification.
+
+This phase exists to PROVE that the commercial system actually works.
+
+Do not assume anything.
+
+Use real test accounts.
+
+Use real API requests.
+
+Use real database verification.
+
+Provide evidence for every result.
+
+--------------------------------------------------
+SECTION 1 — CREATE TEST ENVIRONMENT
+--------------------------------------------------
+
+Create four clean laundry accounts.
+
+1. Trial Laundry
+2. Starter Laundry
+3. Professional Laundry
+4. Enterprise Laundry
+
+Assign the correct subscription status.
+
+Verify:
+
+- plan
+- status
+- trial dates
+- renewal dates
+
+Provide screenshots.
+
+--------------------------------------------------
+SECTION 2 — PLAN LIMIT TESTS
+--------------------------------------------------
+
+STARTER PLAN
+
+Verify every limit.
+
+Workers
+
+Maximum:
+2
+
+Test:
+
+Create Worker 1
+
+Create Worker 2
+
+Attempt Worker 3
+
+Expected:
+
+403
+
+or
+
+Upgrade Required
+
+Provide evidence.
+
+-----------------------------------
+
+Branches
+
+Maximum:
+1
+
+Test:
+
+Create Branch A
+
+Attempt Branch B
+
+Expected:
+
+Blocked
+
+-----------------------------------
+
+Customers
+
+Maximum:
+500
+
+Test:
+
+Create customer #500
+
+Success
+
+Attempt customer #501
+
+Expected:
+
+Blocked
+
+Delete one customer
+
+Attempt again
+
+Expected:
+
+Success
+
+-----------------------------------
+
+Orders
+
+Monthly maximum:
+
+500
+
+Test:
+
+Create 500 orders
+
+Attempt order 501
+
+Expected:
+
+Blocked
+
+Reset counter if necessary.
+
+Provide evidence.
+
+--------------------------------------------------
+SECTION 3 — FEATURE GATE VERIFICATION
+--------------------------------------------------
+
+Trial
+
+Must have Enterprise access.
+
+Verify:
+
+Expense Tracking
+
+AI Marketing
+
+WhatsApp Campaigns
+
+Advanced Analytics
+
+Advanced Reports
+
+Customer Segmentation
+
+API Access
+
+--------------------------------------------------
+
+Starter
+
+Verify:
+
+Expense Tracking
+
+Blocked
+
+AI Marketing
+
+Blocked
+
+WhatsApp Campaigns
+
+Blocked
+
+Transactional WhatsApp
+
+Allowed
+
+Advanced Analytics
+
+Blocked
+
+Advanced Reports
+
+Blocked
+
+Customer Segmentation
+
+Blocked
+
+--------------------------------------------------
+
+Professional
+
+Verify:
+
+Expense Tracking
+
+Allowed
+
+AI Marketing
+
+Allowed
+
+WhatsApp Campaigns
+
+Allowed
+
+Advanced Analytics
+
+Allowed
+
+Advanced Reports
+
+Allowed
+
+Customer Segmentation
+
+Allowed
+
+API Access
+
+Blocked
+
+--------------------------------------------------
+
+Enterprise
+
+Verify:
+
+Everything enabled.
+
+--------------------------------------------------
+SECTION 4 — TRIAL EXPIRY
+--------------------------------------------------
+
+Simulate trial expiration.
+
+Verify:
+
+Day 14
+
+↓
+
+Trial expires
+
+↓
+
+Plan changes to Free
+
+↓
+
+Premium pages locked
+
+↓
+
+Upgrade banner appears
+
+↓
+
+Data preserved
+
+No data loss.
+
+--------------------------------------------------
+SECTION 5 — BILLING
+--------------------------------------------------
+
+Verify Billing page.
+
+Check:
+
+Current plan
+
+Renewal date
+
+Usage bars
+
+Workers
+
+Customers
+
+Branches
+
+Orders
+
+Payment history
+
+Subscription history
+
+Upgrade cards
+
+Cancel subscription
+
+Invoice placeholder
+
+Everything must render correctly.
+
+--------------------------------------------------
+SECTION 6 — EMAIL LIFECYCLE
+--------------------------------------------------
+
+Verify every email.
+
+Welcome
+
+Trial Day 2
+
+Day 4
+
+Day 6
+
+Day 8
+
+Day 10
+
+Day 12
+
+Day 13
+
+Trial Expired
+
+Payment Successful
+
+Payment Failed
+
+Renewal Reminder
+
+Cancellation
+
+Retention
+
+Verify:
+
+Branding
+
+Pricing
+
+Links
+
+Subject
+
+Preview text
+
+No broken placeholders.
+
+--------------------------------------------------
+SECTION 7 — NAVIGATION
+--------------------------------------------------
+
+Log in as Starter.
+
+Verify every premium page.
+
+Expected:
+
+Never show:
+
+500
+
+404
+
+Blank page
+
+React crash
+
+Instead show:
+
+Upgrade Required
+
+with
+
+Current Plan
+
+Benefits
+
+Upgrade button
+
+Verify every premium route.
+
+--------------------------------------------------
+SECTION 8 — API SECURITY
+--------------------------------------------------
+
+Attempt direct API access.
+
+Starter token:
+
+GET premium endpoints.
+
+Expected:
+
+403
+
+Professional token:
+
+Expected:
+
+200
+
+Enterprise token:
+
+Expected:
+
+200
+
+Verify all gated APIs.
+
+--------------------------------------------------
+SECTION 9 — COMMERCIAL CONSISTENCY
+--------------------------------------------------
+
+Verify there is only ONE source of truth.
+
+Pricing
+
+Feature flags
+
+Limits
+
+No duplicated configuration.
+
+--------------------------------------------------
+SECTION 10 — LIVE EVIDENCE
+--------------------------------------------------
+
+Provide screenshots for:
+
+Starter
+
+Professional
+
+Enterprise
+
+Billing page
+
+Upgrade screen
+
+Payment history
+
+Usage limits
+
+Trial banner
+
+AI Marketing
+
+Expense Tracking
+
+Analytics
+
+--------------------------------------------------
+SECTION 11 — FAILED TESTS
+--------------------------------------------------
+
+List every failed test.
+
+Root cause.
+
+Fix applied.
+
+Evidence.
+
+--------------------------------------------------
+SECTION 12 — LAUNCH CERTIFICATION
+--------------------------------------------------
+
+Provide:
+
+Commercial Readiness Score
+
+Launch Readiness Score
+
+Remaining Risks
+
+Technical Debt
+
+Features still missing
+
+Recommendation:
+
+Can CleanTrack safely onboard its first 100 paying laundry businesses?
+
+Answer only:
+
+YES
+
+or
+
+NO
+
+and explain why.
+
+IMPORTANT
+
+Do NOT build new features.
+
+Only fix issues discovered during verification.
+
+Only after every test passes should Phase 8 begin.
