@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Expenditure, type ExpenditureInput, type ExpenseCategory } from "@/lib/api";
+import { UpgradeRequired } from "@/components/upgrade-required";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -168,6 +169,36 @@ export default function Expenditures() {
   const [editTarget, setEditTarget] = useState<Expenditure | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expenditure | null>(null);
   const queryClient = useQueryClient();
+
+  const { data: subStatus } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: () => api.subscription.getStatus(),
+    staleTime: 60_000,
+  });
+
+  const hasExpenseAccess =
+    !subStatus ||
+    subStatus.status === "trial" ||
+    (subStatus.features as any)?.HAS_EXPENSE_TRACKING === true;
+
+  if (subStatus && !hasExpenseAccess) {
+    return (
+      <UpgradeRequired
+        featureTitle="Expense Tracking"
+        featureDescription="Track operational costs, log expenses by category, and measure real profitability."
+        benefits={[
+          "Log electricity, water, detergent, staff, and other costs",
+          "See actual profit margin = revenue − expenses in real time",
+          "Track recurring expenses (salaries, rent, utilities)",
+          "Category breakdown charts to spot your biggest costs",
+          "Filter and export expenses by date range",
+        ]}
+        requiredPlan="Professional"
+        currentPlan={subStatus.planDisplayName ?? "Starter"}
+        monthlyPriceNgn={30_000}
+      />
+    );
+  }
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["expenditures", period],

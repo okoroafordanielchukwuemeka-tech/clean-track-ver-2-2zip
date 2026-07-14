@@ -1,0 +1,226 @@
+# PHASE 7.6.1 — FINAL COMPLETION PASS
+
+You are now finishing Phase 7.6.1.
+
+DO NOT start Phase 8.
+
+DO NOT add Laundry Academy.
+
+DO NOT add AI improvements.
+
+DO NOT add educational content.
+
+Only complete the remaining unfinished work from Phase 7.6.1.
+
+---
+
+## Remaining Tasks
+
+### 1. Premium Upgrade Experience
+
+Audit every premium page.
+
+Current premium pages include (minimum):
+
+* Expense Tracking
+* Advanced Analytics
+* AI Marketing
+* WhatsApp Campaigns
+* Advanced Reports
+* Customer Segmentation
+* API Access
+
+Verify the frontend.
+
+If a Starter user reaches any premium page they must NEVER see:
+
+* 401
+* 403
+* Blank page
+* Raw API error
+
+Instead display a polished upgrade screen containing:
+
+* Feature title
+* Feature benefits
+* Required plan
+* Current plan
+* Monthly price
+* Upgrade button
+
+Reuse one shared UpgradeRequired component.
+
+Do not duplicate upgrade UI across pages.
+
+---
+
+### 2. Billing History
+
+Finish the Billing page.
+
+Verify it now displays:
+
+* Current subscription
+* Renewal date
+* Subscription status
+* Usage
+* Payment history
+* Subscription history
+* Invoice list (or clear placeholder if invoice generation is intentionally deferred)
+* Cancel subscription
+* Upgrade
+* Reactivate
+
+Ensure empty states are polished.
+
+---
+
+### 3. Payment Records
+
+Verify every subscription transition creates exactly one payment record when appropriate.
+
+Test:
+
+Trial → Active
+
+Starter Renewal
+
+Professional Renewal
+
+Enterprise Renewal
+
+Past Due
+
+Cancelled
+
+Reactivated
+
+Confirm billing history displays these correctly.
+
+---
+
+### 4. Live Commercial Verification
+
+Create four test laundries.
+
+Trial
+
+Starter
+
+Professional
+
+Enterprise
+
+Verify:
+
+Starter
+
+* Expense page
+* Analytics page
+* AI Marketing
+* WhatsApp Campaigns
+
+Professional
+
+* Everything unlocked correctly
+
+Enterprise
+
+* Unlimited limits
+* Unlimited branches
+* Unlimited workers
+
+Trial
+
+* Enterprise access until expiry
+
+Document every result.
+
+---
+
+### 5. Pricing Consistency
+
+Search the ENTIRE project.
+
+Verify there are NO remaining references to:
+
+₦20,000 Professional
+
+Everything must show:
+
+Starter
+
+₦10,000
+
+Professional
+
+₦30,000
+
+Enterprise
+
+₦50,000
+
+Report every file checked.
+
+---
+
+### 6. Email Verification
+
+Verify every lifecycle email now contains:
+
+Correct branding
+
+Correct plan
+
+Correct pricing
+
+Correct CTA
+
+Correct upgrade link
+
+Correct billing link
+
+No outdated pricing.
+
+---
+
+### 7. Navigation Audit
+
+Verify menus.
+
+Starter users should not see broken premium pages.
+
+Either:
+
+* Hide premium items
+
+OR
+
+* Show them with a lock icon that opens the upgrade screen.
+
+No confusing navigation.
+
+---
+
+### 8. Final Commercial Readiness Report
+
+Provide:
+
+1. Subscription Audit
+2. Billing Audit
+3. Upgrade Experience Audit
+4. Pricing Audit
+5. Feature Gate Audit
+6. Email Audit
+7. Navigation Audit
+8. Live Test Results
+9. Files Modified
+10. Remaining Risks
+11. Deferred Items
+12. Commercial Readiness Score
+
+Only conclude when EVERY remaining Phase 7.6.1 item has been verified or explicitly marked as intentionally deferred.
+
+After this report, STOP.
+
+Do not begin Phase 8.

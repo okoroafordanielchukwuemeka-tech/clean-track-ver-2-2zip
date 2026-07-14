@@ -7,7 +7,7 @@
  * DB tier mapping:
  *   "free"     → internal trial/free tier (no price)
  *   "starter"  → Starter plan      (₦10,000/mo)
- *   "pro"      → Professional plan (₦20,000/mo)
+ *   "pro"      → Professional plan (₦30,000/mo)
  *   "business" → Enterprise plan   (₦50,000/mo)
  *
  * When Paystack/Flutterwave integration is added, the planCode fields
@@ -66,8 +66,8 @@ export const PLAN_PRICING: Record<string, PlanPricingConfig> = {
     displayName: "Professional",
     tagline: "For growing multi-location businesses",
     price: {
-      monthly: 20_000,
-      annual: 200_000,
+      monthly: 30_000,
+      annual: 300_000,
       annualSavingsPct: 17,
       currency: CURRENCY,
     },

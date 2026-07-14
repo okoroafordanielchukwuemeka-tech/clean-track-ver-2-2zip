@@ -23,6 +23,7 @@ import {
   Sun,
   Moon,
   Megaphone,
+  Lock,
 } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "@/context/theme-context";
@@ -66,6 +67,19 @@ export function Layout() {
     enabled: isOwner,
     refetchInterval: 30_000,
   });
+
+  const { data: subStatus } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: () => api.subscription.getStatus(),
+    enabled: isOwner,
+    staleTime: 5 * 60_000,
+  });
+  // Starter (or free/no-status) users don't have pro features
+  const isProOrAbove =
+    !subStatus ||
+    subStatus.status === "trial" ||
+    subStatus.plan === "pro" ||
+    subStatus.plan === "business";
 
   const { data: unreadConvData } = useQuery({
     queryKey: ["conversations-unread"],
@@ -169,27 +183,34 @@ export function Layout() {
                 <span className="flex-1 text-left">Advanced</span>
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", advancedOpen && "rotate-180")} />
               </button>
-              {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    location.pathname === to || location.pathname.startsWith(to + "/")
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="flex-1">{label}</span>
-                  {badge != null && (
-                    <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                      {badge}
-                    </span>
-                  )}
-                </Link>
-              ))}
+              {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => {
+                // Show a lock indicator on pro-gated items when on Starter/free
+                const isPremium = (to === "/marketing" || to === "/customer-hub") && !isProOrAbove;
+                return (
+                  <Link
+                    key={to}
+                    to={to}
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      location.pathname === to || location.pathname.startsWith(to + "/")
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1">{label}</span>
+                    {isPremium && (
+                      <Lock className="h-3 w-3 text-sidebar-foreground/40 shrink-0" title="Requires Professional plan" />
+                    )}
+                    {badge != null && !isPremium && (
+                      <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                        {badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </nav>

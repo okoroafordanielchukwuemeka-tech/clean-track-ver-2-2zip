@@ -17,6 +17,7 @@ import {
   type SubscriptionUsage,
   type SubscriptionStatus,
   type SubscriptionLog,
+  type SubscriptionPaymentRecord,
   type PlanPricingConfig,
   type SubscriptionPricing,
   type WaConnectionStatus,
@@ -1444,6 +1445,7 @@ function PlanCard({
 function BillingSection() {
   const [upgradeTarget, setUpgradeTarget] = useState<PlanPricingConfig | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showPayments, setShowPayments] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
@@ -1468,6 +1470,13 @@ function BillingSection() {
     queryKey: ["subscription", "history"],
     queryFn: () => api.subscription.getHistory(),
     enabled: showHistory,
+    staleTime: 60_000,
+  });
+
+  const { data: payments } = useQuery({
+    queryKey: ["subscription", "payments"],
+    queryFn: () => api.subscription.getPayments(),
+    enabled: showPayments,
     staleTime: 60_000,
   });
 
@@ -1724,6 +1733,81 @@ function BillingSection() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Payment history */}
+      <div>
+        <button
+          onClick={() => setShowPayments(!showPayments)}
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronRight className={cn("h-4 w-4 transition-transform", showPayments && "rotate-90")} />
+          Payment history
+        </button>
+        {showPayments && (
+          <div className="mt-3 rounded-lg border overflow-hidden">
+            {!payments ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2" />
+                Loading payments…
+              </div>
+            ) : payments.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p>No payment records yet.</p>
+                <p className="text-xs mt-1 text-muted-foreground/70">
+                  Payments will appear here once your subscription is activated.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {(payments as SubscriptionPaymentRecord[]).map((p) => {
+                  const statusCls: Record<string, string> = {
+                    paid: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700",
+                    pending: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700",
+                    failed: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700",
+                    refunded: "bg-slate-100 dark:bg-slate-800 text-slate-600 border-slate-300 dark:border-slate-600",
+                  };
+                  return (
+                    <div key={p.id} className="px-4 py-3 flex items-start justify-between gap-4 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold">
+                            ₦{Number(p.amountNgn).toLocaleString("en-NG")}
+                          </p>
+                          <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium capitalize", statusCls[p.status] ?? statusCls.pending)}>
+                            {p.status}
+                          </span>
+                          <span className="text-xs text-muted-foreground capitalize">{p.plan} plan</span>
+                        </div>
+                        {p.reference && (
+                          <p className="text-xs text-muted-foreground mt-0.5 font-mono truncate">Ref: {p.reference}</p>
+                        )}
+                        {p.notes && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{p.notes}</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {p.paidAt
+                          ? new Date(p.paidAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })
+                          : new Date(p.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Invoice placeholder */}
+      <div className="rounded-lg border border-dashed px-4 py-4 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">Invoices</p>
+        <p className="text-xs mt-1">
+          Formal invoices and receipts will be available once automated payment processing (Paystack / Flutterwave) is enabled.
+          For now, contact <a href="mailto:support@cleantrack.ng" className="underline hover:text-foreground">support@cleantrack.ng</a> for a payment receipt.
+        </p>
       </div>
 
       {/* Danger zone — cancel subscription */}

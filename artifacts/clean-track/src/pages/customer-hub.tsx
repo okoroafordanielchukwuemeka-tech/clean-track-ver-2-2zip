@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { UpgradeRequired } from "@/components/upgrade-required";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { InboxTab } from "@/components/inbox-tab";
 import { ActivityTab } from "@/components/communications/activity-tab";
@@ -943,6 +944,16 @@ export default function CustomerHubPage() {
   });
   const inboxUnread = unreadData?.unreadCount ?? 0;
 
+  const { data: subStatus } = useQuery({
+    queryKey: ["subscription", "status"],
+    queryFn: () => api.subscription.getStatus(),
+    staleTime: 60_000,
+  });
+  const hasCampaignAccess =
+    !subStatus ||
+    subStatus.status === "trial" ||
+    (subStatus.features as any)?.HAS_WHATSAPP_CAMPAIGNS === true;
+
   const seedDefaults = useMutation({
     mutationFn: () => api.communication.seedDefaults(),
     onSuccess: (data) => {
@@ -1175,7 +1186,24 @@ export default function CustomerHubPage() {
 
         {/* Campaigns */}
         <TabsContent value="campaigns" className="mt-4">
-          <CampaignsTab />
+          {hasCampaignAccess ? (
+            <CampaignsTab />
+          ) : (
+            <UpgradeRequired
+              featureTitle="WhatsApp Campaigns"
+              featureDescription="Send scheduled broadcast messages to segmented customer lists."
+              benefits={[
+                "Send promotional campaigns to any customer segment",
+                "Schedule campaigns in advance for optimal delivery",
+                "Track delivery, read, and response rates",
+                "Filter recipients by spend, tags, or inactivity",
+                "AI-assisted campaign copy generation",
+              ]}
+              requiredPlan="Professional"
+              currentPlan={subStatus?.planDisplayName ?? "Starter"}
+              monthlyPriceNgn={30_000}
+            />
+          )}
         </TabsContent>
 
         {/* Analytics */}

@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Sparkles, Copy, Check, ChevronDown, ChevronUp, Lock, Loader2, MessageSquare } from "lucide-react";
+import { Sparkles, Copy, Check, ChevronDown, ChevronUp, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useQuery as useRQQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { UpgradeRequired } from "@/components/upgrade-required";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -170,22 +171,20 @@ export default function MarketingPage() {
 
   if (!hasAccess) {
     return (
-      <div className="max-w-lg mx-auto mt-16 text-center space-y-4">
-        <div className="flex justify-center">
-          <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
-            <Lock className="h-7 w-7 text-muted-foreground" />
-          </div>
-        </div>
-        <h2 className="text-xl font-bold">AI Marketing Assistant</h2>
-        <p className="text-muted-foreground">
-          The AI Marketing Assistant is available on the <strong>Professional</strong> and{" "}
-          <strong>Enterprise</strong> plans. Upgrade to generate WhatsApp campaigns, SMS blasts,
-          email copy, and social media posts instantly.
-        </p>
-        <Button onClick={() => window.location.href = "/settings"}>
-          View plans & upgrade
-        </Button>
-      </div>
+      <UpgradeRequired
+        featureTitle="AI Marketing Assistant"
+        featureDescription="Generate ready-to-send marketing copy for WhatsApp, SMS, email, and social media."
+        benefits={[
+          "Generate WhatsApp, SMS, email, Facebook & Instagram copy instantly",
+          "AI-powered generation from plain-language business prompts",
+          "Smart templates tuned for Nigerian laundry businesses",
+          "Scheduled WhatsApp broadcast campaigns",
+          "One-click copy — no reformatting needed",
+        ]}
+        requiredPlan="Professional"
+        currentPlan={status?.planDisplayName ?? "Starter"}
+        monthlyPriceNgn={30_000}
+      />
     );
   }
 
