@@ -56,7 +56,8 @@ function checkVersionHeaders(res: Response): void {
 export class HttpError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    public readonly data?: any
   ) {
     super(message);
     this.name = "HttpError";
@@ -92,7 +93,7 @@ async function request<T>(method: string, path: string, body?: unknown, idempote
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new HttpError(res.status, err.error || `HTTP ${res.status}`);
+    throw new HttpError(res.status, err.error || err.message || `HTTP ${res.status}`, err);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -695,6 +696,23 @@ export interface PaymentInput {
   amount: number;
   method: "cash" | "transfer" | "pos";
   notes?: string;
+  reference?: string;
+  attachmentUrl?: string;
+  confirmDuplicate?: boolean;
+}
+
+export interface DuplicatePaymentWarning {
+  duplicateWarning: true;
+  reasons: string[];
+  existingPayment: {
+    id: number;
+    amount: string;
+    method: string;
+    recordedAt: string;
+    recordedBy?: string | null;
+    receiptNumber?: string | null;
+  };
+  message: string;
 }
 
 export interface OrderItem {
@@ -975,6 +993,7 @@ export interface CustomerStatement {
   customer: { id: number; fullName: string; phone: string; address?: string | null };
   period: { from: string; to: string };
   openingBalance: number;
+  paymentDetails?: PaymentDetails | null;
   entries: StatementEntry[];
   summary: {
     openingBalance: number;
@@ -1076,6 +1095,14 @@ export interface ExpenditureSummary {
   period: string;
 }
 
+export interface PaymentDetails {
+  preferredMethod?: "bank_transfer" | "cash" | "pos" | "other";
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  instructions?: string;
+}
+
 export interface BusinessProfile {
   businessName?: string;
   phone?: string;
@@ -1084,6 +1111,7 @@ export interface BusinessProfile {
   email?: string;
   logoUrl?: string;
   notes?: string;
+  paymentDetails?: PaymentDetails;
 }
 
 export interface BrandingSettings {

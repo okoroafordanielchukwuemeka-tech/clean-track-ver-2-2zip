@@ -33,6 +33,18 @@ export const laundries = pgTable("laundries", {
     email?: string;
     logoUrl?: string;
     notes?: string;
+    // ── Payment details (Phase 7.9) ──────────────────────────────────────
+    // Sole source of truth for manual-payment reconciliation instructions.
+    // Never hardcode bank/payment info anywhere else in the app — read it
+    // from here (laundries.businessProfile.paymentDetails).
+    paymentDetails?: {
+      preferredMethod?: "bank_transfer" | "cash" | "pos" | "other";
+      bankName?: string;
+      accountName?: string;
+      accountNumber?: string;
+      /** Free-text shown on receipts/statements/WhatsApp payment reminders */
+      instructions?: string;
+    };
   }>().default({}),
   brandingSettings: jsonb("branding_settings").$type<{
     brandColor?: string;

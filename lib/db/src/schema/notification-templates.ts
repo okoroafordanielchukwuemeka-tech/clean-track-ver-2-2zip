@@ -34,6 +34,12 @@ export const NOTIFICATION_VARIABLES = [
   "service_type",
   "business_name",
   "pickup_date",
+  // ── Payment details (Phase 7.9) — sourced from businessProfile.paymentDetails ──
+  "bank_name",
+  "account_name",
+  "account_number",
+  "payment_reference",
+  "payment_instructions",
 ] as const;
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
 
@@ -111,7 +117,7 @@ export const DEFAULT_NOTIFICATION_TEMPLATES: Array<{
     eventTrigger: "payment_reminder",
     channel: "whatsapp",
     name: "Payment Reminder (WhatsApp)",
-    body: "Hi {{customer_name}} 💳\n\nThis is a gentle reminder that you have an outstanding balance of *{{balance}}* for order *#{{order_number}}* at *{{branch_name}}*.\n\nAmount Paid: {{amount_paid}}\nTotal Due: {{total_due}}\n\nPlease make payment at your earliest convenience. Thank you!",
-    variables: ["customer_name", "order_number", "branch_name", "balance", "amount_paid", "total_due"],
+    body: "Hi {{customer_name}} 💳\n\nThis is a gentle reminder that you have an outstanding balance of *{{balance}}* for order *#{{order_number}}* at *{{branch_name}}*.\n\nAmount Paid: {{amount_paid}}\nTotal Due: {{total_due}}\n\nPay to:\n*{{bank_name}}*\nAccount Name: {{account_name}}\nAccount Number: {{account_number}}\nReference: {{payment_reference}}\n\n{{payment_instructions}}\n\nThank you!",
+    variables: ["customer_name", "order_number", "branch_name", "balance", "amount_paid", "total_due", "bank_name", "account_name", "account_number", "payment_reference", "payment_instructions"],
   },
 ];

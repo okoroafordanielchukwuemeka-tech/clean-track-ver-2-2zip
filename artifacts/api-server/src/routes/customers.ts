@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { customers, orders, paymentRecords, pickupRecords, priceAdjustments } from "@workspace/db/schema";
+import { customers, orders, paymentRecords, pickupRecords, priceAdjustments, laundries } from "@workspace/db/schema";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, and, desc, ilike, or, gte, lte, lt, inArray, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
@@ -386,6 +386,9 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
     const [customer] = await db.select().from(customers).where(and(...custStmtConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
+    const [laundry] = await db.select().from(laundries).where(eq(laundries.id, laundryId));
+    const laundryPaymentDetails = ((laundry?.businessProfile as any)?.paymentDetails) ?? null;
+
     // ── Period boundaries ──────────────────────────────────────────────────
     const fromDate = from ? new Date(from) : new Date(Date.now() - 30 * 86400000);
     fromDate.setHours(0, 0, 0, 0);
@@ -596,6 +599,7 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
       },
       period: { from: fromDate.toISOString(), to: toDate.toISOString() },
       openingBalance,
+      paymentDetails: laundryPaymentDetails,
       entries,
       summary: {
         openingBalance,

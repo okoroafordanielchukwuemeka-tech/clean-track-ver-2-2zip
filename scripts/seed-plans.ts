@@ -64,7 +64,7 @@ const PLAN_ROWS = [
   {
     tier: "pro",
     displayName: "Professional",
-    priceMonthlyNgn: 30_000,
+    priceMonthlyNgn: 20_000,
     maxOrdersPerMonth: -1,   // -1 = unlimited
     maxWorkers: 15,
     maxBranches: 5,

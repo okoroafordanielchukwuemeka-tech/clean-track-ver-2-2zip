@@ -177,6 +177,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
         receiptHeaderName: brandingSettings.receiptHeaderName ?? laundry?.businessName ?? "",
         receiptFooterText: brandingSettings.receiptFooterText ?? "",
         brandColor: brandingSettings.brandColor ?? "",
+        paymentDetails: (businessProfile as any).paymentDetails ?? null,
       },
       branch: branch ? {
         id: branch.id,

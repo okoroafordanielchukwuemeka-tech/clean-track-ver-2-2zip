@@ -118,6 +118,7 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
         receiptHeaderName: brandingSettings.receiptHeaderName ?? laundry?.businessName ?? "",
         receiptFooterText: brandingSettings.receiptFooterText ?? "",
         brandColor: brandingSettings.brandColor ?? "",
+        paymentDetails: (businessProfile as any).paymentDetails ?? null,
       },
       branch: orderBranch ? { id: orderBranch.id, name: orderBranch.name, address: orderBranch.address ?? "" } : null,
       customer: {

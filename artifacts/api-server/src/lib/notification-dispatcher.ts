@@ -182,6 +182,13 @@ export function buildOrderVariables(params: {
   totalDue: string;
   amountPaid: string;
   balance: string;
+  // ── Payment details (Phase 7.9) — read from businessProfile.paymentDetails,
+  // never hardcoded. Omitted fields render as an empty string in templates.
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  paymentReference?: string;
+  paymentInstructions?: string;
 }): Record<string, string> {
   return {
     customer_name:  params.customerName,
@@ -192,5 +199,10 @@ export function buildOrderVariables(params: {
     total_due:      params.totalDue,
     amount_paid:    params.amountPaid,
     balance:        params.balance,
+    bank_name:            params.bankName ?? "",
+    account_name:         params.accountName ?? "",
+    account_number:       params.accountNumber ?? "",
+    payment_reference:    params.paymentReference ?? "",
+    payment_instructions: params.paymentInstructions ?? "",
   };
 }

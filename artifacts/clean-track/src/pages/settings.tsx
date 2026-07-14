@@ -54,6 +54,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = [
@@ -202,6 +209,66 @@ function BusinessProfileSection() {
         <p className="text-sm font-medium text-muted-foreground">Logo Upload</p>
         <p className="text-xs text-muted-foreground/70">Coming soon — file hosting will be enabled in a future update</p>
       </div>
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="text-base font-semibold">Payment Details</h3>
+        <p className="text-sm text-muted-foreground mt-0.5 mb-4">
+          Shown on receipts, customer statements and WhatsApp payment reminders so customers know exactly where to pay.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Preferred Payment Method</Label>
+            <Select
+              value={form.paymentDetails?.preferredMethod ?? "bank_transfer"}
+              onValueChange={(v) => update("paymentDetails", { ...form.paymentDetails, preferredMethod: v as any } as any)}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="pos">POS</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div />
+          <div className="space-y-1.5">
+            <Label>Bank Name</Label>
+            <Input
+              value={form.paymentDetails?.bankName ?? ""}
+              onChange={(e) => update("paymentDetails", { ...form.paymentDetails, bankName: e.target.value } as any)}
+              placeholder="e.g. GTBank"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Account Name</Label>
+            <Input
+              value={form.paymentDetails?.accountName ?? ""}
+              onChange={(e) => update("paymentDetails", { ...form.paymentDetails, accountName: e.target.value } as any)}
+              placeholder="e.g. Sparkle Laundry Services Ltd"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Account Number</Label>
+            <Input
+              value={form.paymentDetails?.accountNumber ?? ""}
+              onChange={(e) => update("paymentDetails", { ...form.paymentDetails, accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) } as any)}
+              placeholder="10-digit NUBAN"
+              maxLength={10}
+            />
+          </div>
+          <div className="sm:col-span-2 space-y-1.5">
+            <Label>Payment Instructions</Label>
+            <Textarea
+              value={form.paymentDetails?.instructions ?? ""}
+              onChange={(e) => update("paymentDetails", { ...form.paymentDetails, instructions: e.target.value } as any)}
+              placeholder="e.g. Please send your receipt/screenshot to our WhatsApp after payment."
+              rows={2}
+            />
+          </div>
+        </div>
+      </div>
+
       <SaveRow onSave={() => mutation.mutate()} isPending={mutation.isPending} isDirty={isDirty} />
     </div>
   );

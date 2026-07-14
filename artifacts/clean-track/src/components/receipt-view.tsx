@@ -20,6 +20,13 @@ export interface ReceiptData {
     receiptHeaderName: string;
     receiptFooterText: string;
     brandColor: string;
+    paymentDetails?: {
+      preferredMethod?: string;
+      bankName?: string;
+      accountName?: string;
+      accountNumber?: string;
+      instructions?: string;
+    } | null;
   };
   branch?: {
     id: number;
@@ -309,6 +316,40 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
                 ))}
               </tbody>
             </table>
+          </div>
+        </>
+      )}
+
+      {balance > 0 && laundry.paymentDetails && (laundry.paymentDetails.bankName || laundry.paymentDetails.instructions) && (
+        <>
+          <div className="receipt-divider" />
+          <div className="receipt-section">
+            <p className="receipt-section-title">HOW TO PAY THE BALANCE</p>
+            {laundry.paymentDetails.bankName && (
+              <div className="receipt-row">
+                <span>Bank</span>
+                <span className="receipt-value">{laundry.paymentDetails.bankName}</span>
+              </div>
+            )}
+            {laundry.paymentDetails.accountName && (
+              <div className="receipt-row">
+                <span>Account Name</span>
+                <span className="receipt-value">{laundry.paymentDetails.accountName}</span>
+              </div>
+            )}
+            {laundry.paymentDetails.accountNumber && (
+              <div className="receipt-row">
+                <span>Account Number</span>
+                <span className="receipt-value-mono">{laundry.paymentDetails.accountNumber}</span>
+              </div>
+            )}
+            <div className="receipt-row">
+              <span>Reference</span>
+              <span className="receipt-value-mono">{order.orderId}</span>
+            </div>
+            {laundry.paymentDetails.instructions && (
+              <p className="receipt-contact" style={{ marginTop: 4 }}>{laundry.paymentDetails.instructions}</p>
+            )}
           </div>
         </>
       )}

@@ -1,58 +1,53 @@
 import { Link } from "react-router-dom";
-import { CheckCircle2, WashingMachine, Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CheckCircle2, WashingMachine, Zap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const PLANS = [
-  {
-    name: "Starter",
-    price: "₦5,000",
-    tagline: "For small laundry businesses",
-    highlighted: false,
-    features: [
-      "1 branch",
-      "Up to 5 workers",
-      "Unlimited customers",
-      "Unlimited orders",
-      "Basic analytics",
-      "Order & payment tracking",
-      "Customer receipts",
-    ],
-  },
-  {
-    name: "Growth",
-    price: "₦10,000",
-    tagline: "For growing laundry businesses",
-    highlighted: true,
-    features: [
-      "Up to 3 branches",
-      "Up to 20 workers",
-      "Unlimited customers",
-      "Unlimited orders",
-      "Advanced analytics & reports",
-      "Expense tracking",
-      "Batch order processing",
-      "Priority email support",
-    ],
-  },
-  {
-    name: "Business",
-    price: "₦20,000",
-    tagline: "For multi-location laundry businesses",
-    highlighted: false,
-    features: [
-      "Unlimited branches",
-      "Unlimited workers",
-      "Unlimited customers",
-      "Unlimited orders",
-      "Full analytics suite",
-      "WhatsApp notifications",
-      "Marketing tools",
-      "Priority support",
-    ],
-  },
-];
+const API_BASE = "/api";
+
+interface PlanPrice {
+  monthly: number;
+  annual: number;
+  annualSavingsPct: number;
+  currency: string;
+}
+
+interface PlanPricingConfig {
+  tier: string;
+  displayName: string;
+  tagline: string;
+  price: PlanPrice;
+  features: string[];
+  highlighted: boolean;
+}
+
+interface PublicPricingResponse {
+  plans: PlanPricingConfig[];
+  currency: string;
+}
+
+function formatNGN(amount: number): string {
+  return `₦${amount.toLocaleString("en-NG")}`;
+}
+
+// Fetched from GET /subscription/public-pricing — the single unauthenticated
+// source of truth mirroring lib/pricing.ts's PLAN_PRICING. Never hardcode
+// plan names/prices/features here again; they will drift from the real plans.
+async function fetchPublicPricing(): Promise<PublicPricingResponse> {
+  const res = await fetch(`${API_BASE}/subscription/public-pricing`);
+  if (!res.ok) throw new Error("Failed to load pricing");
+  return res.json();
+}
 
 export default function Pricing() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["public-pricing"],
+    queryFn: fetchPublicPricing,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const plans = data?.plans ?? [];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="max-w-5xl mx-auto px-4 py-16 space-y-12">
@@ -72,62 +67,79 @@ export default function Pricing() {
           </p>
           <div className="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/40 rounded-full px-4 py-2 text-blue-300 text-sm">
             <Zap className="h-4 w-4" />
-            14-day free trial includes all Growth features
+            14-day free trial includes all Professional features
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.name}
-              className={`relative rounded-2xl border p-6 flex flex-col gap-5 ${
-                plan.highlighted
-                  ? "border-blue-500 bg-blue-600/10 shadow-xl shadow-blue-900/20"
-                  : "border-slate-700 bg-slate-800/50"
-              }`}
-            >
-              {plan.highlighted && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className="bg-blue-600 text-white text-[11px] font-bold px-4 py-1 rounded-full uppercase tracking-wider">
-                    Most Popular
-                  </span>
+        {isLoading && (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 text-slate-400 animate-spin" />
+          </div>
+        )}
+
+        {isError && (
+          <p className="text-center text-slate-400 text-sm">Couldn't load pricing right now — please refresh.</p>
+        )}
+
+        {!isLoading && !isError && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {plans.map((plan) => (
+              <div
+                key={plan.tier}
+                className={`relative rounded-2xl border p-6 flex flex-col gap-5 ${
+                  plan.highlighted
+                    ? "border-blue-500 bg-blue-600/10 shadow-xl shadow-blue-900/20"
+                    : "border-slate-700 bg-slate-800/50"
+                }`}
+              >
+                {plan.highlighted && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="bg-blue-600 text-white text-[11px] font-bold px-4 py-1 rounded-full uppercase tracking-wider">
+                      Most Popular
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <h2 className="text-white font-bold text-xl">{plan.displayName}</h2>
+                  <p className="text-slate-400 text-sm mt-1">{plan.tagline}</p>
                 </div>
-              )}
 
-              <div>
-                <h2 className="text-white font-bold text-xl">{plan.name}</h2>
-                <p className="text-slate-400 text-sm mt-1">{plan.tagline}</p>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-extrabold text-white">{formatNGN(plan.price.monthly)}</span>
+                    <span className="text-slate-400 text-sm">/month</span>
+                  </div>
+                  <p className="text-slate-500 text-xs mt-1">
+                    or {formatNGN(plan.price.annual)}/year — save {plan.price.annualSavingsPct}%
+                  </p>
+                </div>
+
+                <ul className="space-y-2 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm text-slate-300">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                <Link to="/signup">
+                  <Button
+                    className={`w-full h-11 font-semibold ${
+                      plan.highlighted
+                        ? "bg-blue-600 hover:bg-blue-700 text-white"
+                        : "bg-slate-700 hover:bg-slate-600 text-white border-0"
+                    }`}
+                    variant={plan.highlighted ? "default" : "outline"}
+                  >
+                    Start Free Trial
+                  </Button>
+                </Link>
               </div>
-
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-extrabold text-white">{plan.price}</span>
-                <span className="text-slate-400 text-sm">/month</span>
-              </div>
-
-              <ul className="space-y-2 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-slate-300">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <Link to="/signup">
-                <Button
-                  className={`w-full h-11 font-semibold ${
-                    plan.highlighted
-                      ? "bg-blue-600 hover:bg-blue-700 text-white"
-                      : "bg-slate-700 hover:bg-slate-600 text-white border-0"
-                  }`}
-                  variant={plan.highlighted ? "default" : "outline"}
-                >
-                  Start Free Trial
-                </Button>
-              </Link>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-8 text-center space-y-3">
           <h3 className="text-white font-semibold text-lg">How do I pay after the trial?</h3>

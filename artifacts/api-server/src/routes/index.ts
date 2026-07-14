@@ -31,6 +31,7 @@ import { conversationsRouter } from "./conversations.js";
 import { automationRulesRouter } from "./automation-rules.js";
 import { marketingRouter } from "./marketing.js";
 import { campaignsRouter } from "./campaigns.js";
+import { getPricingList, MANUAL_PAYMENT_INSTRUCTIONS } from "../lib/pricing.js";
 
 export const router = Router();
 
@@ -67,6 +68,15 @@ router.use("/alerts", requireOwner, alertsRouter);
 router.use("/communication", requireOwner, communicationRouter);
 router.use("/whatsapp", requireOwner, whatsappRouter);
 router.use("/conversations", requireAuth, conversationsRouter);
+// Public, unauthenticated pricing for the pre-signup marketing page — must be
+// mounted before the requireOwner-gated /subscription router below.
+router.get("/subscription/public-pricing", (_req, res) => {
+  res.json({
+    plans: getPricingList(),
+    paymentInstructions: MANUAL_PAYMENT_INSTRUCTIONS,
+    currency: "NGN",
+  });
+});
 router.use("/subscription", requireOwner, subscriptionRouter);
 router.use("/automation-rules", requireAuth, automationRulesRouter);
 router.use("/marketing", requireOwner, marketingRouter);

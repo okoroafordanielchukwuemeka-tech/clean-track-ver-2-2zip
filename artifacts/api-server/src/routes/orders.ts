@@ -648,9 +648,56 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
       amount: z.number().min(0.01),
       method: z.enum(["cash", "transfer", "pos"]).default("cash"),
       notes: z.string().optional(),
+      reference: z.string().trim().max(120).optional(),
+      attachmentUrl: z.string().trim().max(2000).optional(),
+      // Set by the client after the user explicitly dismisses a duplicate-payment warning.
+      confirmDuplicate: z.boolean().optional(),
     });
     const data = paymentSchema.parse(req.body);
     const orderId = parseInt(req.params.id);
+
+    // ── Duplicate-payment detection ─────────────────────────────────────────
+    // Manual reconciliation has no provider to verify against, so this is a
+    // heuristic *warning*, never a hard block: staff can always confirm and
+    // proceed (e.g. a customer genuinely paying the same amount twice).
+    const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
+    const recentSameOrderPayments = await db.select().from(paymentRecords).where(and(
+      eq(paymentRecords.orderId, orderId),
+      isNull(paymentRecords.deletedAt),
+    ));
+    const now = Date.now();
+    const exactMatch = recentSameOrderPayments.find(p =>
+      parseFloat(p.amount) === data.amount &&
+      p.method === data.method &&
+      now - new Date(p.recordedAt).getTime() <= DUPLICATE_WINDOW_MS
+    );
+    const looseMatch = !exactMatch && recentSameOrderPayments.find(p =>
+      parseFloat(p.amount) === data.amount &&
+      now - new Date(p.recordedAt).getTime() <= 30 * 60 * 1000
+    );
+
+    if (exactMatch && !data.confirmDuplicate) {
+      return res.status(409).json({
+        duplicateWarning: true,
+        reasons: ["same_amount_and_method_within_5_minutes"],
+        existingPayment: {
+          id: exactMatch.id,
+          amount: exactMatch.amount,
+          method: exactMatch.method,
+          recordedAt: exactMatch.recordedAt,
+          recordedBy: exactMatch.recordedBy,
+          receiptNumber: exactMatch.receiptNumber,
+        },
+        message: "A payment with the same amount and method was just recorded on this order. Confirm to record it anyway.",
+      });
+    }
+
+    const confidenceScore: "high" | "medium" | "low" = exactMatch ? "low" : looseMatch ? "medium" : "high";
+    const confidenceReasons: string[] = exactMatch
+      ? ["same_amount_and_method_within_5_minutes_confirmed_by_staff"]
+      : looseMatch
+      ? ["same_amount_recorded_within_30_minutes"]
+      : [];
 
     /**
      * All financial mutations run inside a single serialisable transaction with
@@ -705,6 +752,12 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
         remainingBalance: remainingBalance.toString(),
         recordedBy: actorName(req.auth!),
         workerId: req.auth!.type === "worker" ? (req.auth!.workerId ?? null) : null,
+        reference: data.reference || (row.order_id as string),
+        attachmentUrl: data.attachmentUrl,
+        provider: "manual",
+        reconciliationStatus: "confirmed",
+        confidenceScore,
+        confidenceReasons,
       }).returning();
 
       await tx.update(orders).set({
@@ -997,6 +1050,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
         receiptHeaderName: brandingSettings.receiptHeaderName ?? laundry?.businessName ?? "",
         receiptFooterText: brandingSettings.receiptFooterText ?? "",
         brandColor: brandingSettings.brandColor ?? "",
+        paymentDetails: (businessProfile as any).paymentDetails ?? null,
       },
       branch: orderBranch ? {
         id: orderBranch.id,
@@ -1283,6 +1337,7 @@ ordersRouter.post(
       const amountPaid = Number(order.amountPaid ?? 0);
       const balance = Math.max(0, totalDue - amountPaid);
 
+      const paymentDetails = (laundry?.businessProfile as any)?.paymentDetails ?? {};
       const vars = buildOrderVariables({
         customerName: order.customerName,
         orderNumber: order.orderId,
@@ -1292,6 +1347,11 @@ ordersRouter.post(
         totalDue: `₦${totalDue.toLocaleString()}`,
         amountPaid: `₦${amountPaid.toLocaleString()}`,
         balance: `₦${balance.toLocaleString()}`,
+        bankName: paymentDetails.bankName,
+        accountName: paymentDetails.accountName,
+        accountNumber: paymentDetails.accountNumber,
+        paymentReference: order.orderId,
+        paymentInstructions: paymentDetails.instructions,
       });
 
       dispatchNotification({

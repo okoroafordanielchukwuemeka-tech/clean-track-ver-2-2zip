@@ -242,7 +242,7 @@ export function buildTrialDay13Email(businessName: string, dashboardUrl: string)
     </p>
     <ul style="color:#475569;font-size:13px;line-height:2;padding-left:20px;">
       <li><strong>Starter — ₦10,000/month</strong> · 1 branch, 2 workers, 500 orders/mo</li>
-      <li><strong>Professional — ₦30,000/month</strong> · 5 branches, unlimited workers, AI marketing</li>
+      <li><strong>Professional — ₦20,000/month</strong> · 5 branches, unlimited workers, AI marketing</li>
       <li><strong>Enterprise — ₦50,000/month</strong> · Unlimited everything, API access</li>
     </ul>
     ${cta("Choose my plan now", `${dashboardUrl}/settings`)}
@@ -250,7 +250,7 @@ export function buildTrialDay13Email(businessName: string, dashboardUrl: string)
       Questions? Reply to this email or WhatsApp us. We'll help you pick the right plan.
     </p>
   `);
-  const text = `Hi ${businessName}, your trial expires tomorrow.\n\nChoose a plan at ${dashboardUrl}/settings:\n- Starter: ₦10,000/mo\n- Professional: ₦30,000/mo\n- Enterprise: ₦50,000/mo\n\nYour data is safe — payment instantly restores access.`;
+  const text = `Hi ${businessName}, your trial expires tomorrow.\n\nChoose a plan at ${dashboardUrl}/settings:\n- Starter: ₦10,000/mo\n- Professional: ₦20,000/mo\n- Enterprise: ₦50,000/mo\n\nYour data is safe — payment instantly restores access.`;
   return { subject, html, text };
 }
 
@@ -272,7 +272,7 @@ export function buildTrialDay14ExpiredEmail(businessName: string, dashboardUrl: 
         <p style="color:#64748b;font-size:12px;margin:2px 0 0;">1 branch · 2 workers · 500 orders/mo · WhatsApp notifications</p>
       </div>
       <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;background:#eff6ff;">
-        <span style="font-weight:700;color:#1d4ed8;">Professional — ₦30,000/month ⭐ Most Popular</span>
+        <span style="font-weight:700;color:#1d4ed8;">Professional — ₦20,000/month ⭐ Most Popular</span>
         <p style="color:#3b5bdb;font-size:12px;margin:2px 0 0;">5 branches · Unlimited workers · AI marketing · Advanced analytics</p>
       </div>
       <div style="padding:12px 16px;">
@@ -283,7 +283,7 @@ export function buildTrialDay14ExpiredEmail(businessName: string, dashboardUrl: 
     ${cta("Upgrade now", `${dashboardUrl}/settings`)}
     <p style="color:#64748b;font-size:12px;text-align:center;">Need help choosing? Reply to this email — we respond within 1 hour.</p>
   `);
-  const text = `Hi ${businessName}, your trial has ended. Your data is safe.\n\nUpgrade at ${dashboardUrl}/settings:\n- Starter: ₦10,000/mo\n- Professional: ₦30,000/mo\n- Enterprise: ₦50,000/mo\n\nWe'll restore full access within 24 hours of payment.`;
+  const text = `Hi ${businessName}, your trial has ended. Your data is safe.\n\nUpgrade at ${dashboardUrl}/settings:\n- Starter: ₦10,000/mo\n- Professional: ₦20,000/mo\n- Enterprise: ₦50,000/mo\n\nWe'll restore full access within 24 hours of payment.`;
   return { subject, html, text };
 }
 

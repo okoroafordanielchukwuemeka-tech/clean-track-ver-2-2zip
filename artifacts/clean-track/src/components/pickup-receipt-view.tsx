@@ -15,6 +15,13 @@ export interface PickupReceiptData {
     receiptHeaderName: string;
     receiptFooterText: string;
     brandColor: string;
+    paymentDetails?: {
+      preferredMethod?: string;
+      bankName?: string;
+      accountName?: string;
+      accountNumber?: string;
+      instructions?: string;
+    } | null;
   };
   branch?: {
     id: number;
@@ -183,6 +190,23 @@ export function PickupReceiptView({ data }: PickupReceiptViewProps) {
         <div className="receipt-status-row">
           <span className="receipt-status-unpaid">✕ ORDER SINCE CANCELLED</span>
         </div>
+      )}
+
+      {pricing.balance > 0 && laundry.paymentDetails?.bankName && (
+        <>
+          <div className="receipt-divider" />
+          <div className="receipt-section">
+            <p className="receipt-section-title">HOW TO PAY THE BALANCE</p>
+            <div className="receipt-row"><span>Bank</span><span className="receipt-value">{laundry.paymentDetails.bankName}</span></div>
+            {laundry.paymentDetails.accountName && (
+              <div className="receipt-row"><span>Account Name</span><span className="receipt-value">{laundry.paymentDetails.accountName}</span></div>
+            )}
+            {laundry.paymentDetails.accountNumber && (
+              <div className="receipt-row"><span>Account Number</span><span className="receipt-value-mono">{laundry.paymentDetails.accountNumber}</span></div>
+            )}
+            <div className="receipt-row"><span>Reference</span><span className="receipt-value-mono">{order.orderId}</span></div>
+          </div>
+        </>
       )}
 
       {pickup.notes && (

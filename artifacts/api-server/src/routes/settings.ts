@@ -13,6 +13,26 @@ const slaSchema = z.object({
   premiumTurnaroundHours: z.number().int().min(1).max(336),
 });
 
+// Payment details are the sole source of truth for manual-payment reconciliation
+// instructions — surfaced on receipts, the customer statement, and WhatsApp
+// payment-reminder templates. Never hardcode bank/payment info elsewhere.
+const paymentDetailsSchema = z.object({
+  preferredMethod: z.enum(["bank_transfer", "cash", "pos", "other"]).optional(),
+  bankName: z.string().trim().max(120).optional().or(z.literal("")),
+  accountName: z.string().trim().max(120).optional().or(z.literal("")),
+  accountNumber: z.string().trim().max(20).optional().or(z.literal("")),
+  instructions: z.string().trim().max(1000).optional().or(z.literal("")),
+}).superRefine((data, ctx) => {
+  // Nigerian NUBAN account numbers are exactly 10 digits — validate format
+  // when a value is present, but never require the field itself.
+  if (data.accountNumber && !/^\d{10}$/.test(data.accountNumber)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["accountNumber"], message: "Account number must be exactly 10 digits" });
+  }
+  if (data.preferredMethod === "bank_transfer" && (!data.bankName || !data.accountName || !data.accountNumber)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["preferredMethod"], message: "Bank name, account name and account number are required when bank transfer is the preferred method" });
+  }
+});
+
 const businessProfileSchema = z.object({
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
@@ -20,6 +40,7 @@ const businessProfileSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   logoUrl: z.string().optional(),
   notes: z.string().optional(),
+  paymentDetails: paymentDetailsSchema.optional(),
 });
 
 const brandingSchema = z.object({

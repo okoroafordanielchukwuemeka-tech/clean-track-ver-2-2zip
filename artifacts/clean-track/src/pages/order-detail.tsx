@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry, type OrderMessage } from "@/lib/api";
+import { api, type PaymentInput, type OrderItem, type PriceAdjustment, type AuditLogEntry, type OrderMessage, type DuplicatePaymentWarning, HttpError } from "@/lib/api";
 import { enqueueOrderStatusUpdate, enqueuePayment, enqueuePickup, type OfflinePaymentPayload, type OfflinePickupPayload } from "@/lib/queue-service";
 import { syncEngine } from "@/lib/sync-engine";
 import { getIsOnline } from "@/lib/network-state";
@@ -144,6 +144,7 @@ export default function OrderDetail() {
   const [deletePaymentId, setDeletePaymentId] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentInput>({ amount: 0, method: "cash" });
   const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicatePaymentWarning | null>(null);
   const [isPickupSubmitting, setIsPickupSubmitting] = useState(false);
   const [pickupForm, setPickupForm] = useState({ shirtsPickedUp: 0, trousersPickedUp: 0, notes: "" });
   const [itemPickupQtys, setItemPickupQtys] = useState<Map<number, number>>(new Map());
@@ -257,9 +258,16 @@ export default function OrderDetail() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       setShowPayment(false);
       setPaymentForm({ amount: 0, method: "cash" });
+      setDuplicateWarning(null);
       toast.success("Payment recorded");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      if (e instanceof HttpError && e.status === 409 && (e.data as DuplicatePaymentWarning)?.duplicateWarning) {
+        setDuplicateWarning(e.data as DuplicatePaymentWarning);
+        return;
+      }
+      toast.error(e.message);
+    },
   });
 
   const handlePaymentSubmit = async (formData: PaymentInput) => {
@@ -1791,7 +1799,7 @@ export default function OrderDetail() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showPayment} onOpenChange={setShowPayment}>
+      <Dialog open={showPayment} onOpenChange={(v) => { setShowPayment(v); if (!v) setDuplicateWarning(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -1801,18 +1809,29 @@ export default function OrderDetail() {
                 <span className="font-semibold text-red-600">{formatCurrency(balance)}</span>
               </div>
             )}
+            {duplicateWarning && (
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-300 dark:border-yellow-800 rounded-lg text-sm space-y-1.5">
+                <p className="font-medium text-yellow-800 dark:text-yellow-300">Possible duplicate payment</p>
+                <p className="text-yellow-700 dark:text-yellow-400">{duplicateWarning.message}</p>
+                <p className="text-xs text-muted-foreground">
+                  Previous: {formatCurrency(Number(duplicateWarning.existingPayment.amount))} via {duplicateWarning.existingPayment.method}
+                  {duplicateWarning.existingPayment.recordedBy ? ` by ${duplicateWarning.existingPayment.recordedBy}` : ""}
+                  {" "}at {new Date(duplicateWarning.existingPayment.recordedAt).toLocaleTimeString()}
+                </p>
+              </div>
+            )}
             <div>
               <Label>Amount (₦) *</Label>
               <Input
                 type="number" min={0}
                 value={paymentForm.amount || ""}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => { setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 }); setDuplicateWarning(null); }}
                 placeholder="Enter amount"
               />
             </div>
             <div>
               <Label>Method</Label>
-              <Select value={paymentForm.method} onValueChange={(v) => setPaymentForm({ ...paymentForm, method: v as any })}>
+              <Select value={paymentForm.method} onValueChange={(v) => { setPaymentForm({ ...paymentForm, method: v as any }); setDuplicateWarning(null); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
@@ -1820,6 +1839,14 @@ export default function OrderDetail() {
                   <SelectItem value="pos">POS</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Reference</Label>
+              <Input
+                value={paymentForm.reference ?? ""}
+                onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
+                placeholder={`Defaults to order #${order.orderId}`}
+              />
             </div>
             <div>
               <Label>Notes</Label>
@@ -1831,12 +1858,13 @@ export default function OrderDetail() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPayment(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowPayment(false); setDuplicateWarning(null); }}>Cancel</Button>
             <Button
-              onClick={() => handlePaymentSubmit(paymentForm)}
+              variant={duplicateWarning ? "destructive" : "default"}
+              onClick={() => handlePaymentSubmit(duplicateWarning ? { ...paymentForm, confirmDuplicate: true } : paymentForm)}
               disabled={paymentMutation.isPending || isPaymentSubmitting}
             >
-              {paymentMutation.isPending || isPaymentSubmitting ? "Recording..." : "Record Payment"}
+              {paymentMutation.isPending || isPaymentSubmitting ? "Recording..." : duplicateWarning ? "Record Anyway" : "Record Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>

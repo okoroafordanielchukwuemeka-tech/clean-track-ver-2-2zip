@@ -127,6 +127,10 @@ subscriptionRouter.get("/pricing", requireOwner, (_req, res) => {
   }
 });
 
+// NOTE: the unauthenticated equivalent of this endpoint, consumed by the
+// pre-signup marketing pricing page, lives at GET /api/subscription/public-pricing
+// in routes/index.ts (must be mounted before the requireOwner-gated router below).
+
 /**
  * GET /subscription/history
  * Returns subscription state transition log for this laundry.

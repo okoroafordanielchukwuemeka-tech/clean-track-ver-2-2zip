@@ -21,7 +21,9 @@ export const orders = pgTable("orders", {
   trousersPickedUp: integer("trousers_picked_up").notNull().default(0),
   additionalNotes: text("additional_notes"),
   status: text("status", { enum: ["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"] }).notNull().default("pending"),
-  paymentStatus: text("payment_status", { enum: ["unpaid", "partial", "paid"] }).notNull().default("unpaid"),
+  // "overpaid"/"refund_pending"/"refunded" are reserved for the future refund
+  // workflow (Phase 7.9 schema-only groundwork) — no workflow sets them yet.
+  paymentStatus: text("payment_status", { enum: ["unpaid", "partial", "paid", "overpaid", "refund_pending", "refunded"] }).notNull().default("unpaid"),
   price: numeric("price", { precision: 10, scale: 2 }),
   extraCharge: numeric("extra_charge", { precision: 10, scale: 2 }),
   discount: numeric("discount", { precision: 10, scale: 2 }),
