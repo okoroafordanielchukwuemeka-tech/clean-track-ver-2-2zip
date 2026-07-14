@@ -1,0 +1,213 @@
+PHASE 7.4 — COMPLETE WORKFLOW VALIDATION
+
+DO NOT BUILD ANY NEW FEATURES.
+
+DO NOT REDESIGN THE UI.
+
+DO NOT ADD POLISH.
+
+Your only task is to verify that every existing feature works together as a complete real-world laundry workflow.
+
+Think like a real laundry owner and a real worker using CleanTrack from opening the shop in the morning until closing.
+
+I want a complete workflow audit.
+
+Simulate multiple real scenarios.
+
+---
+
+## Scenario 1 — Walk-in Customer
+
+Perform the complete workflow:
+
+* Create customer
+* Create order
+* Search services
+* Add quantities
+* Apply discount
+* Record payment
+* Print receipt
+* Update status
+* Mark Ready
+* Partial Pickup
+* Final Pickup
+* Print Pickup Receipt
+* Customer Statement
+
+Verify:
+
+* No unnecessary clicks
+* No duplicated information
+* No confusing screens
+* No missing buttons
+* No dead ends
+
+---
+
+## Scenario 2 — Returning Customer
+
+Customer already exists.
+
+Search customer.
+
+Create another order.
+
+Verify:
+
+* Search is fast.
+* Previous balance is visible.
+* Outstanding balance is obvious.
+* Order history is useful.
+* Statement updates correctly.
+
+---
+
+## Scenario 3 — Customer Pays Later
+
+Create order.
+
+No payment.
+
+Complete laundry.
+
+Pickup.
+
+Partial payment.
+
+Final payment.
+
+Verify:
+
+* Balance remains correct.
+* Statement remains correct.
+* Receipts remain correct.
+* Auto-completion works correctly.
+
+---
+
+## Scenario 4 — Worker Workflow
+
+Login as worker.
+
+Perform an entire shift.
+
+Verify:
+
+* Dashboard clarity
+* Queue clarity
+* Status updates
+* Payment flow
+* Pickup flow
+* Offline behaviour
+* Permission boundaries
+
+Record every unnecessary click.
+
+---
+
+## Scenario 5 — Owner Workflow
+
+Login as owner.
+
+Complete:
+
+* Dashboard review
+* Worker review
+* Customer lookup
+* Order lookup
+* Statement printing
+* Receipt lookup
+* Discount approval
+* Analytics review
+
+Verify everything feels natural.
+
+---
+
+## Navigation Audit
+
+For every page answer:
+
+1. Why would the user visit this page?
+2. What is the primary action?
+3. Is that action immediately obvious?
+4. Can the action be completed quickly?
+5. Are there unnecessary buttons?
+6. Are there duplicated actions?
+7. Are important actions hidden?
+
+Recommend simplifications only.
+
+---
+
+## Mobile Audit
+
+Pretend this is being used on a phone inside a busy laundry.
+
+Verify:
+
+* Buttons are large enough.
+* Forms are easy.
+* Tables remain usable.
+* Dialogs fit correctly.
+* No horizontal scrolling.
+* Important actions remain visible.
+
+---
+
+## Workflow Friction Audit
+
+Find every place where users may think:
+
+* "Where do I click?"
+* "What do I do next?"
+* "Why is this here?"
+* "I didn't know this feature existed."
+
+For every issue provide:
+
+* Root cause
+* Suggested improvement
+* Priority (Critical / High / Medium / Low)
+
+---
+
+## Data Consistency Audit
+
+Verify throughout all workflows:
+
+* Customer balances
+* Statements
+* Payments
+* Receipts
+* Pickup quantities
+* Discounts
+* Analytics
+
+must always stay synchronized.
+
+---
+
+## Final Report
+
+Produce:
+
+1. Workflow Score (/100)
+
+2. Customer Experience Score
+
+3. Worker Experience Score
+
+4. Owner Experience Score
+
+5. Mobile Experience Score
+
+6. Top 20 Workflow Problems
+
+7. Suggested Fix Order
+
+8. Any Remaining Risks Before Public Launch
+
+Do not build anything new.
+
+Focus only on validating that the entire product works as one complete experience.
