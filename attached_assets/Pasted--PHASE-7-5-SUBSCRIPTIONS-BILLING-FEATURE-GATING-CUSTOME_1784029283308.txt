@@ -1,0 +1,522 @@
+# PHASE 7.5 — SUBSCRIPTIONS, BILLING, FEATURE GATING & CUSTOMER LIFECYCLE
+
+## IMPORTANT
+
+Do NOT build anything outside this scope.
+
+Do NOT modify existing laundry workflows unless required for billing integration.
+
+Do NOT remove existing functionality.
+
+First perform a COMPLETE audit before implementing anything.
+
+---
+
+# STEP 1 — AUDIT CURRENT SYSTEM
+
+Audit the current application and determine:
+
+1. Is there already a subscription system?
+2. Is there already a billing table?
+3. Are plans hardcoded?
+4. Are features currently gated?
+5. Can users currently exceed any limits?
+6. Is WhatsApp already integrated?
+7. Are there existing email templates?
+8. Is onboarding email already implemented?
+9. Is trial logic already present?
+10. Are there existing cron jobs or scheduled tasks?
+
+Provide findings before implementation.
+
+---
+
+# STEP 2 — DESIGN THE BILLING ARCHITECTURE
+
+Design the subscription system so it can easily scale in the future.
+
+Support:
+
+* Free Trial
+* Monthly Billing
+* Future Annual Billing
+
+The system must NOT require code changes when adding new plans later.
+
+Plans must be database-driven.
+
+Create tables if missing.
+
+Suggested entities:
+
+* Plans
+* Subscriptions
+* Subscription History
+* Feature Limits
+* Usage Counters
+* Billing Events
+* Payment Records
+
+---
+
+# STEP 3 — CREATE THE PLANS
+
+Implement these plans.
+
+---
+
+## Starter
+
+Price:
+
+₦10,000 / month
+
+Target:
+
+Small laundries
+
+Included:
+
+* Customer Management
+* Orders
+* Payments
+* Pickups
+* Receipts
+* Customer Statements
+* Worker Management
+* Single Branch
+* Basic Dashboard
+* Basic Reports
+* Laundry Academy
+* Basic Email Notifications
+* WhatsApp Transactional Notifications
+
+WhatsApp includes:
+
+* Order Created
+* Order Ready
+* Pickup Reminder
+* Payment Reminder
+
+Limits:
+
+* 2 Workers
+* 500 Active Customers
+* 500 Orders / month
+* 1 Branch
+
+No marketing campaigns.
+
+No customer segmentation.
+
+No AI marketing.
+
+---
+
+## Professional
+
+Price:
+
+₦30,000 / month
+
+Target:
+
+Growing laundries
+
+Everything in Starter plus:
+
+* Multi Branch
+* Unlimited Workers
+* Advanced Analytics
+* Customer Segmentation
+* Marketing Campaigns
+* Scheduled WhatsApp Campaigns
+* AI Marketing Templates
+* Business Insights
+* Revenue Reports
+* Expense Tracking
+* Owner Dashboard
+* Branch Comparison
+* Priority Email Support
+
+Limits:
+
+* 5 Branches
+* Unlimited Workers
+* Unlimited Customers
+* Unlimited Orders
+
+---
+
+## Enterprise
+
+Price:
+
+₦50,000 / month
+
+Target:
+
+Large Laundry Businesses
+
+Everything in Professional plus:
+
+* Unlimited Branches
+* API Access
+* AI Business Advisor
+* White Label Options (future-ready)
+* Advanced Reports
+* Custom Roles
+* Advanced Permissions
+* Dedicated Support
+* Future Integrations Ready
+
+Unlimited everything.
+
+---
+
+# STEP 4 — FEATURE GATING
+
+Every premium feature must check subscription before execution.
+
+Never hide features only in the frontend.
+
+Enforce limits in BOTH:
+
+* Backend
+* Frontend
+
+Example:
+
+Starter attempting:
+
+Create third worker
+
+Return:
+
+403
+
+"Your current plan allows only 2 workers."
+
+Professional attempting:
+
+Create sixth branch
+
+Return:
+
+403
+
+"Upgrade to Enterprise."
+
+---
+
+# STEP 5 — USAGE TRACKING
+
+Track:
+
+* Orders this month
+* Customers
+* Workers
+* Branches
+* WhatsApp messages
+* Emails sent
+* Storage usage (future-ready)
+
+Display usage bars.
+
+Example:
+
+Orders
+
+387 / 500
+
+Workers
+
+2 / 2
+
+Branches
+
+1 / 1
+
+Use progress indicators.
+
+Warn users at:
+
+* 80%
+* 90%
+* 100%
+
+---
+
+# STEP 6 — FREE TRIAL
+
+Every new laundry receives:
+
+14-day trial.
+
+During trial:
+
+Unlock every feature.
+
+Dashboard should display:
+
+Trial
+
+12 Days Remaining
+
+Countdown every day.
+
+After expiry:
+
+Lock premium functionality.
+
+Do NOT delete data.
+
+Allow payment to instantly restore access.
+
+---
+
+# STEP 7 — CUSTOMER LIFECYCLE EMAILS
+
+Implement an automated email lifecycle.
+
+### Immediately after signup
+
+Send:
+
+Welcome email
+
+Include:
+
+* Welcome message
+* Dashboard introduction
+* Laundry Academy
+* Getting Started guide
+* Support information
+
+---
+
+### Day 2
+
+Tips:
+
+Running your first laundry digitally.
+
+---
+
+### Day 4
+
+Tips:
+
+Reducing lost clothes.
+
+---
+
+### Day 6
+
+Tips:
+
+Improving customer retention.
+
+---
+
+### Day 8
+
+Tips:
+
+Using WhatsApp effectively.
+
+---
+
+### Day 10
+
+Tips:
+
+Increasing repeat customers.
+
+---
+
+### Day 12
+
+Tips:
+
+Understanding reports.
+
+---
+
+### Day 13
+
+Reminder:
+
+Trial expires tomorrow.
+
+---
+
+### Day 14
+
+Trial expired.
+
+Upgrade email.
+
+---
+
+### Monthly subscribers
+
+Automatically send:
+
+Payment successful.
+
+---
+
+### Before renewal
+
+7 days before renewal.
+
+3 days before renewal.
+
+1 day before renewal.
+
+---
+
+### Failed payment
+
+Immediately.
+
+After 24 hours.
+
+After 72 hours.
+
+---
+
+### Cancelled subscription
+
+Retention email.
+
+---
+
+# STEP 8 — IN-APP EDUCATION
+
+Show educational tips throughout the application.
+
+Examples:
+
+"Did you know?"
+
+"Removing wine stains is easier if treated immediately."
+
+"Customers who receive reminders are more likely to return."
+
+"Separating white garments before washing reduces discoloration."
+
+"Recording pickups immediately reduces customer disputes."
+
+Rotate tips daily.
+
+Allow dismissal.
+
+Do not interrupt workflows.
+
+---
+
+# STEP 9 — AI MARKETING ASSISTANT (Professional+)
+
+Provide an AI prompt interface.
+
+Users should describe what they want.
+
+Examples:
+
+"Create a mid-week promotion."
+
+"Write a festive discount message."
+
+"Generate a campaign for inactive customers."
+
+"Promote duvet cleaning."
+
+The AI should generate:
+
+* WhatsApp message
+* SMS version
+* Email version
+* Facebook post
+* Instagram caption
+
+Allow editing before sending.
+
+Allow saving as reusable templates.
+
+Support scheduling.
+
+---
+
+# STEP 10 — SUBSCRIPTION SETTINGS
+
+Create a Billing page showing:
+
+* Current Plan
+* Price
+* Renewal Date
+* Trial Status
+* Usage
+* Upgrade
+* Downgrade
+* Cancel Subscription
+* Billing History
+* Payment History
+* Download Invoice
+
+---
+
+# STEP 11 — TESTING
+
+Verify:
+
+Starter
+
+* Cannot exceed limits
+* WhatsApp transactional notifications work
+* Marketing tools unavailable
+
+Professional
+
+* Marketing works
+* AI templates work
+* Multi-branch works
+
+Enterprise
+
+* Unlimited usage
+* API access enabled
+* Advanced features enabled
+
+Test:
+
+* Trial expiry
+* Renewals
+* Failed payments
+* Successful upgrades
+* Downgrades
+* Feature locking
+* Feature restoration
+
+---
+
+# STEP 12 — FINAL REPORT
+
+Provide:
+
+1. Audit Results
+2. Database Changes
+3. Billing Architecture
+4. Feature Matrix
+5. Usage Tracking Results
+6. Trial Verification
+7. Email Workflow Verification
+8. AI Marketing Verification
+9. Security Review
+10. Failed Tests
+11. Fixed Issues
+12. Remaining Risks
+13. Production Readiness Score
+
+Do not proceed to Phase 8 until every billing, subscription, feature gate, lifecycle email, and usage limit has been fully implemented and verified.

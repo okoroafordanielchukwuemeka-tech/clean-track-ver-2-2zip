@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { laundries, subscriptionLogs } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { laundries, subscriptionLogs, subscriptionPayments } from "@workspace/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { getEffectivePlanFeatures, getEffectivePlanLimits, PLAN_DISPLAY_NAMES, getEntitlementReport } from "../lib/entitlements.js";
 import { computeUsageWithLimits } from "../lib/usage-service.js";
 import { getPricingList, MANUAL_PAYMENT_INSTRUCTIONS } from "../lib/pricing.js";
 import type { SubscriptionStatus } from "@workspace/db/schema";
+import { sendLifecycleEmail } from "../lib/email-lifecycle.js";
 
 export const subscriptionRouter = Router();
 
@@ -83,9 +84,9 @@ subscriptionRouter.get("/usage", requireOwner, async (req: AuthRequest, res) => 
 
     if (!laundry) return res.status(404).json({ error: "Not found" });
 
-    // During trial, report usage against Growth limits so new accounts
-    // don't see a false "branch limit reached" warning immediately.
-    const effectiveTier = laundry.subscriptionStatus === "trial" ? "pro" : laundry.subscriptionTier;
+    // During trial, report usage against Enterprise limits so new accounts
+    // don't see false "limit reached" warnings.
+    const effectiveTier = laundry.subscriptionStatus === "trial" ? "business" : laundry.subscriptionTier;
     const usage = await computeUsageWithLimits(laundryId, effectiveTier);
     res.json(usage);
   } catch {
@@ -104,7 +105,6 @@ subscriptionRouter.get("/entitlements", requireOwner, async (_req, res) => {
 /**
  * GET /subscription/pricing
  * Returns all plan pricing configs + manual payment instructions.
- * Used by the billing UI to render plan cards.
  */
 subscriptionRouter.get("/pricing", requireOwner, (_req, res) => {
   try {
@@ -119,9 +119,50 @@ subscriptionRouter.get("/pricing", requireOwner, (_req, res) => {
 });
 
 /**
+ * GET /subscription/history
+ * Returns subscription state transition log for this laundry.
+ */
+subscriptionRouter.get("/history", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+
+    const logs = await db
+      .select()
+      .from(subscriptionLogs)
+      .where(eq(subscriptionLogs.laundryId, laundryId))
+      .orderBy(desc(subscriptionLogs.createdAt))
+      .limit(50);
+
+    res.json(logs);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch subscription history" });
+  }
+});
+
+/**
+ * GET /subscription/payments
+ * Returns payment records for this laundry.
+ */
+subscriptionRouter.get("/payments", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+
+    const payments = await db
+      .select()
+      .from(subscriptionPayments)
+      .where(eq(subscriptionPayments.laundryId, laundryId))
+      .orderBy(desc(subscriptionPayments.createdAt))
+      .limit(50);
+
+    res.json(payments);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch payment records" });
+  }
+});
+
+/**
  * POST /subscription/upgrade-intent
  * Logs when an owner clicks an upgrade button.
- * Phase 5: Subscription analytics event tracking.
  * No payment processing — records intent only.
  */
 const upgradeIntentSchema = z.object({
@@ -169,5 +210,59 @@ subscriptionRouter.post("/upgrade-intent", requireOwner, async (req: AuthRequest
       return res.status(400).json({ error: err.errors[0].message });
     }
     res.status(500).json({ error: "Failed to log upgrade intent" });
+  }
+});
+
+/**
+ * POST /subscription/cancel
+ * Owner can self-cancel their subscription.
+ * Sets status to "cancelled" and sends retention email.
+ */
+subscriptionRouter.post("/cancel", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+
+    const [laundry] = await db
+      .select({
+        subscriptionStatus: laundries.subscriptionStatus,
+        subscriptionTier: laundries.subscriptionTier,
+        ownerEmail: laundries.ownerEmail,
+        businessName: laundries.businessName,
+      })
+      .from(laundries)
+      .where(eq(laundries.id, laundryId));
+
+    if (!laundry) return res.status(404).json({ error: "Not found" });
+
+    if (laundry.subscriptionStatus === "cancelled") {
+      return res.status(409).json({ error: "Subscription is already cancelled." });
+    }
+
+    await db.update(laundries)
+      .set({ subscriptionStatus: "cancelled", updatedAt: new Date() })
+      .where(eq(laundries.id, laundryId));
+
+    await db.insert(subscriptionLogs).values({
+      laundryId,
+      fromStatus: laundry.subscriptionStatus as SubscriptionStatus,
+      toStatus: "cancelled",
+      fromPlan: laundry.subscriptionTier,
+      toPlan: laundry.subscriptionTier,
+      reason: "owner_cancelled",
+      changedBy: "owner",
+      metadata: { cancelledAt: new Date().toISOString() },
+    });
+
+    // Send retention email (fire-and-forget)
+    sendLifecycleEmail(
+      laundryId,
+      laundry.ownerEmail,
+      laundry.businessName,
+      "cancellation_retention"
+    ).catch(() => {});
+
+    res.json({ cancelled: true, message: "Your subscription has been cancelled. Your data is preserved." });
+  } catch {
+    res.status(500).json({ error: "Failed to cancel subscription" });
   }
 });

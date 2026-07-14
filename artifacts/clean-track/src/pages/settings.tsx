@@ -16,6 +16,7 @@ import {
   type MessageTemplate,
   type SubscriptionUsage,
   type SubscriptionStatus,
+  type SubscriptionLog,
   type PlanPricingConfig,
   type SubscriptionPricing,
   type WaConnectionStatus,
@@ -1375,6 +1376,8 @@ function PlanCard({
 
 function BillingSection() {
   const [upgradeTarget, setUpgradeTarget] = useState<PlanPricingConfig | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
     queryKey: ["subscription", "status"],
@@ -1392,6 +1395,24 @@ function BillingSection() {
     queryKey: ["subscription", "pricing"],
     queryFn: () => api.subscription.getPricing(),
     staleTime: 60_000 * 30,
+  });
+
+  const { data: history } = useQuery({
+    queryKey: ["subscription", "history"],
+    queryFn: () => api.subscription.getHistory(),
+    enabled: showHistory,
+    staleTime: 60_000,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => api.subscription.cancel(),
+    onSuccess: () => {
+      toast.success("Subscription cancelled. Your data is preserved.");
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message ?? "Failed to cancel subscription. Please contact support.");
+    },
   });
 
   const isLoading = statusLoading || usageLoading;
@@ -1416,6 +1437,8 @@ function BillingSection() {
     cancelled: "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-600",
   };
 
+  const canCancel = status && !["cancelled", "trial"].includes(status.status);
+
   return (
     <div className="space-y-6">
       <SectionHeader title="Billing & Subscription" description="Manage your plan, view usage, and upgrade your account." />
@@ -1431,6 +1454,11 @@ function BillingSection() {
               <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium capitalize", statusColors[status.status] ?? statusColors.active)}>
                 {status.status.replace("_", " ")}
               </span>
+              {status.subscriptionRenewsAt && status.status === "active" && (
+                <span className="text-xs text-muted-foreground">
+                  Renews {new Date(status.subscriptionRenewsAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -1444,7 +1472,7 @@ function BillingSection() {
       {status?.status === "trial" && status.trialEndsAt && (
         <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 px-4 py-4 text-sm text-blue-700 dark:text-blue-300 space-y-2">
           <div>
-            <span className="font-semibold">Growth Trial — </span>
+            <span className="font-semibold">14-Day Trial — </span>
             {(status.trialDaysRemaining ?? 0) <= 0
               ? "Your trial has expired. Upgrade below to continue using CleanTrack."
               : (status.trialDaysRemaining ?? 0) <= 3
@@ -1454,14 +1482,14 @@ function BillingSection() {
           </div>
           {(status.trialDaysRemaining ?? 0) > 0 && (
             <p className="text-xs text-blue-600 dark:text-blue-400">
-              During your trial you have full access to Growth plan features — analytics, multiple branches, batch processing, and up to 20 workers.
-              Choose a paid plan below to keep these features after your trial ends.
+              During your trial you have full access to all Enterprise features.
+              Choose a paid plan below to keep access after your trial ends.
             </p>
           )}
         </div>
       )}
 
-      {/* Past due grace period banner */}
+      {/* Past due banner */}
       {status?.status === "past_due" && (
         <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           <AlertCircle className="h-4 w-4 inline mr-1.5" />
@@ -1482,6 +1510,15 @@ function BillingSection() {
         </div>
       )}
 
+      {/* Cancelled banner */}
+      {status?.status === "cancelled" && (
+        <div className="rounded-lg border bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+          <AlertCircle className="h-4 w-4 inline mr-1.5" />
+          <span className="font-semibold">Subscription Cancelled — </span>
+          Your data is preserved. Choose a plan below to reactivate your account instantly.
+        </div>
+      )}
+
       {/* Usage bars */}
       {isLoading && !usage && (
         <div className="flex items-center justify-center py-8">
@@ -1492,19 +1529,32 @@ function BillingSection() {
       {usage && (
         <div className="rounded-lg border divide-y">
           <div className="px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">This Month's Usage</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current Usage</p>
           </div>
           <div className="px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium">Orders</h3>
+              <h3 className="text-sm font-medium">Orders this month</h3>
               <WarnBadge level={usage.warnings.orders} />
             </div>
             <UsageBar
-              label="This month (resets on the 1st)"
+              label="Resets on the 1st of each month"
               used={usage.monthlyOrderCount}
               limit={usage.limits.maxOrdersPerMonth}
               pct={usage.percentages.orders}
               warnLevel={usage.warnings.orders}
+            />
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium">Active customers</h3>
+              <WarnBadge level={usage.warnings.customers} />
+            </div>
+            <UsageBar
+              label="Total active customers in your account"
+              used={usage.activeCustomerCount}
+              limit={usage.limits.maxCustomers}
+              pct={usage.percentages.customers}
+              warnLevel={usage.warnings.customers}
             />
           </div>
           <div className="px-4 py-3">
@@ -1540,7 +1590,7 @@ function BillingSection() {
       <div>
         <h3 className="text-sm font-semibold mb-1">Available Plans</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          All prices in Nigerian Naira (NGN). Contact us to upgrade.
+          All prices in Nigerian Naira (NGN). Contact us to upgrade or downgrade.
         </p>
         {pricing ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1555,12 +1605,95 @@ function BillingSection() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {["Starter", "Growth", "Business"].map((name) => (
+            {["Starter", "Professional", "Enterprise"].map((name) => (
               <div key={name} className="rounded-xl border p-5 animate-pulse h-64 bg-muted/30" />
             ))}
           </div>
         )}
       </div>
+
+      {/* Billing history */}
+      <div>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronRight className={cn("h-4 w-4 transition-transform", showHistory && "rotate-90")} />
+          Subscription history
+        </button>
+        {showHistory && (
+          <div className="mt-3 rounded-lg border overflow-hidden">
+            {!history ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2" />
+                Loading history…
+              </div>
+            ) : history.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">No subscription history yet.</div>
+            ) : (
+              <div className="divide-y">
+                {(history as SubscriptionLog[]).map((entry) => (
+                  <div key={entry.id} className="px-4 py-3 flex items-start justify-between gap-4 text-sm">
+                    <div>
+                      <p className="font-medium capitalize">
+                        {entry.reason?.replace(/_/g, " ") ?? "Status change"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {entry.fromStatus && entry.toStatus && entry.fromStatus !== entry.toStatus
+                          ? `${entry.fromStatus.replace("_", " ")} → ${entry.toStatus.replace("_", " ")}`
+                          : entry.toStatus?.replace("_", " ")}
+                        {entry.fromPlan && entry.toPlan && entry.fromPlan !== entry.toPlan
+                          ? ` · ${entry.fromPlan} → ${entry.toPlan}`
+                          : ""}
+                        {" "}· by {entry.changedBy ?? "system"}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(entry.createdAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Danger zone — cancel subscription */}
+      {canCancel && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-4">
+          <h3 className="text-sm font-semibold text-destructive mb-1">Cancel Subscription</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Cancelling will block new orders, workers, and branches after your current period ends.
+            All existing data is preserved and access can be restored at any time.
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={cancelMutation.isPending}>
+                {cancelMutation.isPending ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Cancelling…</> : "Cancel subscription"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel your subscription?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will cancel your CleanTrack subscription. New orders, workers, and branches will be blocked after cancellation.
+                  Your existing data — customers, orders, and history — is permanently preserved and can be restored by reactivating.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep subscription</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => cancelMutation.mutate()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Yes, cancel subscription
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
 
       {/* Upgrade modal */}
       {upgradeTarget && pricing && (

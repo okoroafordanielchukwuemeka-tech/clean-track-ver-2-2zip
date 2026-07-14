@@ -424,6 +424,14 @@ export const api = {
         targetPlan,
         source: source ?? "billing_settings",
       }),
+    getHistory: () => request<SubscriptionLog[]>("GET", "/subscription/history"),
+    getPayments: () => request<SubscriptionPaymentRecord[]>("GET", "/subscription/payments"),
+    cancel: () => request<{ cancelled: boolean; message: string }>("POST", "/subscription/cancel"),
+  },
+  marketing: {
+    generate: (prompt: string) =>
+      request<MarketingGenerateResponse>("POST", "/marketing/generate", { prompt }),
+    getTips: () => request<MarketingTipsResponse>("GET", "/marketing/tips"),
   },
   health: {
     production: () => request<unknown>("GET", "/health/production"),
@@ -1698,15 +1706,24 @@ export interface SubscriptionStatus {
   subscriptionRenewsAt: string | null;
   features: {
     HAS_WHATSAPP: boolean;
+    HAS_WHATSAPP_CAMPAIGNS: boolean;
+    HAS_AI_MARKETING: boolean;
+    HAS_CUSTOMER_SEGMENTATION: boolean;
     HAS_MULTI_BRANCH: boolean;
-    HAS_MARKETING_TOOLS: boolean;
     HAS_ANALYTICS: boolean;
+    HAS_ADVANCED_ANALYTICS: boolean;
     HAS_BATCH_PROCESSING: boolean;
+    HAS_EXPENSE_TRACKING: boolean;
+    HAS_ADVANCED_REPORTS: boolean;
+    HAS_API_ACCESS: boolean;
+    HAS_SLA_MANAGEMENT: boolean;
+    [key: string]: boolean;
   };
   limits: {
     maxBranches: number;
     maxWorkers: number;
     maxOrdersPerMonth: number;
+    maxCustomers: number;
   };
 }
 
@@ -1866,24 +1883,72 @@ export interface SubscriptionUsage {
   monthlyOrderCount: number;
   activeWorkerCount: number;
   activeBranchCount: number;
+  activeCustomerCount: number;
   storageUsedMb: number;
   plan: string;
   limits: {
     maxOrdersPerMonth: number;
     maxWorkers: number;
     maxBranches: number;
+    maxCustomers: number;
     maxStorageMb: number;
   };
   percentages: {
     orders: number;
     workers: number;
     branches: number;
+    customers: number;
     storage: number;
   };
   warnings: {
     orders: UsageWarningLevel;
     workers: UsageWarningLevel;
     branches: UsageWarningLevel;
+    customers: UsageWarningLevel;
     storage: UsageWarningLevel;
   };
+}
+
+export interface SubscriptionLog {
+  id: number;
+  laundryId: number;
+  fromStatus: string | null;
+  toStatus: string | null;
+  fromPlan: string | null;
+  toPlan: string | null;
+  reason: string | null;
+  changedBy: string | null;
+  createdAt: string;
+}
+
+export interface SubscriptionPaymentRecord {
+  id: number;
+  laundryId: number;
+  amountNgn: number;
+  plan: string;
+  billingPeriod: string | null;
+  status: "pending" | "paid" | "failed" | "refunded";
+  paymentMethod: string;
+  reference: string | null;
+  notes: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface MarketingContent {
+  whatsapp: string;
+  sms: string;
+  email: { subject: string; body: string };
+  facebook: string;
+  instagram: string;
+}
+
+export interface MarketingGenerateResponse {
+  content: MarketingContent;
+  generatedBy: "ai" | "template";
+  prompt: string;
+}
+
+export interface MarketingTipsResponse {
+  prompts: string[];
 }

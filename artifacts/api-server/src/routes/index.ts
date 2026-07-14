@@ -29,6 +29,7 @@ import { productionHealthRouter } from "./production-health.js";
 import { whatsappRouter } from "./whatsapp.js";
 import { conversationsRouter } from "./conversations.js";
 import { automationRulesRouter } from "./automation-rules.js";
+import { marketingRouter } from "./marketing.js";
 
 export const router = Router();
 
@@ -67,6 +68,7 @@ router.use("/whatsapp", requireOwner, whatsappRouter);
 router.use("/conversations", requireAuth, conversationsRouter);
 router.use("/subscription", requireOwner, subscriptionRouter);
 router.use("/automation-rules", requireAuth, automationRulesRouter);
+router.use("/marketing", requireOwner, marketingRouter);
 
 // Platform admin routes (CleanTrack internal — not for laundry owners)
 router.use("/admin", adminRouter);

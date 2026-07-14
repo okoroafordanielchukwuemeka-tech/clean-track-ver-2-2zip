@@ -15,6 +15,7 @@ import { laundries, subscriptionLogs } from "@workspace/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 import { GRACE_PERIOD_DAYS } from "./entitlements.js";
 import type { SubscriptionStatus } from "@workspace/db/schema";
+import { processTrialLifecycleEmails, processRenewalReminderEmails } from "./email-lifecycle.js";
 
 const LOG_PREFIX = "[subscription-lifecycle]";
 
@@ -168,6 +169,14 @@ export async function runLifecycleCheck(): Promise<void> {
         `${LOG_PREFIX} Lifecycle run complete: ${expired} trial(s) expired, ${suspended} account(s) suspended.`
       );
     }
+
+    // Phase 7.5 — send automated lifecycle emails
+    await processTrialLifecycleEmails().catch((err) =>
+      console.error(`${LOG_PREFIX} Trial lifecycle emails failed:`, err)
+    );
+    await processRenewalReminderEmails().catch((err) =>
+      console.error(`${LOG_PREFIX} Renewal reminder emails failed:`, err)
+    );
   } catch (err) {
     console.error(`${LOG_PREFIX} Lifecycle check failed:`, err);
   }

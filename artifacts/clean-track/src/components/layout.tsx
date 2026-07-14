@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Sun,
   Moon,
+  Megaphone,
 } from "lucide-react";
 import { useState } from "react";
 import { useTheme } from "@/context/theme-context";
@@ -92,6 +93,7 @@ export function Layout() {
   ];
 
   const advancedNavItems = [
+    { to: "/marketing", label: "AI Marketing", icon: Megaphone, badge: undefined as number | undefined },
     { to: "/operations", label: "Operations", icon: Activity, badge: undefined as number | undefined },
     { to: "/customer-hub", label: "Customer Hub", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined },
     { to: "/platform-health", label: "Platform Health", icon: ShieldCheck, badge: undefined as number | undefined },

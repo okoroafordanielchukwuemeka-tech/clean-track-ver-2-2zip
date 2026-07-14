@@ -37,3 +37,6 @@ export * from "./admin-audit-log.js";
 export * from "./whatsapp-connections.js";
 export * from "./whatsapp-activity-logs.js";
 export * from "./automation-rules.js";
+export * from "./plans.js";
+export * from "./lifecycle-email-log.js";
+export * from "./subscription-payments.js";

@@ -108,7 +108,7 @@ export function requireEntitlement(feature: PlanFeature) {
  * Returns HTTP 403 with a machine-readable code if the plan limit is exceeded.
  * Trial accounts use Growth-level limits.
  */
-export function requirePlanLimit(limitType: "orders" | "workers" | "branches") {
+export function requirePlanLimit(limitType: "orders" | "workers" | "branches" | "customers") {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     const laundryId = req.auth?.laundryId;
     if (!laundryId) return next();

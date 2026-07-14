@@ -37,6 +37,7 @@ import DemoLogin from "@/pages/demo-login";
 import OperationsPage from "@/pages/operations";
 import CustomerHubPage from "@/pages/customer-hub";
 import PlatformHealthPage from "@/pages/platform-health";
+import MarketingPage from "@/pages/marketing";
 import Welcome from "@/pages/welcome";
 import Pricing from "@/pages/pricing";
 
@@ -127,6 +128,7 @@ export default function App() {
                 <Route path="operations" element={<ProtectedRoute ownerOnly><OperationsPage /></ProtectedRoute>} />
                 <Route path="customer-hub" element={<ProtectedRoute ownerOnly><CustomerHubPage /></ProtectedRoute>} />
                 <Route path="platform-health" element={<ProtectedRoute ownerOnly><PlatformHealthPage /></ProtectedRoute>} />
+                <Route path="marketing" element={<ProtectedRoute ownerOnly><MarketingPage /></ProtectedRoute>} />
                 <Route path="worker-station" element={<WorkerStation />} />
                 <Route path="*" element={<NotFound />} />
               </Route>

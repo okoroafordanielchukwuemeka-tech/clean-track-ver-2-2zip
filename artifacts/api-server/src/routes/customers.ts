@@ -6,6 +6,7 @@ import { eq, and, desc, ilike, or, gte, lte, lt, inArray, isNull, isNotNull } fr
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
+import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction } from "../lib/audit.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
 
@@ -272,7 +273,7 @@ customersRouter.get("/:id", checkPermission("view:customers"), async (req: AuthR
   }
 });
 
-customersRouter.post("/", checkPermission("create:customers"), idempotencyMiddleware, async (req: AuthRequest, res) => {
+customersRouter.post("/", checkPermission("create:customers"), requireOperational, requirePlanLimit("customers"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const data = customerInputSchema.parse(req.body);

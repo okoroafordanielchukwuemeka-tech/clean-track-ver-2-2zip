@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { orders, workers, branches } from "@workspace/db/schema";
+import { orders, workers, branches, customers } from "@workspace/db/schema";
 import { eq, and, gte, isNull, count } from "drizzle-orm";
 import { getPlanLimits } from "./entitlements.js";
 
@@ -14,6 +14,7 @@ export interface UsageSnapshot {
   monthlyOrderCount: number;
   activeWorkerCount: number;
   activeBranchCount: number;
+  activeCustomerCount: number;
   storageUsedMb: number;
 }
 
@@ -25,18 +26,21 @@ export interface UsageWithLimits extends UsageSnapshot {
     maxOrdersPerMonth: number;
     maxWorkers: number;
     maxBranches: number;
+    maxCustomers: number;
     maxStorageMb: number;
   };
   percentages: {
     orders: number;
     workers: number;
     branches: number;
+    customers: number;
     storage: number;
   };
   warnings: {
     orders: UsageWarningLevel;
     workers: UsageWarningLevel;
     branches: UsageWarningLevel;
+    customers: UsageWarningLevel;
     storage: UsageWarningLevel;
   };
 }
@@ -66,6 +70,7 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
     [{ monthlyOrders }],
     [{ activeWorkers }],
     [{ activeBranches }],
+    [{ activeCustomers }],
     [{ totalOrders }],
   ] = await Promise.all([
     db.select({ monthlyOrders: count() })
@@ -77,6 +82,9 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
     db.select({ activeBranches: count() })
       .from(branches)
       .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt))),
+    db.select({ activeCustomers: count() })
+      .from(customers)
+      .where(and(eq(customers.laundryId, laundryId), eq(customers.isActive, true))),
     db.select({ totalOrders: count() })
       .from(orders)
       .where(eq(orders.laundryId, laundryId)),
@@ -89,6 +97,7 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
     monthlyOrderCount: Number(monthlyOrders),
     activeWorkerCount: Number(activeWorkers),
     activeBranchCount: Number(activeBranches),
+    activeCustomerCount: Number(activeCustomers),
     storageUsedMb,
   };
 }
@@ -105,6 +114,7 @@ export async function computeUsageWithLimits(laundryId: number, plan: string): P
   const pctOrders = calcPct(usage.monthlyOrderCount, limits.maxOrdersPerMonth);
   const pctWorkers = calcPct(usage.activeWorkerCount, limits.maxWorkers);
   const pctBranches = calcPct(usage.activeBranchCount, limits.maxBranches);
+  const pctCustomers = calcPct(usage.activeCustomerCount, limits.maxCustomers);
   const pctStorage = calcPct(usage.storageUsedMb, maxStorageMb);
 
   return {
@@ -114,18 +124,21 @@ export async function computeUsageWithLimits(laundryId: number, plan: string): P
       maxOrdersPerMonth: limits.maxOrdersPerMonth,
       maxWorkers: limits.maxWorkers,
       maxBranches: limits.maxBranches,
+      maxCustomers: limits.maxCustomers,
       maxStorageMb,
     },
     percentages: {
       orders: pctOrders,
       workers: pctWorkers,
       branches: pctBranches,
+      customers: pctCustomers,
       storage: pctStorage,
     },
     warnings: {
       orders: getWarningLevel(pctOrders),
       workers: getWarningLevel(pctWorkers),
       branches: getWarningLevel(pctBranches),
+      customers: getWarningLevel(pctCustomers),
       storage: getWarningLevel(pctStorage),
     },
   };
@@ -139,7 +152,7 @@ export async function computeUsageWithLimits(laundryId: number, plan: string): P
 export async function checkLimit(
   laundryId: number,
   plan: string,
-  limitType: "orders" | "workers" | "branches"
+  limitType: "orders" | "workers" | "branches" | "customers"
 ): Promise<{ code: string; message: string } | null> {
   const limits = getPlanLimits(plan);
 
@@ -168,7 +181,7 @@ export async function checkLimit(
     if (Number(cnt) >= max) {
       return {
         code: "PLAN_LIMIT_WORKERS_REACHED",
-        message: `Your plan allows ${max} active workers. You have reached this limit. Upgrade your plan to add more workers.`,
+        message: `Your plan allows ${max} active worker${max === 1 ? "" : "s"}. You have reached this limit. Upgrade your plan to add more workers.`,
       };
     }
   }
@@ -182,7 +195,21 @@ export async function checkLimit(
     if (Number(cnt) >= max) {
       return {
         code: "PLAN_LIMIT_BRANCHES_REACHED",
-        message: `Your plan allows ${max} branch(es). You have reached this limit. Upgrade your plan to add more branches.`,
+        message: `Your plan allows ${max} branch${max === 1 ? "" : "es"}. You have reached this limit. Upgrade your plan to add more branches.`,
+      };
+    }
+  }
+
+  if (limitType === "customers") {
+    const max = limits.maxCustomers;
+    if (!isFinite(max)) return null;
+    const [{ cnt }] = await db.select({ cnt: count() })
+      .from(customers)
+      .where(and(eq(customers.laundryId, laundryId), eq(customers.isActive, true)));
+    if (Number(cnt) >= max) {
+      return {
+        code: "PLAN_LIMIT_CUSTOMERS_REACHED",
+        message: `Your plan allows ${max} active customers. You have reached this limit. Upgrade your plan to add more customers.`,
       };
     }
   }

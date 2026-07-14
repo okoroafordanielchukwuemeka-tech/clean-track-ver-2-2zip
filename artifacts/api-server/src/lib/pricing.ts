@@ -6,9 +6,9 @@
  *
  * DB tier mapping:
  *   "free"     → internal trial/free tier (no price)
- *   "starter"  → Starter plan  (₦5,000/mo)
- *   "pro"      → Growth plan   (₦10,000/mo)
- *   "business" → Business plan (₦20,000/mo)
+ *   "starter"  → Starter plan      (₦10,000/mo)
+ *   "pro"      → Professional plan (₦30,000/mo)
+ *   "business" → Enterprise plan   (₦50,000/mo)
  *
  * When Paystack/Flutterwave integration is added, the planCode fields
  * will be populated with the provider's plan codes.
@@ -41,51 +41,60 @@ export const PLAN_PRICING: Record<string, PlanPricingConfig> = {
     displayName: "Starter",
     tagline: "Perfect for a single-location laundry",
     price: {
-      monthly: 5_000,
-      annual: 50_000,
-      annualSavingsPct: 17,
-      currency: CURRENCY,
-    },
-    features: [
-      "1 branch",
-      "Up to 5 workers",
-      "Unlimited customers",
-      "Unlimited orders",
-      "Basic dashboard analytics",
-      "Order & payment tracking",
-      "Customer receipts",
-    ],
-    highlighted: false,
-  },
-  pro: {
-    tier: "pro",
-    displayName: "Growth",
-    tagline: "For growing multi-location businesses",
-    price: {
       monthly: 10_000,
       annual: 100_000,
       annualSavingsPct: 17,
       currency: CURRENCY,
     },
     features: [
-      "Up to 3 branches",
-      "Up to 20 workers",
+      "1 branch",
+      "Up to 2 workers",
+      "Up to 500 active customers",
+      "500 orders per month",
+      "Customer management & statements",
+      "Order, payment & pickup tracking",
+      "Customer receipts",
+      "Basic dashboard & reports",
+      "Laundry Academy",
+      "WhatsApp transactional notifications",
+      "Basic email notifications",
+    ],
+    highlighted: false,
+  },
+  pro: {
+    tier: "pro",
+    displayName: "Professional",
+    tagline: "For growing multi-location businesses",
+    price: {
+      monthly: 30_000,
+      annual: 300_000,
+      annualSavingsPct: 17,
+      currency: CURRENCY,
+    },
+    features: [
+      "Up to 5 branches",
+      "Unlimited workers",
       "Unlimited customers",
       "Unlimited orders",
-      "Advanced analytics & reports",
-      "Expense tracking",
+      "Advanced analytics & revenue reports",
+      "Expense tracking & profitability",
+      "Customer segmentation",
+      "Marketing campaigns",
+      "Scheduled WhatsApp campaigns",
+      "AI Marketing Assistant",
       "Batch order processing",
+      "Business insights & branch comparison",
       "Priority email support",
     ],
     highlighted: true,
   },
   business: {
     tier: "business",
-    displayName: "Business",
+    displayName: "Enterprise",
     tagline: "Enterprise-grade for large operations",
     price: {
-      monthly: 20_000,
-      annual: 200_000,
+      monthly: 50_000,
+      annual: 500_000,
       annualSavingsPct: 17,
       currency: CURRENCY,
     },
@@ -95,10 +104,13 @@ export const PLAN_PRICING: Record<string, PlanPricingConfig> = {
       "Unlimited customers",
       "Unlimited orders",
       "Full analytics suite",
-      "WhatsApp notifications",
-      "Marketing tools",
-      "Priority support",
-      "Custom branding",
+      "WhatsApp campaigns & automation",
+      "AI Business Advisor",
+      "API access for integrations",
+      "Advanced reports & custom roles",
+      "Advanced permissions",
+      "White label options (future)",
+      "Dedicated support",
     ],
     highlighted: false,
   },

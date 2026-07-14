@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { type SubscriptionStatus } from "@/lib/api";
 import { GettingStartedChecklist } from "@/components/getting-started-checklist";
+import { TipBanner } from "@/components/tip-banner";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
@@ -278,6 +279,7 @@ export default function Dashboard() {
       )}
       <SubscriptionBanner sub={subStatus ?? null} />
       {!isDemo && <GettingStartedChecklist />}
+      {!isDemo && <TipBanner />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
