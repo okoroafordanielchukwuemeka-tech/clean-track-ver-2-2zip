@@ -1,0 +1,708 @@
+# PHASE 7.9 — PAYMENT CONFIGURATION, MANUAL PAYMENT RECONCILIATION & FUTURE PAYMENT ARCHITECTURE
+
+## IMPORTANT
+
+Before writing any code:
+
+Perform a COMPLETE audit.
+
+Do NOT modify unrelated workflows.
+
+Do NOT remove existing functionality.
+
+Every change must preserve backward compatibility.
+
+This phase builds CleanTrack's permanent payment architecture.
+
+Today's workflow is **manual payment confirmation**, but the architecture must seamlessly support future integrations with:
+
+* Paystack
+* Flutterwave
+* Moniepoint Virtual Accounts
+* Static/Dynamic QR Payments
+* Payment Links
+* Automatic Bank Reconciliation
+
+without requiring database redesign.
+
+---
+
+# STEP 1 — COMPLETE AUDIT
+
+Audit the existing system.
+
+Determine:
+
+1. Where Business Profile is stored.
+2. Whether payment details already exist.
+3. How payments are currently recorded.
+4. Which receipts display balances.
+5. Which WhatsApp templates mention payments.
+6. Whether Order Numbers are globally unique.
+7. Whether payment records already support metadata.
+8. Whether duplicate payment detection exists.
+9. Whether refunds are supported.
+10. Whether payment status exists independently from order status.
+11. Whether accounting history can be edited.
+12. Whether receipts already contain payment instructions.
+
+Provide findings BEFORE implementation.
+
+---
+
+# STEP 2 — UPDATE SUBSCRIPTION PRICING
+
+Update the pricing system everywhere.
+
+This includes:
+
+* Billing page
+* Upgrade page
+* Subscription emails
+* Pricing configuration
+* Entitlement logic
+* Trial upgrade messaging
+* Marketing copy
+
+New plans:
+
+## Starter
+
+₦10,000/month
+
+₦100,000/year
+
+Includes:
+
+* Customer Management
+* Order Management
+* Receipts
+* Statements
+* Transactional WhatsApp
+* Payment Reminders
+* Worker Management
+* Reports
+
+---
+
+## Professional
+
+₦20,000/month
+
+₦200,000/year
+
+Everything in Starter plus:
+
+* AI Marketing
+* WhatsApp Campaigns
+* Customer Segmentation
+* Multi Branch
+* Advanced Analytics
+* Expense Tracking
+
+---
+
+## Enterprise
+
+₦50,000/month
+
+₦500,000/year
+
+Everything unlocked including:
+
+* API Access
+* Unlimited branches
+* Unlimited workers
+* Unlimited customers
+* Future AI Automation
+* Priority Support
+
+---
+
+# STEP 3 — BUSINESS PAYMENT CONFIGURATION
+
+Inside:
+
+Settings
+
+→ Business Profile
+
+Create:
+
+## Payment Details
+
+Fields:
+
+* Preferred Payment Method
+* Bank Name
+* Account Name
+* Account Number
+* Payment Instructions
+
+Validation:
+
+* Nigerian account number validation
+* Digits only
+* Required when Bank Transfer enabled
+
+Example
+
+Preferred Method
+
+Bank Transfer
+
+Bank
+
+Moniepoint
+
+Account Name
+
+Clean Laundry Ltd
+
+Account Number
+
+1234567890
+
+Instructions
+
+Please use your Order Number as the payment reference.
+
+Business Profile becomes the ONLY source of truth.
+
+No hardcoded payment information anywhere.
+
+---
+
+# STEP 4 — RECEIPT PAYMENT BLOCK
+
+Automatically show payment details on:
+
+* Order Receipt
+* Pickup Receipt
+* Customer Statement
+
+ONLY IF
+
+Outstanding Balance > ₦0
+
+Display:
+
+PAYMENT DETAILS
+
+Outstanding Balance
+
+Preferred Method
+
+Bank
+
+Account Name
+
+Account Number
+
+Payment Reference
+
+Payment Instructions
+
+If balance = ₦0
+
+Replace with:
+
+✓ PAID IN FULL
+
+Thank you for your payment.
+
+No payment details should appear.
+
+---
+
+# STEP 5 — UNIQUE PAYMENT REFERENCE
+
+Every order must have ONE permanent payment reference.
+
+Default:
+
+Order Number
+
+Example:
+
+CT-000123
+
+Never generate multiple references.
+
+Future payment providers must reuse this same reference.
+
+---
+
+# STEP 6 — PAYMENT STATUS ENGINE
+
+Create dedicated payment status.
+
+Separate from order status.
+
+Statuses:
+
+* UNPAID
+* PARTIALLY PAID
+* PAID
+* OVERPAID
+* REFUND PENDING
+* REFUNDED
+
+Display consistently across:
+
+* Orders
+* Customer Profile
+* Dashboard
+* Statements
+* Receipts
+
+---
+
+# STEP 7 — PAYMENT REVIEW WORKFLOW
+
+Replace basic payment recording.
+
+Workflow:
+
+Owner receives transfer notification.
+
+Open Order.
+
+Display:
+
+Outstanding Balance
+
+Buttons:
+
+Confirm Payment
+
+Record Partial Payment
+
+Confirm dialog:
+
+Amount
+
+Method
+
+Reference
+
+Notes
+
+Attachment (optional proof)
+
+Confirm
+
+Automatically update:
+
+* Payment Ledger
+* Dashboard Revenue
+* Customer Balance
+* Customer Statement
+* Receipt
+* WhatsApp
+* Analytics
+
+Everything must remain synchronized.
+
+---
+
+# STEP 8 — PARTIAL PAYMENT WORKFLOW
+
+Support unlimited partial payments.
+
+Example:
+
+Outstanding
+
+₦8,500
+
+Customer pays
+
+₦5,000
+
+System updates:
+
+Paid
+
+₦5,000
+
+Remaining
+
+₦3,500
+
+Update instantly across:
+
+* Receipts
+* Statements
+* Dashboard
+* Analytics
+* Customer Profile
+
+---
+
+# STEP 9 — PAYMENT TIMELINE
+
+Every payment should generate timeline events.
+
+Example
+
+Order Created
+
+↓
+
+Reminder Sent
+
+↓
+
+Customer Paid ₦5,000
+
+↓
+
+Owner Confirmed
+
+↓
+
+Receipt Updated
+
+↓
+
+WhatsApp Sent
+
+Display inside Order Details.
+
+---
+
+# STEP 10 — DUPLICATE PAYMENT PROTECTION
+
+Prevent accidental double confirmation.
+
+If:
+
+Amount
+
+Reference
+
+Customer
+
+look similar
+
+Warn:
+
+Possible duplicate payment detected.
+
+Already recorded?
+
+Continue?
+
+---
+
+# STEP 11 — PAYMENT CONFIDENCE SCORE
+
+When confirming payment,
+
+calculate:
+
+Confidence
+
+HIGH
+
+MEDIUM
+
+LOW
+
+Example
+
+HIGH
+
+✓ Amount matches balance
+
+✓ Reference matches order
+
+✓ Customer matches
+
+✓ No duplicate
+
+LOW
+
+⚠ Different amount
+
+⚠ Similar payment exists
+
+⚠ Customer has another unpaid order
+
+Display before confirmation.
+
+---
+
+# STEP 12 — FUTURE PAYMENT ARCHITECTURE
+
+Prepare only.
+
+Do NOT integrate.
+
+Payment record should support:
+
+* Provider
+* Provider Transaction ID
+* Payment Reference
+* Provider Reference
+* Reconciliation Status
+* QR ID
+* Virtual Account Number
+* Payment Link ID
+
+Statuses:
+
+Pending
+
+Confirmed
+
+Automatically Reconciled
+
+Failed
+
+---
+
+# STEP 13 — PAYMENT PROVIDER ABSTRACTION
+
+Create provider interface.
+
+Instead of coding directly against Paystack.
+
+Architecture:
+
+Payment Provider
+
+↓
+
+Bank Transfer
+
+Paystack
+
+Flutterwave
+
+Moniepoint
+
+Cash
+
+POS
+
+Future providers plug into the same interface.
+
+---
+
+# STEP 14 — PAYMENT NOTES & ATTACHMENTS
+
+Every payment supports:
+
+Notes
+
+Examples:
+
+Paid by wife
+
+POS machine offline
+
+Transfer confirmed via SMS
+
+Customer promised balance tomorrow
+
+Optional attachment:
+
+* Screenshot
+* PDF receipt
+
+---
+
+# STEP 15 — REFUND ARCHITECTURE
+
+Prepare only.
+
+Every payment supports:
+
+Refund Amount
+
+Refund Reason
+
+Refund Date
+
+Refund Reference
+
+Do NOT implement refund workflow.
+
+---
+
+# STEP 16 — OUTSTANDING BALANCE BADGES
+
+Show consistently across:
+
+Customer Card
+
+Order List
+
+Dashboard
+
+Receipts
+
+Customer Profile
+
+---
+
+# STEP 17 — PAYMENT HEALTH DASHBOARD
+
+Add owner insights:
+
+Outstanding Today
+
+Outstanding This Week
+
+Average Payment Delay
+
+Collection Rate
+
+Outstanding Aging
+
+0–7 Days
+
+8–14 Days
+
+15–30 Days
+
+30+ Days
+
+Top Late Paying Customers
+
+Most Used Payment Method
+
+---
+
+# STEP 18 — WHATSAPP
+
+Payment reminders automatically include:
+
+Outstanding
+
+Bank
+
+Account Name
+
+Account Number
+
+Reference
+
+Instructions
+
+Never duplicate payment information.
+
+Always use Business Profile configuration.
+
+---
+
+# STEP 19 — VALIDATION
+
+Verify:
+
+✓ Updating Business Payment Details updates:
+
+* Receipts
+* Statements
+* WhatsApp
+
+✓ Confirm Payment updates:
+
+* Revenue
+* Dashboard
+* Statements
+* Payment History
+
+✓ Partial Payments calculate correctly.
+
+✓ Paid Orders hide payment instructions.
+
+✓ Duplicate payments detected.
+
+✓ Confidence score works.
+
+✓ Outstanding balances remain synchronized.
+
+✓ No duplicated financial logic exists.
+
+---
+
+# STEP 20 — LIVE TESTS
+
+Run real workflow.
+
+Customer
+
+↓
+
+Order
+
+↓
+
+Receipt
+
+↓
+
+Outstanding
+
+↓
+
+Partial Payment
+
+↓
+
+Receipt Updated
+
+↓
+
+Final Payment
+
+↓
+
+Paid In Full
+
+↓
+
+Statement Updated
+
+↓
+
+Dashboard Updated
+
+↓
+
+WhatsApp Sent
+
+Repeat with:
+
+* Cancelled Order
+* Overpayment
+* Duplicate Payment attempt
+
+---
+
+# DELIVERABLES
+
+Provide:
+
+1. Audit Findings
+2. Database Changes
+3. Subscription Pricing Changes
+4. Business Profile Changes
+5. Receipt Changes
+6. Payment Workflow Changes
+7. Dashboard Changes
+8. WhatsApp Changes
+9. Validation Results
+10. Failed Tests
+11. Fixed Issues
+12. Remaining Risks
+13. Production Readiness Score
+
+Do NOT modify unrelated workflows.
+
+Do NOT simplify the architecture.
+
+Build this as the permanent payment foundation for CleanTrack.
