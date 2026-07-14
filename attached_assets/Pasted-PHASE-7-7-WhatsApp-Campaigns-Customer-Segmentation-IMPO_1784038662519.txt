@@ -1,0 +1,360 @@
+PHASE 7.7 — WhatsApp Campaigns & Customer Segmentation
+
+IMPORTANT
+
+Do NOT build any unrelated features.
+
+Do NOT modify existing transactional WhatsApp messages.
+
+Do NOT change subscription logic.
+
+Focus ONLY on completing the missing WhatsApp Campaign system.
+
+Before writing code:
+
+Perform a complete audit of the current communication module.
+
+Determine:
+
+1. Which WhatsApp features already exist.
+2. Which transactional notifications already work.
+3. Which endpoints exist.
+4. Which campaign endpoints are missing.
+5. Which feature flags already exist.
+6. Which subscription plans should have campaign access.
+
+Current rule:
+
+Starter:
+
+* Transactional WhatsApp only
+* No bulk campaigns
+
+Professional:
+
+* Full campaign system
+
+Enterprise:
+
+* Full campaign system
+
+Verify that this rule is enforced everywhere.
+
+---
+
+BUILD THE COMPLETE CAMPAIGN SYSTEM
+
+Create owner-only Campaigns page.
+
+Sections:
+
+1. Campaign Dashboard
+
+Show:
+
+* Total Campaigns
+* Scheduled Campaigns
+* Sent Campaigns
+* Draft Campaigns
+* Failed Campaigns
+
+---
+
+2. Campaign Types
+
+Support:
+
+* Promotion
+* Reminder
+* Announcement
+* Holiday Greeting
+* Customer Win-back
+* Custom
+
+---
+
+3. Audience Selection
+
+Allow owners to target:
+
+All Customers
+
+VIP Customers
+
+Repeat Customers
+
+Inactive 30 Days
+
+Inactive 60 Days
+
+Inactive 90 Days
+
+Customers With Outstanding Balance
+
+Customers Ready For Pickup
+
+Customers With Completed Orders
+
+Custom Tag
+
+Custom Selection
+
+Branch Filter
+
+Preview customer count before sending.
+
+---
+
+4. Message Composer
+
+Allow:
+
+Title
+
+Message
+
+Emoji
+
+Variables
+
+Examples:
+
+{{customerName}}
+
+{{businessName}}
+
+{{pickupDate}}
+
+{{orderNumber}}
+
+{{balance}}
+
+Preview rendered message before sending.
+
+---
+
+5. AI Campaign Generator
+
+Professional+
+
+Enterprise
+
+Only.
+
+Prompt example:
+
+"Generate a midweek promotion for customers who haven't visited in 45 days."
+
+Generate:
+
+WhatsApp version
+
+SMS version
+
+Facebook version
+
+Instagram version
+
+Email version
+
+Allow:
+
+Regenerate
+
+Copy
+
+Edit before sending
+
+---
+
+6. Scheduling
+
+Support:
+
+Send Now
+
+Schedule Later
+
+Date
+
+Time
+
+Timezone
+
+Recurring:
+
+Weekly
+
+Monthly
+
+One-time
+
+---
+
+7. Delivery
+
+Show progress:
+
+Queued
+
+Sending
+
+Delivered
+
+Failed
+
+Retry Failed
+
+Cancel Pending
+
+---
+
+8. Campaign History
+
+Store:
+
+Campaign Name
+
+Audience
+
+Created By
+
+Created Date
+
+Sent Date
+
+Total Recipients
+
+Delivered
+
+Failed
+
+Cancelled
+
+Open campaign to view details.
+
+---
+
+9. Subscription Enforcement
+
+Starter:
+
+Campaign page visible
+
+Show locked state
+
+Display:
+
+Upgrade to Professional to send marketing campaigns.
+
+No API bypass.
+
+Professional:
+
+Unlimited campaigns.
+
+Enterprise:
+
+Unlimited campaigns.
+
+Verify backend enforcement.
+
+---
+
+10. API
+
+Create:
+
+POST /campaigns
+
+GET /campaigns
+
+GET /campaigns/:id
+
+PATCH /campaigns/:id
+
+DELETE /campaigns/:id
+
+POST /campaigns/:id/send
+
+POST /campaigns/:id/cancel
+
+POST /campaigns/:id/retry
+
+GET /campaigns/history
+
+All endpoints:
+
+Owner only
+
+Branch isolated
+
+Subscription gated
+
+---
+
+11. Security Tests
+
+Attempt:
+
+Starter account sending campaign
+
+Expected:
+
+403
+
+Attempt worker access
+
+Expected:
+
+403
+
+Attempt cross-branch campaign
+
+Expected:
+
+404
+
+No data leakage.
+
+---
+
+12. Performance
+
+Generate:
+
+10,000 customers
+
+Queue:
+
+5,000 campaign messages
+
+Verify:
+
+No duplicate sends
+
+Retry only failed messages
+
+Correct delivery statistics
+
+---
+
+Provide final report:
+
+1. Campaign System Status
+
+2. Subscription Gate Status
+
+3. Security Audit
+
+4. Performance Results
+
+5. Failed Tests
+
+6. Fixed Bugs
+
+7. Remaining Risks
+
+8. Production Readiness Score
+
+Do not begin Phase 8 until every Campaign feature above is implemented, tested, and verified.

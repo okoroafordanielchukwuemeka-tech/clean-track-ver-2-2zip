@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { InboxTab } from "@/components/inbox-tab";
 import { ActivityTab } from "@/components/communications/activity-tab";
 import { AutomationsTab } from "@/components/communications/automations-tab";
+import { CampaignsTab } from "@/components/communications/campaigns-tab";
 import { api } from "@/lib/api";
 import type {
   WaConnectionStatus,
@@ -773,39 +774,7 @@ function OverviewTab({ onNavigateToTab }: { onNavigateToTab: (tab: string) => vo
   );
 }
 
-// ─── CampaignsTab ─────────────────────────────────────────────────────────────
-
-function CampaignsTab() {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center gap-5">
-      <div className="w-20 h-20 rounded-2xl bg-muted/30 flex items-center justify-center">
-        <Megaphone className="h-9 w-9 text-muted-foreground/30" />
-      </div>
-      <div className="space-y-2 max-w-sm">
-        <h3 className="text-lg font-semibold">Campaigns Coming Soon</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Send targeted WhatsApp blasts to your customers — promotions, re-engagement
-          messages, seasonal offers, and loyalty campaigns.
-        </p>
-      </div>
-      <div className="flex flex-wrap justify-center gap-2 mt-2">
-        {[
-          "Bulk Messaging",
-          "Customer Segments",
-          "Scheduled Sends",
-          "Delivery Analytics",
-        ].map((tag) => (
-          <span
-            key={tag}
-            className="text-xs text-muted-foreground/60 px-2.5 py-1 rounded-full border border-dashed border-muted-foreground/20"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
+// CampaignsTab is imported from @/components/communications/campaigns-tab
 
 // ─── AnalyticsTab ─────────────────────────────────────────────────────────────
 

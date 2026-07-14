@@ -436,6 +436,30 @@ export const api = {
   health: {
     production: () => request<unknown>("GET", "/health/production"),
   },
+  campaigns: {
+    list: (params?: { status?: CampaignStatus }) => {
+      const qs = params?.status ? `?status=${params.status}` : "";
+      return request<Campaign[]>("GET", `/campaigns${qs}`);
+    },
+    history: () => request<Campaign[]>("GET", "/campaigns/history"),
+    get: (id: number) => request<Campaign & { recipientStats: Array<{ status: string; cnt: number }> }>("GET", `/campaigns/${id}`),
+    create: (data: CampaignInput) => request<Campaign>("POST", "/campaigns", data),
+    update: (id: number, data: Partial<CampaignInput>) => request<Campaign>("PATCH", `/campaigns/${id}`, data),
+    delete: (id: number) => request<void>("DELETE", `/campaigns/${id}`),
+    send: (id: number) => request<{ campaignId: number; totalRecipients: number; message: string }>("POST", `/campaigns/${id}/send`),
+    cancel: (id: number) => request<{ cancelled: boolean; recipientsCancelled: number }>("POST", `/campaigns/${id}/cancel`),
+    retry: (id: number) => request<{ retrying: boolean; recipientsQueued: number }>("POST", `/campaigns/${id}/retry`),
+    previewAudience: (data: { audienceType: CampaignAudienceType; audienceFilter?: any; branchId?: number | null }) =>
+      request<AudiencePreview>("POST", "/campaigns/preview-audience", data),
+    recipients: (id: number, params?: { status?: string; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams();
+      if (params?.status) qs.set("status", params.status);
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
+      const q = qs.toString();
+      return request<CampaignRecipient[]>("GET", `/campaigns/${id}/recipients${q ? "?" + q : ""}`);
+    },
+  },
   conversations: {
     list: async (params?: {
       status?: "open" | "resolved" | "archived";
@@ -1951,4 +1975,75 @@ export interface MarketingGenerateResponse {
 
 export interface MarketingTipsResponse {
   prompts: string[];
+}
+
+// ── Campaigns ─────────────────────────────────────────────────────────────────
+
+export type CampaignType = "promotion" | "reminder" | "announcement" | "holiday_greeting" | "win_back" | "custom";
+export type CampaignAudienceType =
+  | "all" | "vip" | "repeat"
+  | "inactive_30" | "inactive_60" | "inactive_90"
+  | "outstanding_balance" | "ready_pickup" | "completed_orders"
+  | "custom_tag" | "custom_selection";
+export type CampaignScheduleType = "now" | "scheduled" | "recurring_weekly" | "recurring_monthly";
+export type CampaignStatus = "draft" | "scheduled" | "queued" | "sending" | "sent" | "failed" | "cancelled";
+export type CampaignRecipientStatus = "queued" | "sending" | "delivered" | "failed" | "cancelled";
+
+export interface Campaign {
+  id: number;
+  laundryId: number;
+  branchId: number | null;
+  name: string;
+  type: CampaignType;
+  audienceType: CampaignAudienceType;
+  audienceFilter: string | null;
+  messageTitle: string | null;
+  messageBody: string;
+  scheduleType: CampaignScheduleType;
+  scheduledAt: string | null;
+  timezone: string | null;
+  status: CampaignStatus;
+  sentAt: string | null;
+  completedAt: string | null;
+  totalRecipients: number;
+  delivered: number;
+  failed: number;
+  cancelled: number;
+  createdById: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignRecipient {
+  id: number;
+  campaignId: number;
+  customerId: number | null;
+  customerName: string;
+  phone: string;
+  message: string;
+  status: CampaignRecipientStatus;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  failedAt: string | null;
+  errorMessage: string | null;
+  retries: number;
+  createdAt: string;
+}
+
+export interface CampaignInput {
+  name: string;
+  type: CampaignType;
+  audienceType: CampaignAudienceType;
+  audienceFilter?: { tag?: string; customerIds?: number[] } | null;
+  messageTitle?: string;
+  messageBody: string;
+  scheduleType: CampaignScheduleType;
+  scheduledAt?: string | null;
+  timezone?: string;
+  branchId?: number | null;
+}
+
+export interface AudiencePreview {
+  count: number;
+  sample: Array<{ id: number; name: string; phone: string }>;
 }

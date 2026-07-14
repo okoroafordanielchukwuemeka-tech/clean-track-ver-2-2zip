@@ -40,3 +40,4 @@ export * from "./automation-rules.js";
 export * from "./plans.js";
 export * from "./lifecycle-email-log.js";
 export * from "./subscription-payments.js";
+export * from "./campaigns.js";
