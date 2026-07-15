@@ -79,8 +79,11 @@ function StatsBar({ orders }: { orders: (Order & { _urgency: any })[] }) {
     {} as Record<string, number>
   );
   const overdue = orders.filter(o => o._urgency.level === "overdue" && o.status !== "completed").length;
-  const revenue = orders.reduce((s, o) => s + (o.price ?? 0), 0);
-  const collected = orders.reduce((s, o) => s + (o.amountPaid ?? 0), 0);
+  // Order prices/amountPaid come back from the API as decimal strings (e.g. "1200.00"),
+  // not numbers — summing them directly produced string concatenation → NaN once
+  // formatCurrency ran Intl.NumberFormat over the result. Always parse first.
+  const revenue = orders.reduce((s, o) => s + (parseFloat(String(o.price ?? 0)) || 0), 0);
+  const collected = orders.reduce((s, o) => s + (parseFloat(String(o.amountPaid ?? 0)) || 0), 0);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">

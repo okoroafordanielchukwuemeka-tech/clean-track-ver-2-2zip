@@ -529,7 +529,13 @@ export const api = {
     },
   },
   conversations: {
-    list: async (params?: {
+    // NOTE: these previously used raw `fetch(..., { credentials: "include" })`,
+    // which relies on cookie auth. This app authenticates with a Bearer token
+    // in localStorage (see `request()` above) — there is no auth cookie — so
+    // every one of these calls 401'd for every owner, on every page (the
+    // unread-count query runs globally in the sidebar). Fixed by routing
+    // through the shared `request()` helper like the rest of the API client.
+    list: (params?: {
       status?: "open" | "resolved" | "archived";
       limit?: number;
       offset?: number;
@@ -538,83 +544,45 @@ export const api = {
       if (params?.status) q.set("status", params.status);
       if (params?.limit != null) q.set("limit", String(params.limit));
       if (params?.offset != null) q.set("offset", String(params.offset));
-      const res = await fetch(`/api/conversations?${q}`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      const qs = q.toString();
+      return request<ConversationListResponse>("GET", `/conversations${qs ? "?" + qs : ""}`);
     },
 
-    getUnreadCount: async (): Promise<{ unreadCount: number }> => {
-      const res = await fetch("/api/conversations/unread-count", { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    getUnreadCount: (): Promise<{ unreadCount: number }> =>
+      request<{ unreadCount: number }>("GET", "/conversations/unread-count"),
 
-    get: async (id: number): Promise<ConversationDetail> => {
-      const res = await fetch(`/api/conversations/${id}`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    get: (id: number): Promise<ConversationDetail> =>
+      request<ConversationDetail>("GET", `/conversations/${id}`),
 
-    markRead: async (id: number): Promise<void> => {
-      const res = await fetch(`/api/conversations/${id}/read`, {
-        method: "PATCH",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(await res.text());
-    },
+    markRead: (id: number): Promise<void> =>
+      request<void>("PATCH", `/conversations/${id}/read`),
 
-    updateStatus: async (
+    updateStatus: (
       id: number,
       status: "open" | "resolved" | "archived"
-    ): Promise<void> => {
-      const res = await fetch(`/api/conversations/${id}/status`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-    },
+    ): Promise<void> =>
+      request<void>("PATCH", `/conversations/${id}/status`, { status }),
 
-    reply: async (
+    reply: (
       id: number,
       body: string
-    ): Promise<{ message: ConversationMessage; delivered: boolean }> => {
-      const res = await fetch(`/api/conversations/${id}/messages`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    ): Promise<{ message: ConversationMessage; delivered: boolean }> =>
+      request<{ message: ConversationMessage; delivered: boolean }>(
+        "POST",
+        `/conversations/${id}/messages`,
+        { body }
+      ),
 
-    assign: async (id: number, workerId: number | null): Promise<void> => {
-      const res = await fetch(`/api/conversations/${id}/assign`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-    },
+    assign: (id: number, workerId: number | null): Promise<void> =>
+      request<void>("PATCH", `/conversations/${id}/assign`, { workerId }),
 
-    addNote: async (
+    addNote: (
       id: number,
       body: string
-    ): Promise<{ message: ConversationMessage }> => {
-      const res = await fetch(`/api/conversations/${id}/notes`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    ): Promise<{ message: ConversationMessage }> =>
+      request<{ message: ConversationMessage }>("POST", `/conversations/${id}/notes`, { body }),
 
-    getActivity: async (params?: {
+    getActivity: (params?: {
       limit?: number;
       offset?: number;
       conversationId?: number;
@@ -623,16 +591,12 @@ export const api = {
       if (params?.limit != null) q.set("limit", String(params.limit));
       if (params?.offset != null) q.set("offset", String(params.offset));
       if (params?.conversationId != null) q.set("conversationId", String(params.conversationId));
-      const res = await fetch(`/api/conversations/activity?${q}`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
+      const qs = q.toString();
+      return request<WhatsAppActivityResponse>("GET", `/conversations/activity${qs ? "?" + qs : ""}`);
     },
 
-    getConversationActivity: async (convId: number): Promise<WhatsAppActivityResponse> => {
-      const res = await fetch(`/api/conversations/${convId}/activity`, { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
+    getConversationActivity: (convId: number): Promise<WhatsAppActivityResponse> =>
+      request<WhatsAppActivityResponse>("GET", `/conversations/${convId}/activity`),
   },
 };
 
