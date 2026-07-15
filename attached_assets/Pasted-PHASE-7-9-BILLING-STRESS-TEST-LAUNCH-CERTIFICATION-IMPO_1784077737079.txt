@@ -1,0 +1,364 @@
+PHASE 7.9 — BILLING STRESS TEST & LAUNCH CERTIFICATION
+
+IMPORTANT
+
+Do NOT implement new features.
+
+Do NOT redesign the UI.
+
+Do NOT improve styling.
+
+This phase is verification only.
+
+Your objective is to break the billing system and prove it is production-ready.
+
+If a defect is discovered, fix only that defect and re-run the affected tests before continuing.
+
+---
+
+SECTION 1 — Subscription State Machine
+
+Create four test laundries:
+
+• Trial
+• Starter
+• Professional
+• Enterprise
+
+Verify every transition:
+
+Trial
+→ Active
+
+Active
+→ Renewal Reminder
+
+Renewal Reminder
+→ Payment Due
+
+Payment Due
+→ Grace Period
+
+Grace Period
+→ Suspended
+
+Suspended
+→ Reactivated
+
+Reactivated
+→ Cancelled
+
+Confirm each transition updates:
+
+• Subscription status
+• Renewal date
+• Feature entitlements
+• Billing dashboard
+• Audit log
+• Email queue
+
+---
+
+SECTION 2 — Upgrade Verification
+
+Using a Starter account:
+
+Confirm limits:
+
+• 1 branch
+• 2 workers
+• 500 customers
+• 500 monthly orders
+
+Upgrade to Professional.
+
+Without logging out:
+
+Verify immediately:
+
+• Limits increase
+• Locked pages unlock
+• Sidebar updates
+• API permissions update
+• Billing page reflects new plan
+• Renewal date remains correct
+
+Repeat:
+
+Professional
+→ Enterprise
+
+Verify API Access unlocks immediately.
+
+---
+
+SECTION 3 — Downgrade Verification
+
+Create:
+
+Professional account
+
+Populate:
+
+• 15 workers
+• 5 branches
+• 700 customers
+• 900 monthly orders
+
+Downgrade to Starter.
+
+Verify:
+
+Existing data remains visible.
+
+No data is deleted.
+
+User cannot create:
+
+• Worker #16
+• Branch #6
+• Customer #701
+• Order #901
+
+Verify upgrade messaging appears correctly.
+
+---
+
+SECTION 4 — Webhook Replay
+
+Replay the exact same Paystack webhook:
+
+1 time
+
+5 times
+
+10 times
+
+Verify:
+
+Only ONE payment record.
+
+Only ONE invoice.
+
+Only ONE renewal.
+
+Only ONE lifecycle email.
+
+Only ONE audit log.
+
+No duplicate processing.
+
+---
+
+SECTION 5 — Concurrent Payment Test
+
+Attempt:
+
+Two simultaneous successful payments.
+
+Verify:
+
+Only one subscription activation.
+
+No duplicate invoices.
+
+No duplicate payment records.
+
+Correct billing history.
+
+Correct audit logs.
+
+---
+
+SECTION 6 — Failed Webhook Recovery
+
+Simulate:
+
+Payment succeeds.
+
+Webhook fails.
+
+Webhook retries later.
+
+Verify:
+
+Subscription eventually activates.
+
+No duplicate records.
+
+No missing invoice.
+
+No duplicate email.
+
+---
+
+SECTION 7 — Invoice Validation
+
+Generate invoices for:
+
+• Trial upgrade
+• Starter purchase
+• Professional renewal
+• Enterprise renewal
+• Manual admin payment
+
+Verify:
+
+Invoice numbers increase sequentially.
+
+No duplicates.
+
+Print version.
+
+PDF version.
+
+Download.
+
+Permanent availability.
+
+---
+
+SECTION 8 — Email Validation
+
+Verify delivery of:
+
+• Welcome
+• Trial Day 2
+• Trial Day 4
+• Trial Day 6
+• Trial Day 8
+• Trial Day 10
+• Trial Day 12
+• Trial Day 13
+• Trial Expired
+• Payment Successful
+• Renewal Reminder
+• Payment Failed
+• Cancellation
+• Reactivation
+
+Each event must send exactly ONE email.
+
+---
+
+SECTION 9 — Admin Metrics
+
+Verify:
+
+MRR
+
+ARR
+
+Revenue by Plan
+
+Trials
+
+Failed Payments
+
+Cancelled Subscriptions
+
+Churn
+
+must reconcile exactly with the database.
+
+No calculation drift.
+
+---
+
+SECTION 10 — Security
+
+Attempt:
+
+Starter calling Enterprise APIs.
+
+Replay old webhook.
+
+Fake webhook.
+
+Expired webhook.
+
+Modified webhook signature.
+
+Direct invoice access.
+
+Cross-account invoice download.
+
+Verify:
+
+Correct rejection.
+
+No data leakage.
+
+---
+
+SECTION 11 — Performance
+
+Seed:
+
+5,000 orders
+
+10,000 payments
+
+1,000 customers
+
+Multiple subscriptions
+
+Measure:
+
+Billing dashboard load.
+
+Invoice generation.
+
+Subscription status API.
+
+Payment history.
+
+Webhook processing.
+
+Identify slow queries.
+
+Recommend indexes if needed.
+
+---
+
+SECTION 12 — Final Launch Certification
+
+Provide:
+
+1. Subscription State Results
+
+2. Upgrade Results
+
+3. Downgrade Results
+
+4. Webhook Results
+
+5. Invoice Results
+
+6. Email Results
+
+7. Admin Metrics Validation
+
+8. Security Results
+
+9. Performance Results
+
+10. Failed Tests
+
+11. Fixed Issues
+
+12. Remaining Risks
+
+13. Production Readiness Score
+
+IMPORTANT
+
+If ANY critical defect is found:
+
+Fix it.
+
+Re-run the failed tests.
+
+Do not continue until they pass.
+
+Do NOT begin Phase 8 until this certification is complete and the billing system is verified as production-ready.
