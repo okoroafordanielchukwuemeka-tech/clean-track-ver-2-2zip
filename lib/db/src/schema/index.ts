@@ -41,3 +41,6 @@ export * from "./plans.js";
 export * from "./lifecycle-email-log.js";
 export * from "./subscription-payments.js";
 export * from "./campaigns.js";
+export * from "./webhook-events.js";
+export * from "./invoices.js";
+export * from "./payment-subscriptions.js";

@@ -28,6 +28,9 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { WhatsAppCloudProvider, normalizePhoneE164 } from "../lib/providers/whatsapp-cloud.js";
+import { webhookEvents } from "@workspace/db/schema";
+import { verifyPaystackSignature } from "../lib/paystack.js";
+import { activatePlanFromPayment, recordFailedPayment } from "../lib/billing-service.js";
 
 export const webhooksRouter = Router();
 
@@ -430,5 +433,104 @@ async function processWhatsAppWebhook(payload: unknown): Promise<void> {
     } catch (err) {
       console.error(`[Webhook] Failed to process inbound message from ${msg.from}:`, err);
     }
+  }
+}
+
+// ─── POST /webhooks/paystack — payment lifecycle events ────────────────────────
+//
+// Handles: charge.success, charge.failed (and any other Paystack event type —
+// unrecognized types are recorded but ignored). Every event is written to
+// webhook_events BEFORE processing; the unique (provider, eventKey) constraint
+// makes retried/duplicate deliveries no-ops. Signature verification is
+// fail-closed: missing/invalid X-Paystack-Signature always returns 403.
+
+webhooksRouter.post("/paystack", async (req, res) => {
+  const rawBody: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+  const signatureHeader = req.headers["x-paystack-signature"] as string | undefined;
+
+  if (!verifyPaystackSignature(rawBody, signatureHeader)) {
+    console.warn("[Webhook] Paystack signature missing/invalid — rejecting");
+    return res.status(403).end();
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    return res.status(400).json({ error: "Invalid JSON payload" });
+  }
+
+  // Respond immediately — Paystack retries on slow/non-2xx responses.
+  res.status(200).json({ status: "ok" });
+
+  const eventType: string = payload?.event ?? "unknown";
+  const data = payload?.data ?? {};
+  const reference: string | undefined = data?.reference;
+  const laundryId = Number(data?.metadata?.laundryId) || null;
+
+  // De-dup key: event type + reference + status (a distinct new event will
+  // always have at least one of these differ from the original).
+  const eventKey = `${eventType}:${reference ?? "no-ref"}:${data?.status ?? ""}`;
+
+  let webhookEventId: number;
+  try {
+    const [row] = await db
+      .insert(webhookEvents)
+      .values({
+        provider: "paystack",
+        eventType,
+        eventKey,
+        laundryId,
+        reference: reference ?? null,
+        status: "received",
+        payload,
+      })
+      .returning({ id: webhookEvents.id });
+    webhookEventId = row.id;
+  } catch {
+    // Unique constraint violation → this exact event was already recorded/processed.
+    console.log(`[Webhook] Paystack duplicate event ignored: ${eventKey}`);
+    return;
+  }
+
+  try {
+    await processPaystackWebhook(eventType, data);
+    await db.update(webhookEvents).set({ status: "processed", processedAt: new Date() }).where(eq(webhookEvents.id, webhookEventId));
+  } catch (err) {
+    console.error(`[Webhook] Paystack processing error for ${eventType}:`, err);
+    await db
+      .update(webhookEvents)
+      .set({ status: "failed", processedAt: new Date(), error: err instanceof Error ? err.message : String(err) })
+      .where(eq(webhookEvents.id, webhookEventId));
+  }
+});
+
+async function processPaystackWebhook(eventType: string, data: any): Promise<void> {
+  switch (eventType) {
+    case "charge.success": {
+      // Verify server-side rather than trusting the webhook payload directly —
+      // Paystack's own recommendation to guard against forged/replayed bodies.
+      const { verifyTransaction } = await import("../lib/paystack.js");
+      const verified = await verifyTransaction(data.reference);
+      if (verified.status === "success") {
+        await activatePlanFromPayment(verified);
+      }
+      break;
+    }
+    case "charge.failed": {
+      const laundryId = Number(data?.metadata?.laundryId);
+      const invoiceId = Number(data?.metadata?.invoiceId);
+      if (laundryId) {
+        await recordFailedPayment({
+          laundryId,
+          invoiceId: invoiceId || undefined,
+          reference: data.reference,
+          reason: data.gateway_response ?? "declined",
+        });
+      }
+      break;
+    }
+    default:
+      console.log(`[Webhook] Paystack event ignored (no handler): ${eventType}`);
   }
 }

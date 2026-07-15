@@ -9,6 +9,7 @@ import { adminBackupsRouter } from "./backups.js";
 import { adminSubscriptionsRouter } from "./subscriptions.js";
 import { adminActivationRouter } from "./activation.js";
 import { adminIntegrationsRouter } from "./integrations.js";
+import { adminBillingRouter } from "./billing.js";
 
 export const adminRouter = Router();
 
@@ -22,3 +23,4 @@ adminRouter.use("/backups", requireAdmin, adminBackupsRouter);
 adminRouter.use("/subscriptions", requireAdmin, adminSubscriptionsRouter);
 adminRouter.use("/activation", requireAdmin, adminActivationRouter);
 adminRouter.use("/integrations", requireAdmin, adminIntegrationsRouter);
+adminRouter.use("/billing", requireAdmin, adminBillingRouter);

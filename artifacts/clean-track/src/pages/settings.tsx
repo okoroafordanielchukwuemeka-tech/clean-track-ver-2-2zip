@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
@@ -1294,23 +1294,43 @@ function WarnBadge({ level }: { level: string }) {
   return <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-xs border font-medium", c.cls)}>{c.label}</span>;
 }
 
-function UpgradeModal({
+function CheckoutModal({
   plan,
   pricing,
+  paystackConfigured,
+  isReactivation,
   onClose,
 }: {
   plan: PlanPricingConfig;
   pricing: SubscriptionPricing;
+  paystackConfigured: boolean;
+  isReactivation: boolean;
   onClose: () => void;
 }) {
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
+
   const upgradeIntent = useMutation({
     mutationFn: () => api.subscription.logUpgradeIntent(plan.tier, "billing_settings"),
   });
 
-  function handleOpen() {
+  const checkoutMutation = useMutation({
+    mutationFn: () =>
+      isReactivation
+        ? api.subscription.reactivate(plan.tier, billingPeriod)
+        : api.subscription.checkout(plan.tier, billingPeriod),
+    onSuccess: (result) => {
+      window.location.href = result.authorizationUrl;
+    },
+    onError: (err: any) => {
+      toast.error(err?.message ?? "Failed to start checkout. Please try again.");
+    },
+  });
+
+  function handleContactClick() {
     upgradeIntent.mutate();
   }
 
+  const amount = billingPeriod === "annual" ? plan.price.annual : plan.price.monthly;
   const { paymentInstructions } = pricing;
 
   return (
@@ -1319,50 +1339,98 @@ function UpgradeModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-blue-500" />
-            Upgrade to {plan.displayName}
+            {isReactivation ? "Reactivate on" : "Switch to"} {plan.displayName}
           </DialogTitle>
           <DialogDescription>
-            ₦{plan.price.monthly.toLocaleString("en-NG")}/month — contact us to activate your plan.
+            Pay securely with your card via Paystack — your plan activates instantly.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 pt-2">
-          <div className="rounded-lg bg-muted/50 px-4 py-3 space-y-2 text-sm">
-            <p className="font-semibold text-foreground">How to upgrade:</p>
-            <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground">
-              {paymentInstructions.instructions.map((step, i) => (
-                <li key={i}>{step}</li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="space-y-2">
-            {paymentInstructions.contactWhatsApp && (
-              <a
-                href={`https://wa.me/${paymentInstructions.contactWhatsApp.replace(/\D/g, "")}?text=Hi, I'd like to upgrade to the ${plan.displayName} plan (₦${plan.price.monthly.toLocaleString("en-NG")}/month).`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleOpen}
-                className="flex items-center justify-center gap-2 w-full rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 px-4 transition-colors"
+        {paystackConfigured ? (
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center justify-center gap-1 rounded-lg border p-1 w-fit mx-auto">
+              <button
+                type="button"
+                onClick={() => setBillingPeriod("monthly")}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  billingPeriod === "monthly" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
               >
-                <MessageCircle className="h-4 w-4" />
-                Contact via WhatsApp
-              </a>
-            )}
-            <a
-              href={`mailto:${paymentInstructions.contactEmail}?subject=Upgrade to ${plan.displayName} Plan&body=Hi, I'd like to upgrade to the ${plan.displayName} plan (₦${plan.price.monthly.toLocaleString("en-NG")}/month).`}
-              onClick={handleOpen}
-              className="flex items-center justify-center gap-2 w-full rounded-lg border border-input bg-background hover:bg-muted text-sm font-medium py-2.5 px-4 transition-colors"
-            >
-              <Mail className="h-4 w-4" />
-              Email {paymentInstructions.contactEmail}
-            </a>
-          </div>
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingPeriod("annual")}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  billingPeriod === "annual" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Annual
+                {plan.price.annualSavingsPct > 0 && (
+                  <span className="ml-1 text-emerald-600 dark:text-emerald-400 text-xs">save {plan.price.annualSavingsPct}%</span>
+                )}
+              </button>
+            </div>
 
-          <p className="text-xs text-center text-muted-foreground">
-            Your plan will be activated within 24 hours of payment confirmation.
-          </p>
-        </div>
+            <div className="rounded-lg bg-muted/50 px-4 py-3 text-center">
+              <p className="text-2xl font-extrabold">₦{amount.toLocaleString("en-NG")}</p>
+              <p className="text-xs text-muted-foreground">{billingPeriod === "annual" ? "billed yearly" : "billed monthly, auto-renews"}</p>
+            </div>
+
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => checkoutMutation.mutate()}
+              disabled={checkoutMutation.isPending}
+            >
+              {checkoutMutation.isPending ? (
+                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Starting checkout…</>
+              ) : (
+                <><CreditCard className="h-4 w-4 mr-2" />Pay with card</>
+              )}
+            </Button>
+            <p className="text-xs text-center text-muted-foreground">
+              Your card is charged automatically each {billingPeriod === "annual" ? "year" : "month"} — cancel anytime.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div className="rounded-lg bg-muted/50 px-4 py-3 space-y-2 text-sm">
+              <p className="font-semibold text-foreground">How to upgrade:</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground">
+                {paymentInstructions.instructions.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+            </div>
+            <div className="space-y-2">
+              {paymentInstructions.contactWhatsApp && (
+                <a
+                  href={`https://wa.me/${paymentInstructions.contactWhatsApp.replace(/\D/g, "")}?text=Hi, I'd like to switch to the ${plan.displayName} plan (₦${plan.price.monthly.toLocaleString("en-NG")}/month).`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleContactClick}
+                  className="flex items-center justify-center gap-2 w-full rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 px-4 transition-colors"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Contact via WhatsApp
+                </a>
+              )}
+              <a
+                href={`mailto:${paymentInstructions.contactEmail}?subject=Switch to ${plan.displayName} Plan&body=Hi, I'd like to switch to the ${plan.displayName} plan (₦${plan.price.monthly.toLocaleString("en-NG")}/month).`}
+                onClick={handleContactClick}
+                className="flex items-center justify-center gap-2 w-full rounded-lg border border-input bg-background hover:bg-muted text-sm font-medium py-2.5 px-4 transition-colors"
+              >
+                <Mail className="h-4 w-4" />
+                Email {paymentInstructions.contactEmail}
+              </a>
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Your plan will be activated within 24 hours of payment confirmation.
+            </p>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -1371,11 +1439,11 @@ function UpgradeModal({
 function PlanCard({
   plan,
   currentTier,
-  onUpgrade,
+  onSelect,
 }: {
   plan: PlanPricingConfig;
   currentTier: string;
-  onUpgrade: (plan: PlanPricingConfig) => void;
+  onSelect: (plan: PlanPricingConfig) => void;
 }) {
   const isCurrent = plan.tier === currentTier;
   const isHigher = ["starter", "pro", "business"].indexOf(plan.tier) >
@@ -1434,7 +1502,7 @@ function PlanCard({
         )}
         variant={isCurrent ? "outline" : "default"}
         disabled={isCurrent}
-        onClick={() => !isCurrent && isHigher && onUpgrade(plan)}
+        onClick={() => !isCurrent && onSelect(plan)}
       >
         {isCurrent ? "Current Plan" : isHigher ? "Upgrade" : "Downgrade"}
       </Button>
@@ -1478,6 +1546,34 @@ function BillingSection() {
     queryFn: () => api.subscription.getPayments(),
     enabled: showPayments,
     staleTime: 60_000,
+  });
+
+  const { data: paymentConfig } = useQuery({
+    queryKey: ["subscription", "payment-config"],
+    queryFn: () => api.subscription.getPaymentConfig(),
+    staleTime: 60_000 * 30,
+  });
+
+  const { data: billingStatus } = useQuery({
+    queryKey: ["subscription", "billing-status"],
+    queryFn: () => api.subscription.getBillingStatus(),
+    staleTime: 30_000,
+  });
+
+  const { data: invoices, isLoading: invoicesLoading } = useQuery({
+    queryKey: ["subscription", "invoices"],
+    queryFn: () => api.subscription.getInvoices(),
+    staleTime: 30_000,
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (invoiceId: number) => api.subscription.retryPayment(invoiceId),
+    onSuccess: (result) => {
+      window.location.href = result.authorizationUrl;
+    },
+    onError: (err: any) => {
+      toast.error(err?.message ?? "Failed to retry payment.");
+    },
   });
 
   const cancelMutation = useMutation({
@@ -1662,11 +1758,34 @@ function BillingSection() {
         </div>
       )}
 
+      {/* Card on file */}
+      {billingStatus?.hasCardOnFile && (
+        <div className="rounded-lg border px-4 py-3 flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <span>
+              {billingStatus.cardBank ?? "Card"} ending in {billingStatus.cardLast4 ?? "····"}
+              {billingStatus.cardType ? ` (${billingStatus.cardType})` : ""}
+            </span>
+            {billingStatus.consecutiveFailures ? (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700">
+                {billingStatus.consecutiveFailures} failed charge{billingStatus.consecutiveFailures > 1 ? "s" : ""}
+              </span>
+            ) : null}
+          </div>
+          {billingStatus.nextChargeAt && (
+            <span className="text-xs text-muted-foreground">
+              Next charge {new Date(billingStatus.nextChargeAt).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Pricing cards */}
       <div>
         <h3 className="text-sm font-semibold mb-1">Available Plans</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          All prices in Nigerian Naira (NGN). Contact us to upgrade or downgrade.
+          All prices in Nigerian Naira (NGN). {paymentConfig?.paystackConfigured ? "Pay securely by card — plans activate instantly." : "Contact us to upgrade or downgrade."}
         </p>
         {pricing ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1675,7 +1794,7 @@ function BillingSection() {
                 key={plan.tier}
                 plan={plan}
                 currentTier={status?.plan ?? "free"}
-                onUpgrade={setUpgradeTarget}
+                onSelect={setUpgradeTarget}
               />
             ))}
           </div>
@@ -1801,13 +1920,64 @@ function BillingSection() {
         )}
       </div>
 
-      {/* Invoice placeholder */}
-      <div className="rounded-lg border border-dashed px-4 py-4 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Invoices</p>
-        <p className="text-xs mt-1">
-          Formal invoices and receipts will be available once automated payment processing (Paystack / Flutterwave) is enabled.
-          For now, contact <a href="mailto:support@cleantrack.ng" className="underline hover:text-foreground">support@cleantrack.ng</a> for a payment receipt.
-        </p>
+      {/* Invoices */}
+      <div>
+        <h3 className="text-sm font-semibold mb-1">Invoices</h3>
+        <p className="text-xs text-muted-foreground mb-3">Every checkout and renewal generates a permanent invoice you can print or save as PDF.</p>
+        <div className="rounded-lg border overflow-hidden">
+          {invoicesLoading ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2" />
+              Loading invoices…
+            </div>
+          ) : !invoices || invoices.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p>No invoices yet.</p>
+              <p className="text-xs mt-1 text-muted-foreground/70">Invoices appear here after your first checkout or renewal.</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {invoices.map((inv) => {
+                const statusCls: Record<string, string> = {
+                  paid: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700",
+                  pending: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700",
+                  failed: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700",
+                  void: "bg-slate-100 dark:bg-slate-800 text-slate-600 border-slate-300 dark:border-slate-600",
+                };
+                return (
+                  <div key={inv.id} className="px-4 py-3 flex items-center justify-between gap-4 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold font-mono text-xs">{inv.invoiceNumber}</p>
+                        <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium capitalize", statusCls[inv.status] ?? statusCls.pending)}>
+                          {inv.status}
+                        </span>
+                        <span className="text-xs text-muted-foreground capitalize">{inv.planDisplayName} · {inv.type.replace("_", " ")}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        ₦{Number(inv.totalNgn).toLocaleString("en-NG")} · {new Date(inv.issueDate).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {inv.status === "failed" ? (
+                        <Button size="sm" variant="outline" onClick={() => retryMutation.mutate(inv.id)} disabled={retryMutation.isPending}>
+                          Retry payment
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="ghost" asChild>
+                          <a href={api.subscription.getInvoiceHtmlUrl(inv.id)} target="_blank" rel="noopener noreferrer">
+                            View / Print
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Danger zone — cancel subscription */}
@@ -1846,11 +2016,13 @@ function BillingSection() {
         </div>
       )}
 
-      {/* Upgrade modal */}
+      {/* Checkout modal */}
       {upgradeTarget && pricing && (
-        <UpgradeModal
+        <CheckoutModal
           plan={upgradeTarget}
           pricing={pricing}
+          paystackConfigured={paymentConfig?.paystackConfigured ?? false}
+          isReactivation={status?.status === "cancelled"}
           onClose={() => setUpgradeTarget(null)}
         />
       )}
@@ -1957,7 +2129,11 @@ function WhatsAppBusinessSection() {
 export default function SettingsPage() {
   const { isOwner } = useAuth();
   const { isOnline } = useNetworkStatus();
-  const [activeSection, setActiveSection] = useState("profile");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [activeSection, setActiveSection] = useState(
+    initialTab && SECTIONS.some((s) => s.id === initialTab) ? initialTab : "profile"
+  );
 
   if (!isOwner) {
     return (

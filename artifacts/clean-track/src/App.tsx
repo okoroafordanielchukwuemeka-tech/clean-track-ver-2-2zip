@@ -30,6 +30,7 @@ import WorkerLogin from "@/pages/worker-login";
 import NotFound from "@/pages/not-found";
 import DiscountApprovals from "@/pages/discount-approvals";
 import Receipts from "@/pages/receipts";
+import BillingCallback from "@/pages/billing-callback";
 import ReceiptPrint from "@/pages/receipt-print";
 import PickupReceiptPrint from "@/pages/pickup-receipt-print";
 import BranchesPage from "@/pages/branches";
@@ -132,6 +133,7 @@ export default function App() {
                 <Route path="worker-station" element={<WorkerStation />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
+              <Route path="/billing/callback" element={<BillingCallback />} />
               <Route path="/receipts/:receiptNumber/print" element={<ReceiptPrint />} />
               <Route path="/orders/:orderId/pickups/:pickupId/print" element={<PickupReceiptPrint />} />
             </Routes>

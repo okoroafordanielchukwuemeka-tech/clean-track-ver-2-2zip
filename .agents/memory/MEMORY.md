@@ -43,3 +43,4 @@
 - [Cancelled-order pricing & A4 print width](document-audit-cancelled-orders.md) — computeOrderPricing() must zero out fields for status==="cancelled" (no soft-delete on orders); A4 print CSS was capped at leftover 480px receipt-width
 - [Campaign System](campaign-system.md) — HAS_WHATSAPP_CAMPAIGNS gates Pro+; batch processor bulk-updates for no-provider path (10k rows ~1s); 2 tables: campaigns + campaign_recipients
 - [Payment Config & Manual Reconciliation](payment-config-reconciliation.md) — paymentDetails lives on laundries.businessProfile JSONB, sole source of truth; duplicate-payment detection thresholds; public vs owner-gated pricing routing
+- [Payment & Billing Automation (Paystack)](payment-billing-automation.md) — recurring charges via saved-authorization + own scheduler, not native Paystack subscriptions; webhook dedup table + re-verify-before-activate; transactional emails bypass lifecycle dedup

@@ -1,14 +1,17 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { laundries, subscriptionLogs, subscriptionPayments } from "@workspace/db/schema";
+import { laundries, subscriptionLogs, subscriptionPayments, paymentSubscriptions } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { getEffectivePlanFeatures, getEffectivePlanLimits, PLAN_DISPLAY_NAMES, getEntitlementReport } from "../lib/entitlements.js";
 import { computeUsageWithLimits } from "../lib/usage-service.js";
-import { getPricingList, MANUAL_PAYMENT_INSTRUCTIONS } from "../lib/pricing.js";
+import { getPricingList, MANUAL_PAYMENT_INSTRUCTIONS, PAID_PLANS, type PaidPlan } from "../lib/pricing.js";
 import type { SubscriptionStatus } from "@workspace/db/schema";
 import { sendLifecycleEmail } from "../lib/email-lifecycle.js";
+import { startCheckout, verifyAndActivate } from "../lib/billing-service.js";
+import { isPaystackConfigured, getPaystackPublicKey } from "../lib/paystack.js";
+import { listInvoices, getInvoice, renderInvoiceHtml } from "../lib/invoice-service.js";
 
 export const subscriptionRouter = Router();
 
@@ -277,5 +280,195 @@ subscriptionRouter.post("/cancel", requireOwner, async (req: AuthRequest, res) =
     res.json({ cancelled: true, message: "Your subscription has been cancelled. Your data is preserved." });
   } catch {
     res.status(500).json({ error: "Failed to cancel subscription" });
+  }
+});
+
+// ── Phase 7.8: Payment Automation & Billing Infrastructure ──────────────────
+
+/**
+ * GET /subscription/payment-config
+ * Tells the frontend whether card payments are available and, if so, the
+ * public key needed to render the checkout button state.
+ */
+subscriptionRouter.get("/payment-config", requireOwner, (_req, res) => {
+  res.json({
+    paystackConfigured: isPaystackConfigured(),
+    paystackPublicKey: isPaystackConfigured() ? getPaystackPublicKey() : null,
+  });
+});
+
+const checkoutSchema = z.object({
+  targetPlan: z.enum(PAID_PLANS as unknown as [PaidPlan, ...PaidPlan[]]),
+  billingPeriod: z.enum(["monthly", "annual"]).default("monthly"),
+});
+
+/**
+ * POST /subscription/checkout
+ * Starts a Paystack hosted checkout for a new subscription, upgrade, or
+ * downgrade. Returns a URL the frontend redirects the browser to.
+ */
+subscriptionRouter.post("/checkout", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const data = checkoutSchema.parse(req.body);
+    const laundryId = req.auth!.laundryId;
+
+    const [laundry] = await db
+      .select({ subscriptionTier: laundries.subscriptionTier, subscriptionStatus: laundries.subscriptionStatus })
+      .from(laundries)
+      .where(eq(laundries.id, laundryId));
+    if (!laundry) return res.status(404).json({ error: "Not found" });
+
+    const currentRank = PAID_PLANS.indexOf(laundry.subscriptionTier as PaidPlan);
+    const targetRank = PAID_PLANS.indexOf(data.targetPlan);
+    let purpose: "new_subscription" | "upgrade" | "downgrade" | "reactivation" = "new_subscription";
+    if (laundry.subscriptionStatus === "cancelled") purpose = "reactivation";
+    else if (currentRank >= 0 && targetRank > currentRank) purpose = "upgrade";
+    else if (currentRank >= 0 && targetRank < currentRank) purpose = "downgrade";
+
+    const result = await startCheckout({
+      laundryId,
+      targetPlan: data.targetPlan,
+      billingPeriod: data.billingPeriod,
+      purpose,
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors[0].message });
+    }
+    res.status(500).json({ error: err instanceof Error ? err.message : "Failed to start checkout" });
+  }
+});
+
+/**
+ * POST /subscription/reactivate
+ * Owner-initiated reactivation of a cancelled subscription — same flow as
+ * checkout, exposed separately so the frontend can present distinct copy.
+ */
+subscriptionRouter.post("/reactivate", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const data = checkoutSchema.parse(req.body);
+    const laundryId = req.auth!.laundryId;
+
+    const result = await startCheckout({
+      laundryId,
+      targetPlan: data.targetPlan,
+      billingPeriod: data.billingPeriod,
+      purpose: "reactivation",
+    });
+
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors[0].message });
+    }
+    res.status(500).json({ error: err instanceof Error ? err.message : "Failed to start reactivation" });
+  }
+});
+
+/**
+ * POST /subscription/verify-payment
+ * Fallback verification for the browser return-from-checkout page, in case
+ * the Paystack webhook hasn't landed yet. Idempotent — safe to poll.
+ */
+const verifySchema = z.object({ reference: z.string().min(1) });
+
+subscriptionRouter.post("/verify-payment", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const { reference } = verifySchema.parse(req.body);
+    const result = await verifyAndActivate(reference);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors[0].message });
+    }
+    res.status(500).json({ error: "Failed to verify payment" });
+  }
+});
+
+/**
+ * POST /subscription/retry-payment
+ * Re-initiates checkout for a failed/pending invoice — reuses the same
+ * plan/billing period recorded on that invoice.
+ */
+subscriptionRouter.post("/retry-payment", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const invoiceId = Number(req.body?.invoiceId);
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
+
+    const invoice = await getInvoice(laundryId, invoiceId);
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    if (invoice.status === "paid") return res.status(409).json({ error: "Invoice is already paid" });
+    if (!PAID_PLANS.includes(invoice.plan as PaidPlan)) {
+      return res.status(400).json({ error: "Invoice plan is not a billable plan" });
+    }
+
+    const result = await startCheckout({
+      laundryId,
+      targetPlan: invoice.plan as PaidPlan,
+      billingPeriod: (invoice.billingPeriod as "monthly" | "annual") ?? "monthly",
+      purpose: "new_subscription",
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Failed to retry payment" });
+  }
+});
+
+/**
+ * GET /subscription/invoices
+ * Lists this laundry's permanent invoice history.
+ */
+subscriptionRouter.get("/invoices", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const invoices = await listInvoices(req.auth!.laundryId);
+    res.json(invoices);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch invoices" });
+  }
+});
+
+/**
+ * GET /subscription/invoices/:id/html
+ * Print-friendly standalone invoice document (browser "print to PDF").
+ */
+subscriptionRouter.get("/invoices/:id/html", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const invoice = await getInvoice(req.auth!.laundryId, Number(req.params.id));
+    if (!invoice) return res.status(404).send("Invoice not found");
+    res.setHeader("Content-Type", "text/html");
+    res.send(renderInvoiceHtml(invoice));
+  } catch {
+    res.status(500).send("Failed to render invoice");
+  }
+});
+
+/**
+ * GET /subscription/billing-status
+ * Recurring-billing state (saved card on file, next charge date) for the
+ * Billing settings page.
+ */
+subscriptionRouter.get("/billing-status", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const [sub] = await db
+      .select({
+        cardLast4: paymentSubscriptions.cardLast4,
+        cardBank: paymentSubscriptions.cardBank,
+        cardType: paymentSubscriptions.cardType,
+        status: paymentSubscriptions.status,
+        nextChargeAt: paymentSubscriptions.nextChargeAt,
+        consecutiveFailures: paymentSubscriptions.consecutiveFailures,
+        lastChargeAt: paymentSubscriptions.lastChargeAt,
+        lastChargeStatus: paymentSubscriptions.lastChargeStatus,
+      })
+      .from(paymentSubscriptions)
+      .where(eq(paymentSubscriptions.laundryId, req.auth!.laundryId));
+
+    res.json({ hasCardOnFile: !!sub, ...(sub ?? {}) });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch billing status" });
   }
 });

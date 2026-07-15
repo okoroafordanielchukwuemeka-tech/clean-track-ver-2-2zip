@@ -1715,6 +1715,188 @@ function IntegrationsTab({ token }: { token: string }) {
   );
 }
 
+// ─── Billing Dashboard (Phase 7.8, Part 7) ─────────────────────────────────
+
+function formatNgn(n: number): string {
+  return `₦${Number(n ?? 0).toLocaleString("en-NG")}`;
+}
+
+function BillingTab({ token }: { token: string }) {
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [planFilter, setPlanFilter] = useState<string>("");
+
+  const { data: overview, isLoading: overviewLoading, refetch } = useQuery({
+    queryKey: ["admin", "billing", "overview"],
+    queryFn: () => adminFetch("/admin/billing/overview", token),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const { data: invoices, isLoading: invoicesLoading } = useQuery({
+    queryKey: ["admin", "billing", "invoices", statusFilter, planFilter],
+    queryFn: () =>
+      adminFetch(
+        `/admin/billing/invoices?${statusFilter ? `status=${statusFilter}&` : ""}${planFilter ? `plan=${planFilter}` : ""}`,
+        token
+      ),
+  });
+
+  const { data: atRisk, isLoading: atRiskLoading } = useQuery({
+    queryKey: ["admin", "billing", "at-risk"],
+    queryFn: () => adminFetch("/admin/billing/at-risk", token),
+    refetchInterval: 60_000,
+  });
+
+  if (overviewLoading) return <LoadingSpinner />;
+  if (!overview) return <ErrorState />;
+
+  const o = overview as any;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">Billing & Revenue</h2>
+          <p className="text-slate-400 text-sm mt-0.5">MRR, churn, and payment health across all tenants.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard icon={TrendingUp} label="MRR" value={formatNgn(o.mrr)} sub={`ARR ${formatNgn(o.arr)}`} color="green" />
+        <MetricCard icon={CreditCard} label="Revenue (30d)" value={formatNgn(o.revenueLast30Days)} sub="collected payments" color="blue" />
+        <MetricCard icon={AlertTriangle} label="Churn Rate (30d)" value={`${o.churnRatePct}%`} sub="of active + past-due + cancelled" color={o.churnRatePct > 10 ? "red" : o.churnRatePct > 5 ? "amber" : "green"} />
+        <MetricCard icon={XCircle} label="Failed Payments (30d)" value={o.failedPaymentsLast30Days} sub="invoices" color={o.failedPaymentsLast30Days > 0 ? "amber" : "green"} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-violet-400" /> Subscription Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 space-y-2">
+            {o.statusBreakdown.map((s: any) => (
+              <div key={s.status} className="flex items-center justify-between text-sm">
+                <span className="text-slate-400 capitalize">{s.status.replace("_", " ")}</span>
+                <span className="text-white font-semibold">{s.count}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+              <Layers className="w-4 h-4 text-blue-400" /> Plan Mix (Active)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4 space-y-2">
+            {o.planBreakdown.length === 0 ? (
+              <div className="text-slate-500 text-sm py-2">No active paid subscriptions yet.</div>
+            ) : (
+              o.planBreakdown.map((p: any) => (
+                <div key={p.plan} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">{p.planDisplayName}</span>
+                  <span className="text-white font-semibold">{p.count}</span>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-2 pt-4 px-5">
+          <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400" /> At-Risk Tenants (Grace Period)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5 pb-4">
+          {atRiskLoading ? (
+            <div className="text-slate-500 text-sm py-4">Loading…</div>
+          ) : !atRisk || atRisk.length === 0 ? (
+            <div className="text-slate-500 text-sm py-4 text-center">No tenants currently in a payment grace period.</div>
+          ) : (
+            <div className="divide-y divide-slate-800">
+              {atRisk.map((t: any) => (
+                <div key={t.laundryId} className="py-2.5 flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <p className="text-white font-medium">{t.businessName}</p>
+                    <p className="text-slate-500 text-xs">{t.ownerEmail}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-amber-400 text-xs font-medium capitalize">{t.subscriptionStatus.replace("_", " ")}</p>
+                    {t.consecutiveFailures ? (
+                      <p className="text-red-400 text-xs">{t.consecutiveFailures} failed charge(s)</p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-slate-900 border-slate-800">
+        <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
+          <CardTitle className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-teal-400" /> Recent Invoices
+          </CardTitle>
+          <div className="flex gap-2">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1">
+              <option value="">All statuses</option>
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+              <option value="void">Void</option>
+            </select>
+            <select value={planFilter} onChange={(e) => setPlanFilter(e.target.value)}
+              className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1">
+              <option value="">All plans</option>
+              <option value="starter">Starter</option>
+              <option value="pro">Professional</option>
+              <option value="business">Enterprise</option>
+            </select>
+          </div>
+        </CardHeader>
+        <CardContent className="px-5 pb-4">
+          {invoicesLoading ? (
+            <div className="text-slate-500 text-sm py-4">Loading…</div>
+          ) : !invoices || invoices.length === 0 ? (
+            <div className="text-slate-500 text-sm py-4 text-center">No invoices match this filter.</div>
+          ) : (
+            <div className="divide-y divide-slate-800 max-h-96 overflow-y-auto">
+              {invoices.map((inv: any) => {
+                const statusColor: Record<string, string> = {
+                  paid: "text-emerald-400", pending: "text-amber-400", failed: "text-red-400", void: "text-slate-500",
+                };
+                return (
+                  <div key={inv.id} className="py-2.5 flex items-center justify-between gap-3 text-sm">
+                    <div>
+                      <p className="text-white font-mono text-xs">{inv.invoiceNumber}</p>
+                      <p className="text-slate-500 text-xs">{inv.businessName} · {inv.planDisplayName} · {inv.type.replace("_", " ")}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-semibold">{formatNgn(inv.totalNgn)}</p>
+                      <p className={cn("text-xs capitalize", statusColor[inv.status] ?? "text-slate-400")}>{inv.status}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main Shell ────────────────────────────────────────────────────────────
 
 export default function AdminCommandCenter() {
@@ -1740,6 +1922,7 @@ export default function AdminCommandCenter() {
     { id: "overview",      label: "Overview",      icon: LayoutDashboard },
     { id: "tenants",       label: "Tenants",       icon: Building2 },
     { id: "subscriptions", label: "Subscriptions", icon: CreditCard },
+    { id: "billing",       label: "Billing",       icon: TrendingUp },
     { id: "devices",       label: "Devices",       icon: MonitorSmartphone },
     { id: "storage",       label: "Storage",       icon: HardDrive },
     { id: "backups",       label: "Backups",       icon: Archive },
@@ -1818,6 +2001,7 @@ export default function AdminCommandCenter() {
             {tab === "overview"      && <OverviewTab token={token} />}
             {tab === "tenants"       && <TenantsTab token={token} />}
             {tab === "subscriptions" && <SubscriptionsTab token={token} />}
+            {tab === "billing"       && <BillingTab token={token} />}
             {tab === "devices"       && <DevicesTab token={token} />}
             {tab === "storage"       && <StorageTab token={token} />}
             {tab === "backups"       && <BackupsTab token={token} />}

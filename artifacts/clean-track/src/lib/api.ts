@@ -428,6 +428,19 @@ export const api = {
     getHistory: () => request<SubscriptionLog[]>("GET", "/subscription/history"),
     getPayments: () => request<SubscriptionPaymentRecord[]>("GET", "/subscription/payments"),
     cancel: () => request<{ cancelled: boolean; message: string }>("POST", "/subscription/cancel"),
+    // Phase 7.8 — Payment Automation & Billing Infrastructure
+    getPaymentConfig: () => request<{ paystackConfigured: boolean; paystackPublicKey: string | null }>("GET", "/subscription/payment-config"),
+    checkout: (targetPlan: string, billingPeriod: "monthly" | "annual") =>
+      request<{ authorizationUrl: string; reference: string; invoiceId: number }>("POST", "/subscription/checkout", { targetPlan, billingPeriod }),
+    reactivate: (targetPlan: string, billingPeriod: "monthly" | "annual") =>
+      request<{ authorizationUrl: string; reference: string; invoiceId: number }>("POST", "/subscription/reactivate", { targetPlan, billingPeriod }),
+    verifyPayment: (reference: string) =>
+      request<{ status: string; plan?: string }>("POST", "/subscription/verify-payment", { reference }),
+    retryPayment: (invoiceId: number) =>
+      request<{ authorizationUrl: string; reference: string; invoiceId: number }>("POST", "/subscription/retry-payment", { invoiceId }),
+    getInvoices: () => request<Invoice[]>("GET", "/subscription/invoices"),
+    getInvoiceHtmlUrl: (id: number) => `/api/subscription/invoices/${id}/html`,
+    getBillingStatus: () => request<BillingStatus>("GET", "/subscription/billing-status"),
   },
   marketing: {
     generate: (prompt: string) =>
@@ -1985,6 +1998,41 @@ export interface SubscriptionPaymentRecord {
   notes: string | null;
   paidAt: string | null;
   createdAt: string;
+}
+
+// ── Phase 7.8: Billing & Invoices ────────────────────────────────────────────
+
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  laundryId: number;
+  type: "new_subscription" | "renewal" | "upgrade" | "downgrade" | "manual";
+  businessName: string;
+  plan: string;
+  planDisplayName: string;
+  billingPeriod: string | null;
+  subtotalNgn: number;
+  taxNgn: number;
+  totalNgn: number;
+  status: "paid" | "pending" | "failed" | "void";
+  paymentMethod: string;
+  transactionReference: string | null;
+  issueDate: string;
+  dueDate: string;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface BillingStatus {
+  hasCardOnFile: boolean;
+  cardLast4?: string | null;
+  cardBank?: string | null;
+  cardType?: string | null;
+  status?: string;
+  nextChargeAt?: string | null;
+  consecutiveFailures?: number;
+  lastChargeAt?: string | null;
+  lastChargeStatus?: string | null;
 }
 
 export interface MarketingContent {

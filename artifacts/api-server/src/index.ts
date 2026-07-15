@@ -12,6 +12,7 @@ import { startBackupScheduler } from "./lib/backup-scheduler.js";
 import { startMessageQueueWorker } from "./lib/message-queue-worker.js";
 import { startSubscriptionLifecycleScheduler } from "./lib/subscription-lifecycle.js";
 import { startNudgeScheduler } from "./lib/nudge-engine.js";
+import { startRenewalBillingScheduler } from "./lib/billing-renewal.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
@@ -34,6 +35,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   startSubscriptionLifecycleScheduler();
   // Customer success: detect stuck users and send nudge emails hourly
   startNudgeScheduler();
+  // Phase 7.8: auto-charge saved card authorizations on renewal dates
+  startRenewalBillingScheduler();
 });
 
 function scheduleIdempotencyCleanup() {

@@ -75,6 +75,24 @@ async function sendMail(options: MailOptions): Promise<void> {
   }
 }
 
+/**
+ * Generic transactional send — used by billing-service.ts for payment
+ * success/failure/invoice emails, which are keyed by transaction/invoice
+ * (not laundry+type like the trial/renewal lifecycle sequence), so they
+ * don't go through the lifecycle_email_log one-per-type dedup guard.
+ */
+export async function sendTransactionalMail(options: MailOptions): Promise<boolean> {
+  if (!isSmtpConfigured()) {
+    warn("[email-service] SMTP not configured — transactional email not sent.", {
+      to: options.to,
+      subject: options.subject,
+    });
+    return false;
+  }
+  await sendMail(options);
+  return true;
+}
+
 // ── Email engagement tracking token ──────────────────────────────────────────
 // Signs laundryId with JWT_SECRET so tracking endpoints can verify the token
 // without storing it — no extra DB table needed.

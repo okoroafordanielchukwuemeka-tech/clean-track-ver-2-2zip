@@ -91,6 +91,16 @@ const ENV_WARNINGS: EnvRequirement[] = [
     description: "Meta Embedded Signup Configuration ID. Required when META_APP_ID is set.",
     required: false,
   },
+  {
+    key: "PAYSTACK_SECRET_KEY",
+    description: "Paystack secret key for billing automation (checkout, recurring charges, webhooks). Payment flows disabled if unset.",
+    required: false,
+  },
+  {
+    key: "PAYSTACK_PUBLIC_KEY",
+    description: "Paystack public key exposed to the billing checkout UI. Payment flows disabled if unset.",
+    required: false,
+  },
 ];
 
 // Off-site provider credential requirements (checked only when provider is set)
