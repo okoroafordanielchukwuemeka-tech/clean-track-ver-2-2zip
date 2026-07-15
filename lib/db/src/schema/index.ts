@@ -6,6 +6,7 @@ export * from "./order-items.js";
 export * from "./payment-records.js";
 export * from "./pickup-records.js";
 export * from "./services.js";
+export * from "./service-branches.js";
 export * from "./batches.js";
 export * from "./workers.js";
 export * from "./worker-permissions.js";

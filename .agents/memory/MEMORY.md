@@ -44,3 +44,5 @@
 - [Campaign System](campaign-system.md) — HAS_WHATSAPP_CAMPAIGNS gates Pro+; batch processor bulk-updates for no-provider path (10k rows ~1s); 2 tables: campaigns + campaign_recipients
 - [Payment Config & Manual Reconciliation](payment-config-reconciliation.md) — paymentDetails lives on laundries.businessProfile JSONB, sole source of truth; duplicate-payment detection thresholds; public vs owner-gated pricing routing
 - [Payment & Billing Automation (Paystack)](payment-billing-automation.md) — recurring charges via saved-authorization + own scheduler, not native Paystack subscriptions; webhook dedup table + re-verify-before-activate; transactional emails bypass lifecycle dedup
+- [Service Catalog & Image Management](service-catalog-images.md) — imageUrl null/"icon:<key>"/URL convention; swappable local-disk StorageDriver; serviceBranches join table (empty = all branches)
+- [pnpm workspace package installs](pnpm-workspace-installs.md) — installLanguagePackages targeted repo root instead of the workspace member and corrupted node_modules; use `pnpm --filter <pkg> add` directly in this monorepo

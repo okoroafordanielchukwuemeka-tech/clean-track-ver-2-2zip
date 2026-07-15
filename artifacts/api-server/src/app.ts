@@ -18,6 +18,7 @@ import {
 import { trackError } from "./lib/error-tracker.js";
 import { logError } from "./lib/logger.js";
 import type { AuthRequest } from "./middleware/auth.js";
+import { getStorageRoot, STORAGE_PUBLIC_PREFIX } from "./lib/storage.js";
 
 const app = express();
 
@@ -72,6 +73,10 @@ app.use(
     credentials: true,
   })
 );
+
+// ── Static service image storage (Phase 7.10) ─────────────────────────────
+// Serves locally-stored, resized/compressed service images and thumbnails.
+app.use(STORAGE_PUBLIC_PREFIX, express.static(getStorageRoot(), { maxAge: "7d", immutable: true }));
 
 // ── Body parsing ──────────────────────────────────────────────────────────
 // Webhook route must receive the raw body buffer so we can compute the

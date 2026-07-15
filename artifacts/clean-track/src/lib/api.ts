@@ -78,6 +78,21 @@ async function request<T>(method: string, path: string, body?: unknown, idempote
     body: body ? JSON.stringify(body) : undefined,
   });
 
+  return handleResponse<T>(res, path);
+}
+
+/** Like request(), but sends a FormData body (multipart) — used for file uploads. Never JSON-stringifies or sets Content-Type (the browser sets the multipart boundary). */
+async function requestForm<T>(method: string, path: string, form: FormData): Promise<T> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  headers["X-Client-Version"] = APP_VERSION;
+
+  const res = await fetch(`${BASE_URL}${path}`, { method, headers, body: form });
+  return handleResponse<T>(res, path);
+}
+
+async function handleResponse<T>(res: Response, path: string): Promise<T> {
   checkVersionHeaders(res);
 
   if (res.status === 401) {
@@ -176,6 +191,41 @@ export const api = {
     archive: (id: number) => request<Service>("POST", `/services/${id}/archive`, {}),
     restore: (id: number) => request<Service>("POST", `/services/${id}/restore`, {}),
     reorder: (id: number, direction: "up" | "down") => request<Service[]>("POST", "/services/reorder", { id, direction }),
+    duplicate: (id: number) => request<Service>("POST", `/services/${id}/duplicate`, {}),
+    categories: () => request<string[]>("GET", "/services/categories"),
+    uploadImage: (id: number, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return requestForm<Service>("POST", `/services/${id}/image`, form);
+    },
+    deleteImage: (id: number) => request<Service>("DELETE", `/services/${id}/image`),
+    bulkArchive: (ids: number[]) => request<{ updated: number }>("POST", "/services/bulk/archive", { ids }),
+    bulkRestore: (ids: number[]) => request<{ updated: number }>("POST", "/services/bulk/restore", { ids }),
+    bulkDelete: (ids: number[]) => request<{ updated: number; note: string }>("POST", "/services/bulk/delete", { ids }),
+    bulkCategory: (ids: number[], category: string) => request<{ updated: number }>("POST", "/services/bulk/category", { ids, category }),
+    bulkPrice: (data: { ids: number[]; priceField: "standardPrice" | "expressPrice" | "premiumPrice"; mode: "set" | "increase_percent" | "decrease_percent" | "increase_amount" | "decrease_amount"; value: number }) =>
+      request<{ updated: number }>("POST", "/services/bulk/price", data),
+    exportCsv: async () => {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const res = await fetch(`${BASE_URL}/services/export`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new HttpError(res.status, "Failed to export services");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `services-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
+    importCsv: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return requestForm<{ created: number; skipped: number; errors: { row: number; error: string }[] }>("POST", "/services/import", form);
+    },
   },
   batches: {
     list: () => request<Batch[]>("GET", "/batches"),
@@ -198,6 +248,10 @@ export const api = {
     workerAnalytics: (branchId?: number | null) => {
       const qs = branchId ? `?branchId=${branchId}` : "";
       return request<WorkerAnalytics>("GET", `/analytics/workers${qs}`);
+    },
+    services: (branchId?: number | null) => {
+      const qs = branchId ? `?branchId=${branchId}` : "";
+      return request<ServiceAnalytics>("GET", `/analytics/services${qs}`);
     },
   },
   workers: {
@@ -830,6 +884,13 @@ export interface Service {
   premiumPrice?: number | null;
   isActive: boolean;
   displayOrder: number;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  /** null = available at every branch; array = restricted to these branch IDs */
+  branchIds?: number[] | null;
+  usageCount?: number;
+  revenue?: number;
+  lastUsedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -841,6 +902,28 @@ export interface ServiceInput {
   expressPrice?: number;
   premiumPrice?: number;
   isActive?: boolean;
+  imageUrl?: string | null;
+  branchIds?: number[] | null;
+}
+
+export interface ServiceAnalyticsRow {
+  id: number;
+  name: string;
+  category: string;
+  isActive: boolean;
+  itemCount: number;
+  orderCount: number;
+  popularityPercent: number;
+  revenue?: number;
+  avgOrderValue?: number;
+}
+
+export interface ServiceAnalytics {
+  services: ServiceAnalyticsRow[];
+  mostOrdered: ServiceAnalyticsRow[];
+  leastOrdered: ServiceAnalyticsRow[];
+  neverOrdered: ServiceAnalyticsRow[];
+  categoryPopularity: { category: string; itemCount: number; revenue?: number }[];
 }
 
 export interface Batch {

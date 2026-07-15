@@ -1,0 +1,388 @@
+PHASE 7.10 — SERVICE CATALOG & IMAGE MANAGEMENT
+
+IMPORTANT
+
+Do NOT begin Phase 8.
+
+Do NOT modify billing, subscriptions, documents, workflows, or permissions.
+
+This phase focuses ONLY on the Service Catalog experience.
+
+Before implementing anything:
+
+Audit the current Service Management module.
+
+Determine:
+
+1. How services are currently stored.
+2. Whether categories already exist.
+3. Whether images already exist.
+4. Whether branch-specific services are supported.
+5. Whether search already exists.
+6. Whether service ordering exists.
+7. Whether service analytics exist.
+
+If any feature already exists:
+
+Verify it works correctly.
+
+Do NOT rebuild it.
+
+Only fix defects.
+
+---
+
+SECTION 1 — Image Architecture
+
+Do NOT store image binaries inside PostgreSQL.
+
+Implement proper object storage.
+
+Current recommendation:
+
+• Replit Object Storage (current)
+OR
+
+Create a storage abstraction so Cloudflare R2 or Amazon S3 can be used later without changing business logic.
+
+Database should store ONLY:
+
+imageUrl
+
+Never store image blobs.
+
+Verify:
+
+Uploading
+
+Replacing
+
+Deleting
+
+Retrieving
+
+Thumbnail generation
+
+Unused image cleanup
+
+---
+
+SECTION 2 — Default Image Library
+
+CleanTrack should ship with built-in laundry service illustrations/icons.
+
+Examples:
+
+• Shirt
+• Trouser
+• Suit
+• Native Wear
+• Gown
+• Wedding Dress
+• Curtain
+• Blanket
+• Duvet
+• Pillow
+• Towel
+• Rug
+• Carpet
+• Sneakers
+• Leather Shoes
+• Canvas Shoes
+• School Uniform
+• Children's Clothes
+
+When a user creates a service:
+
+If the service name closely matches a built-in service:
+
+Suggest the default image automatically.
+
+Example:
+
+User types:
+
+White Shirt Premium
+
+Automatically suggest:
+
+Shirt image
+
+Owner can:
+
+Use default image
+
+OR
+
+Upload a custom image
+
+---
+
+SECTION 3 — Custom Uploads
+
+Allow owners to upload custom service images.
+
+Requirements:
+
+• JPG
+• PNG
+• WEBP
+
+Resize automatically.
+
+Compress automatically.
+
+Generate thumbnail automatically.
+
+Reject oversized files.
+
+Verify mobile uploads.
+
+---
+
+SECTION 4 — Service Categories
+
+Implement categories if missing.
+
+Suggested defaults:
+
+• Wash
+• Dry Clean
+• Ironing
+• Stain Removal
+• Alteration
+• Shoe Care
+• Household Items
+• Premium Services
+
+Services belong to one category.
+
+Categories can be filtered.
+
+---
+
+SECTION 5 — Search & Ordering
+
+Improve service selection.
+
+Support:
+
+Type-to-search
+
+Keyboard navigation
+
+Mobile search
+
+Instant filtering
+
+Sort by:
+
+Most Used
+
+Alphabetical
+
+Recently Used
+
+Price
+
+Category
+
+---
+
+SECTION 6 — Branch Availability
+
+Support branch-specific services.
+
+Example:
+
+Branch A
+
+Offers:
+
+Wash
+
+Iron
+
+Dry Clean
+
+Branch B
+
+Offers:
+
+Wash
+
+Iron
+
+Carpet Cleaning
+
+Workers should only see services available in their branch.
+
+Verify branch isolation.
+
+---
+
+SECTION 7 — Service Analytics
+
+Display:
+
+Most Ordered Services
+
+Least Ordered Services
+
+Revenue per Service
+
+Average Order Value per Service
+
+Service Popularity
+
+Category Popularity
+
+Use existing analytics architecture.
+
+---
+
+SECTION 8 — Bulk Operations
+
+Support:
+
+Duplicate Service
+
+Archive Service
+
+Restore Service
+
+Bulk Price Update
+
+Bulk Category Change
+
+Bulk Delete (soft delete only)
+
+---
+
+SECTION 9 — Import / Export
+
+Support CSV import/export.
+
+Verify:
+
+Duplicate detection
+
+Validation
+
+Rollback on failure
+
+---
+
+SECTION 10 — UX Improvements
+
+Improve service cards.
+
+Each service should display:
+
+Image
+
+Name
+
+Category
+
+Price
+
+Status
+
+Usage Count
+
+Branch Availability
+
+Quick Actions:
+
+Edit
+
+Duplicate
+
+Archive
+
+Delete
+
+---
+
+SECTION 11 — Testing
+
+Verify:
+
+Default image suggestion
+
+Custom upload
+
+Image replacement
+
+Image deletion
+
+Thumbnail generation
+
+Storage cleanup
+
+Branch isolation
+
+Search
+
+Categories
+
+Analytics
+
+Import
+
+Export
+
+Bulk operations
+
+Mobile responsiveness
+
+Performance with:
+
+500 services
+
+50 categories
+
+100 images
+
+---
+
+SECTION 12 — Final Report
+
+Provide:
+
+1. Image Storage Status
+
+2. Default Image Library Status
+
+3. Upload System Status
+
+4. Categories Status
+
+5. Search Status
+
+6. Branch Availability Status
+
+7. Analytics Status
+
+8. Bulk Operations Status
+
+9. Import/Export Status
+
+10. Failed Tests
+
+11. Fixed Issues
+
+12. Remaining Risks
+
+13. Production Readiness Score
+
+IMPORTANT
+
+If defects are found:
+
+Fix them.
+
+Re-test them.
+
+Do not begin Phase 8 until every Service Catalog feature passes verification.

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { orders, batches, workers, customers, pickupRecords, expenditures, laundries } from "@workspace/db/schema";
+import { orders, batches, workers, customers, pickupRecords, expenditures, laundries, services, orderItems } from "@workspace/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/subscription.js";
@@ -529,5 +529,87 @@ analyticsRouter.get("/sla", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to get SLA analytics" });
+  }
+});
+
+// GET /analytics/services — Phase 7.10: per-service popularity, revenue, avg order value.
+// Owners see revenue figures; workers get counts/popularity only (financial fields withheld,
+// consistent with the rest of this router's owner/worker split).
+analyticsRouter.get("/services", async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const isOwner = req.auth!.type === "owner";
+    const effectiveBranchId = getEffectiveBranchId(req);
+
+    const allServices = await db.select().from(services).where(eq(services.laundryId, laundryId));
+
+    const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
+    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+
+    const rows = await db
+      .select({
+        serviceId: orderItems.serviceId,
+        quantity: orderItems.quantity,
+        totalPrice: orderItems.totalPrice,
+        orderId: orderItems.orderId,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(and(...orderConditions));
+
+    const perService = new Map<number, { orderCount: number; itemCount: number; revenue: number; orderIds: Set<number> }>();
+    for (const r of rows) {
+      if (r.serviceId == null) continue;
+      const entry = perService.get(r.serviceId) ?? { orderCount: 0, itemCount: 0, revenue: 0, orderIds: new Set<number>() };
+      entry.itemCount += r.quantity;
+      entry.revenue += parseFloat(r.totalPrice);
+      entry.orderIds.add(r.orderId);
+      perService.set(r.serviceId, entry);
+    }
+
+    const totalItemCount = [...perService.values()].reduce((s, v) => s + v.itemCount, 0);
+
+    const serviceStats = allServices.map(s => {
+      const stats = perService.get(s.id);
+      const itemCount = stats?.itemCount ?? 0;
+      const orderCount = stats?.orderIds.size ?? 0;
+      const revenue = stats?.revenue ?? 0;
+      return {
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        isActive: s.isActive,
+        itemCount,
+        orderCount,
+        popularityPercent: totalItemCount > 0 ? Math.round((itemCount / totalItemCount) * 1000) / 10 : 0,
+        ...(isOwner ? {
+          revenue,
+          avgOrderValue: orderCount > 0 ? Math.round((revenue / orderCount) * 100) / 100 : 0,
+        } : {}),
+      };
+    });
+
+    const mostOrdered = [...serviceStats].sort((a, b) => b.itemCount - a.itemCount).slice(0, 10);
+    const leastOrdered = [...serviceStats].filter(s => s.itemCount > 0).sort((a, b) => a.itemCount - b.itemCount).slice(0, 10);
+    const neverOrdered = serviceStats.filter(s => s.itemCount === 0);
+
+    const byCategory = new Map<string, { itemCount: number; revenue: number }>();
+    for (const s of serviceStats) {
+      const entry = byCategory.get(s.category) ?? { itemCount: 0, revenue: 0 };
+      entry.itemCount += s.itemCount;
+      if (isOwner) entry.revenue += (s as any).revenue ?? 0;
+      byCategory.set(s.category, entry);
+    }
+
+    res.json({
+      services: serviceStats,
+      mostOrdered,
+      leastOrdered,
+      neverOrdered,
+      categoryPopularity: [...byCategory.entries()].map(([category, v]) => ({ category, ...v })).sort((a, b) => b.itemCount - a.itemCount),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to get service analytics" });
   }
 });

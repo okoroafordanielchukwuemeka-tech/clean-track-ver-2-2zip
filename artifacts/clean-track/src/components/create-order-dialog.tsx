@@ -87,8 +87,8 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   });
 
   const { data: services = [] } = useQuery({
-    queryKey: ["services"],
-    queryFn: () => api.services.list(),
+    queryKey: ["services", activeBranchId],
+    queryFn: () => api.services.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
     enabled: open,
   });
 
