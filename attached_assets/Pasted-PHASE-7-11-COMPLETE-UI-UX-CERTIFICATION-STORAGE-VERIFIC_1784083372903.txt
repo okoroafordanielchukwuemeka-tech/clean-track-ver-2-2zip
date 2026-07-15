@@ -1,0 +1,367 @@
+PHASE 7.11 — COMPLETE UI/UX CERTIFICATION & STORAGE VERIFICATION
+
+IMPORTANT
+
+This is the FINAL certification phase before beginning Phase 8.
+
+Do NOT add new business features.
+
+Do NOT begin Laundry Academy.
+
+Do NOT build AI Marketing enhancements.
+
+Do NOT modify billing, subscriptions, workflows, permissions, or analytics unless defects are found.
+
+The goal of this phase is to verify that CleanTrack feels like a polished commercial SaaS product.
+
+---
+
+SECTION 1 — Image Storage Verification
+
+Before changing anything:
+
+Audit exactly how uploaded service images are currently stored.
+
+Determine:
+
+• Are images stored in Replit Object Storage?
+• Are images stored only in the project directory?
+• Are images stored in temporary storage?
+• Are images persistent after application restart?
+• Are uploaded files safe across deployments?
+• Are thumbnails stored correctly?
+• Are image URLs permanent?
+
+If images are NOT using Replit Object Storage:
+
+Migrate them.
+
+Maintain the existing storage abstraction.
+
+Database must continue storing ONLY image URLs.
+
+Never store binary image data inside PostgreSQL.
+
+Provide evidence showing exactly where uploaded images are stored.
+
+---
+
+SECTION 2 — Manual UI Certification
+
+Perform a complete manual walkthrough.
+
+Do not rely only on API tests.
+
+Actually interact with every screen.
+
+Verify every button.
+
+Verify every dialog.
+
+Verify every dropdown.
+
+Verify every modal.
+
+Verify every empty state.
+
+Verify every loading state.
+
+Verify every success state.
+
+Verify every error state.
+
+---
+
+SECTION 3 — Service Management
+
+Test:
+
+Create service
+
+Edit service
+
+Delete service
+
+Archive service
+
+Restore service
+
+Upload image
+
+Replace image
+
+Delete image
+
+Use default image
+
+Bulk update
+
+CSV import
+
+CSV export
+
+Branch availability
+
+Search
+
+Sorting
+
+Categories
+
+Analytics
+
+Verify:
+
+Desktop
+
+Tablet
+
+Mobile
+
+---
+
+SECTION 4 — Order Workflow
+
+Walk through a complete order.
+
+Create customer
+
+Create order
+
+Search service
+
+Add services
+
+Apply discount
+
+Record payment
+
+Generate receipt
+
+Partial pickup
+
+Final pickup
+
+Generate pickup receipt
+
+Customer statement
+
+Verify every screen transition.
+
+---
+
+SECTION 5 — Customer Management
+
+Verify:
+
+Customer creation
+
+Editing
+
+Searching
+
+Filtering
+
+Statement generation
+
+History
+
+Outstanding balance
+
+Receipts
+
+Orders
+
+Empty state
+
+Large customer lists
+
+---
+
+SECTION 6 — Billing Experience
+
+Verify visually:
+
+Subscription cards
+
+Upgrade flow
+
+Payment history
+
+Invoice list
+
+Usage meters
+
+Renewal information
+
+Trial countdown
+
+Cancel subscription
+
+Reactivation
+
+Outstanding balance
+
+Empty states
+
+Error states
+
+---
+
+SECTION 7 — Navigation Audit
+
+Navigate through every menu.
+
+Verify:
+
+No dead links
+
+No duplicated navigation
+
+No confusing labels
+
+No hidden functionality
+
+No unnecessary clicks
+
+Maximum three clicks to reach any major feature.
+
+---
+
+SECTION 8 — Mobile UX
+
+Test on mobile viewport.
+
+Verify:
+
+Tables
+
+Cards
+
+Buttons
+
+Dialogs
+
+Uploads
+
+Search
+
+Dropdowns
+
+Forms
+
+Print views
+
+Nothing should overflow.
+
+Nothing should require horizontal scrolling.
+
+---
+
+SECTION 9 — Performance
+
+Verify:
+
+Large service list
+
+Large customer list
+
+Large order list
+
+Large receipt history
+
+Dashboard
+
+Analytics
+
+Image loading
+
+Search speed
+
+Sorting speed
+
+No noticeable lag.
+
+---
+
+SECTION 10 — Polish
+
+Identify every small UX issue.
+
+Examples:
+
+Buttons inconsistent
+
+Spacing inconsistent
+
+Misaligned icons
+
+Poor wording
+
+Duplicate labels
+
+Confusing colors
+
+Missing helper text
+
+Poor empty states
+
+Small visual bugs
+
+Fix every issue discovered.
+
+---
+
+SECTION 11 — Accessibility
+
+Verify:
+
+Keyboard navigation
+
+Focus states
+
+Tab order
+
+Contrast
+
+Button labels
+
+Form validation
+
+Mobile touch targets
+
+---
+
+SECTION 12 — Final Certification
+
+Provide:
+
+1. Image Storage Status
+
+2. UI Certification Status
+
+3. Mobile Status
+
+4. Navigation Status
+
+5. Performance Status
+
+6. Accessibility Status
+
+7. UX Improvements Made
+
+8. Failed Tests
+
+9. Fixed Issues
+
+10. Remaining Risks
+
+11. Screenshots
+
+12. Commercial Readiness Score
+
+IMPORTANT
+
+Do not begin Phase 8 until every issue found during this certification has been fixed and re-tested.
+
+This is intended to be the final quality gate before launching CleanTrack to real paying laundry businesses.
