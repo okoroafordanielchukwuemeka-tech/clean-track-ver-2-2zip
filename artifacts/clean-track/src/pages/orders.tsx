@@ -6,7 +6,7 @@ import { usePendingLocalOrders } from "@/hooks/use-pending-local";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,27 +26,7 @@ import { useBranch } from "@/context/branch-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Order } from "@/lib/api";
-
-function statusBadge(status: string) {
-  const map: Record<string, any> = {
-    pending: "warning",
-    processing: "info",
-    ready: "success",
-    partial_pickup: "warning",
-    completed: "success",
-  };
-  const label: Record<string, string> = {
-    partial_pickup: "Partial Pickup",
-    completed: "Completed",
-  };
-  return <Badge variant={map[status] || "outline"}>{label[status] ?? status}</Badge>;
-}
-
-function paymentBadge(status: string) {
-  const map: Record<string, any> = { unpaid: "destructive", partial: "warning", paid: "success" };
-  const labels: Record<string, string> = { unpaid: "Unpaid", partial: "Partial", paid: "Paid" };
-  return <Badge variant={map[status] || "outline"}>{labels[status] ?? status}</Badge>;
-}
+import { OrderStatusBadge, PaymentStatusBadge } from "@/lib/order-status";
 
 function formatCurrency(v: number | null | undefined) {
   if (v == null) return "—";
@@ -546,8 +526,8 @@ export default function Orders() {
                             : `${order.shirts}S / ${order.trousers}T`
                           }
                         </TableCell>
-                        <TableCell>{statusBadge(order.status)}</TableCell>
-                        <TableCell className="hidden sm:table-cell">{paymentBadge(order.paymentStatus)}</TableCell>
+                        <TableCell><OrderStatusBadge status={order.status} /></TableCell>
+                        <TableCell className="hidden sm:table-cell"><PaymentStatusBadge status={order.paymentStatus} /></TableCell>
                         <TableCell className="hidden sm:table-cell">{formatCurrency(order.price as any)}</TableCell>
                         <TableCell className="hidden lg:table-cell">
                           <CountdownTimer

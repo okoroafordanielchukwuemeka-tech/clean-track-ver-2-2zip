@@ -10,6 +10,7 @@ import { AdminProvider, useAdmin } from "@/context/admin-context";
 import AdminLogin from "@/pages/admin-login";
 import AdminCommandCenter from "@/pages/admin-command-center";
 import { ProtectedRoute } from "@/components/protected-route";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Layout } from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
 import Orders from "@/pages/orders";
@@ -84,6 +85,7 @@ function RootRedirect() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <AuthProvider>
@@ -144,5 +146,6 @@ export default function App() {
       </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

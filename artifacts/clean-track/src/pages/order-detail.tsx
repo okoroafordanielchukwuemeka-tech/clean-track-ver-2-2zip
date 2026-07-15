@@ -13,6 +13,7 @@ import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency, shouldShowTimer } from "@/lib/urgency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { OrderStatusBadge, PaymentStatusBadge } from "@/lib/order-status";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,19 +106,6 @@ function formatCurrency(v: number | null | undefined) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(Number(v));
 }
 
-function statusBadge(s: string) {
-  const map: Record<string, any> = {
-    pending: "warning", processing: "info", ready: "success",
-    partial_pickup: "warning", completed: "success",
-  };
-  const label: Record<string, string> = { partial_pickup: "Partial Pickup", completed: "Completed" };
-  return <Badge variant={map[s] || "outline"}>{label[s] ?? s}</Badge>;
-}
-
-function paymentBadge(s: string) {
-  const map: Record<string, any> = { unpaid: "destructive", partial: "warning", paid: "success" };
-  return <Badge variant={map[s] || "outline"}>{s}</Badge>;
-}
 
 // ── Tab types ────────────────────────────────────────────────────────────────
 
@@ -635,8 +623,8 @@ export default function OrderDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap sm:ml-auto pl-12 sm:pl-0">
-          {statusBadge(order.status)}
-          {paymentBadge(order.paymentStatus)}
+          <OrderStatusBadge status={order.status} />
+          <PaymentStatusBadge status={order.paymentStatus} />
           {order.isVerified && (
             <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />Verified</Badge>
           )}

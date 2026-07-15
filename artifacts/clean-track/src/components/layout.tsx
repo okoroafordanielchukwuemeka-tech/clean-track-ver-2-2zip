@@ -140,7 +140,7 @@ export function Layout() {
           <WashingMachine className="h-7 w-7 text-sidebar-primary" />
           <div className="min-w-0">
             <h1 className="text-lg font-bold text-white truncate">
-              {isOwner ? user?.name : "Clean Track"}
+              {isOwner ? user?.name : "CleanTrack"}
             </h1>
             <p className="text-xs text-sidebar-foreground/60">
               {isOwner
@@ -263,7 +263,7 @@ export function Layout() {
           </Button>
           <div className="flex items-center gap-2 flex-1">
             <WashingMachine className="h-5 w-5 text-primary" />
-            <span className="font-bold">Clean Track</span>
+            <span className="font-bold">CleanTrack</span>
           </div>
           <div className="bg-sidebar rounded-lg">
             <NotificationCenter />

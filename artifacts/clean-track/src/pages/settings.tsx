@@ -649,7 +649,7 @@ function WorkerPermissionsSection() {
   if (workersLoading) {
     return (
       <div>
-        <SectionHeader title="Worker Permissions" description="Configure what each worker can do in Clean Track." />
+        <SectionHeader title="Worker Permissions" description="Configure what each worker can do in CleanTrack." />
         <SkeletonRows rows={4} />
       </div>
     );
@@ -658,7 +658,7 @@ function WorkerPermissionsSection() {
   if (!workers || workers.length === 0) {
     return (
       <div>
-        <SectionHeader title="Worker Permissions" description="Configure what each worker can do in Clean Track." />
+        <SectionHeader title="Worker Permissions" description="Configure what each worker can do in CleanTrack." />
         <div className="text-center py-12 text-muted-foreground">
           <Shield className="h-8 w-8 mx-auto mb-2 opacity-40" />
           <p className="text-sm">No workers yet. Add workers first to manage permissions.</p>

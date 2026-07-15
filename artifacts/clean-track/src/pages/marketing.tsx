@@ -192,7 +192,7 @@ export default function MarketingPage() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-2xl font-bold">AI Marketing Assistant</h1>
+          <h1 className="text-2xl font-bold">AI Marketing</h1>
           <Badge variant="secondary" className="gap-1">
             <Sparkles className="h-3 w-3" />
             Professional+

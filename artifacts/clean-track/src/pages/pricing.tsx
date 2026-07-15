@@ -58,7 +58,7 @@ export default function Pricing() {
               <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center">
                 <WashingMachine className="h-5 w-5 text-white" />
               </div>
-              Clean Track
+              CleanTrack
             </Link>
           </div>
           <h1 className="text-4xl font-bold text-white">Simple, honest pricing</h1>

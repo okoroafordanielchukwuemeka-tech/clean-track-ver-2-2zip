@@ -712,7 +712,7 @@ export default function Dashboard() {
                       <Link to="/orders?status=partial_pickup" className="flex items-center gap-3 p-2.5 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors">
                         <ShoppingBag className="h-4 w-4 text-orange-600 shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-orange-800 dark:text-orange-400">{full?.alerts.partialPickupCount} partial pickups</p>
+                          <p className="text-sm font-medium text-orange-800 dark:text-orange-400">{full?.alerts.partialPickupCount} Partial Pickups</p>
                           <p className="text-xs text-orange-600 dark:text-orange-500">{ov?.totalRemainingItems} items still waiting</p>
                         </div>
                         <ArrowUpRight className="h-3.5 w-3.5 text-orange-500 shrink-0" />

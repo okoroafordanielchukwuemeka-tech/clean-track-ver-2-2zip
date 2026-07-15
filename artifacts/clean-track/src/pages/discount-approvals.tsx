@@ -8,18 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Clock, ExternalLink, Percent, User, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { DiscountStatusBadge } from "@/lib/order-status";
 
 const fmt = (v: number | string) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(Number(v));
 
 function fmtTime(d: string) {
   return new Date(d).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function statusBadge(status: string) {
-  if (status === "pending") return <Badge variant="warning" className="gap-1"><Clock className="h-3 w-3" />Pending</Badge>;
-  if (status === "approved") return <Badge variant="success" className="gap-1"><CheckCircle className="h-3 w-3" />Approved</Badge>;
-  return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>;
 }
 
 function DiscountCard({ approval, onApprove, onReject, isPending }: {
@@ -37,7 +32,7 @@ function DiscountCard({ approval, onApprove, onReject, isPending }: {
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            {statusBadge(approval.status)}
+            <DiscountStatusBadge status={approval.status} />
             <span className="text-xs text-muted-foreground">{fmtTime(approval.createdAt)}</span>
           </div>
           {approval.status === "pending" && (

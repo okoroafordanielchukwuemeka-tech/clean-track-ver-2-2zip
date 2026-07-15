@@ -57,7 +57,7 @@ export default function WorkerLogin() {
             <WashingMachine className="h-9 w-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">Worker Login</h1>
-          <p className="text-slate-400 mt-1">Clean Track Worker Station</p>
+          <p className="text-slate-400 mt-1">CleanTrack Worker Station</p>
         </div>
 
         {/* Demo worker shortcut */}

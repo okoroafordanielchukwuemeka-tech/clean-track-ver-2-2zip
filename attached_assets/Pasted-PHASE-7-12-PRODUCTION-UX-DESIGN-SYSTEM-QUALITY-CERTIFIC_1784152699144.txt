@@ -1,0 +1,483 @@
+PHASE 7.12 — PRODUCTION UX, DESIGN SYSTEM & QUALITY CERTIFICATION
+
+IMPORTANT
+
+CleanTrack is no longer in MVP.
+
+Do NOT build new customer-facing features during this phase.
+
+Focus exclusively on making the existing product feel like a premium SaaS built by an experienced product team.
+
+Think like the design teams behind:
+
+• Stripe
+• Shopify
+• Linear
+• Notion
+• Slack
+
+The objective is consistency, polish, usability, speed, and trust.
+
+---
+
+PART 1 — FULL UI AUDIT
+
+Audit EVERY page.
+
+Include:
+
+Dashboard
+
+Orders
+
+Order Details
+
+Customers
+
+Customer Hub
+
+Services
+
+Receipts
+
+Expenditures
+
+Workers
+
+Branches
+
+Discount Requests
+
+Worker Station
+
+Operations
+
+Analytics
+
+Marketing
+
+Settings
+
+Billing
+
+Admin Command Center
+
+Verify:
+
+• consistent spacing
+• alignment
+• typography
+• shadows
+• card styles
+• buttons
+• inputs
+• dropdowns
+• badges
+• tables
+• tabs
+• empty states
+• loading states
+• success states
+• error states
+
+If inconsistencies exist:
+
+Fix them.
+
+---
+
+PART 2 — DESIGN SYSTEM
+
+Create a single reusable design system.
+
+Standardize:
+
+Border radius
+
+Button sizes
+
+Icon sizes
+
+Typography scale
+
+Spacing scale
+
+Card layouts
+
+Alert styles
+
+Modal layouts
+
+Tables
+
+Form controls
+
+Status badges
+
+Colors
+
+Hover effects
+
+Focus states
+
+Disabled states
+
+Loading indicators
+
+Skeleton loaders
+
+Every component should use the shared design system.
+
+Remove duplicate styling.
+
+---
+
+PART 3 — INTERACTION POLISH
+
+Audit every interaction.
+
+Verify:
+
+Hover animations
+
+Button feedback
+
+Loading indicators
+
+Success notifications
+
+Error notifications
+
+Form validation
+
+Keyboard navigation
+
+Modal transitions
+
+Page transitions
+
+Drawer behavior
+
+Search responsiveness
+
+If any interaction feels abrupt or inconsistent:
+
+Improve it.
+
+---
+
+PART 4 — EMPTY STATES
+
+Every page with zero data must have a professional empty state.
+
+Each empty state should include:
+
+Illustration or icon
+
+Helpful explanation
+
+Primary CTA
+
+Optional secondary CTA
+
+Examples:
+
+"No services yet"
+
+"No customers yet"
+
+"No orders yet"
+
+"No expenditures yet"
+
+"No receipts yet"
+
+"No campaigns yet"
+
+Avoid blank tables.
+
+---
+
+PART 5 — LOADING EXPERIENCE
+
+Replace spinners where appropriate with skeleton loaders.
+
+Audit:
+
+Dashboard
+
+Orders
+
+Customers
+
+Services
+
+Analytics
+
+Receipts
+
+Billing
+
+Settings
+
+Worker Station
+
+Loading should never feel frozen.
+
+---
+
+PART 6 — RESPONSIVE CERTIFICATION
+
+Test:
+
+Desktop
+
+Tablet
+
+Mobile
+
+Verify:
+
+Cards
+
+Tables
+
+Dialogs
+
+Navigation
+
+Forms
+
+Images
+
+Charts
+
+Buttons
+
+Search
+
+Overflow
+
+Scrolling
+
+Touch targets
+
+Fix every responsive issue.
+
+---
+
+PART 7 — ACCESSIBILITY
+
+Audit:
+
+Contrast
+
+ARIA labels
+
+Keyboard navigation
+
+Focus rings
+
+Screen reader labels
+
+Button labels
+
+Image alt text
+
+Form validation announcements
+
+Tab order
+
+Fix accessibility issues.
+
+---
+
+PART 8 — PERFORMANCE
+
+Measure:
+
+Initial page load
+
+Dashboard render
+
+Orders search
+
+Customer search
+
+Service search
+
+Analytics rendering
+
+Image loading
+
+Navigation speed
+
+Find bottlenecks.
+
+Optimize where possible.
+
+Do not introduce regressions.
+
+---
+
+PART 9 — PRODUCT CONSISTENCY
+
+Verify terminology is consistent.
+
+Example:
+
+Customer
+
+Worker
+
+Order
+
+Receipt
+
+Invoice
+
+Pickup
+
+Partial Pickup
+
+Branch
+
+Discount
+
+Billing
+
+Subscription
+
+Use identical wording everywhere.
+
+Fix inconsistent labels.
+
+---
+
+PART 10 — BRANDING
+
+Verify:
+
+Logo
+
+Favicon
+
+Browser title
+
+Loading screen
+
+Email branding
+
+Receipt branding
+
+Invoice branding
+
+Error pages
+
+404 page
+
+500 page
+
+Maintenance page
+
+PWA metadata
+
+Open Graph metadata
+
+Everything should consistently reflect the CleanTrack brand.
+
+Remove placeholder assets and default framework branding.
+
+---
+
+PART 11 — FINAL UX TEST
+
+Walk through the complete owner workflow:
+
+Login
+
+Create customer
+
+Create order
+
+Search service
+
+Upload service image
+
+Record payment
+
+Request discount
+
+Approve discount
+
+Assign batch
+
+Mark ready
+
+Partial pickup
+
+Final pickup
+
+Receipt
+
+Analytics
+
+Billing
+
+Logout
+
+Repeat for Worker workflow.
+
+Verify:
+
+No dead ends
+
+No confusing UI
+
+No broken states
+
+No unnecessary clicks
+
+No duplicate actions
+
+No visual glitches
+
+No console errors
+
+---
+
+PART 12 — QUALITY CERTIFICATION REPORT
+
+Provide:
+
+1. UI Audit Results
+
+2. Components Standardized
+
+3. UX Improvements
+
+4. Accessibility Results
+
+5. Responsive Results
+
+6. Performance Results
+
+7. Branding Results
+
+8. Bugs Fixed
+
+9. Remaining Risks
+
+10. Screenshots (Before / After where applicable)
+
+11. Design System Summary
+
+12. Production UX Readiness Score
+
+IMPORTANT
+
+Do NOT start Phase 8.
+
+Do NOT add new business features.
+
+Complete this quality certification before moving to customer communication, WhatsApp automation, PDF enhancements, SMS, or marketing features.

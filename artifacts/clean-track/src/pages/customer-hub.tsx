@@ -516,14 +516,14 @@ function OverviewTab({ onNavigateToTab }: { onNavigateToTab: (tab: string) => vo
           return;
         }
 
-        console.log("[whatsapp] fb.login callback fired before FINISH message — polling for WABA data");
+        // Polling for WABA data from WhatsApp embedded signup FINISH message
         const pollIntervalMs = 100;
         const maxWaitMs = 4000;
         let waitedMs = 0;
         const poll = setInterval(() => {
           if (pendingWabaRef.current) {
             clearInterval(poll);
-            console.log("[whatsapp] FINISH message arrived after", waitedMs, "ms — proceeding");
+            // FINISH message arrived — proceeding with WABA connection
             proceedWithWaba(pendingWabaRef.current);
             return;
           }

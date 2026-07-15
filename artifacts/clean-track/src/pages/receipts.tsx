@@ -6,27 +6,17 @@ import { useAuth } from "@/context/auth-context";
 import { api, type ReceiptListItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ReceiptView } from "@/components/receipt-view";
 import { Receipt, Search, Eye, Printer, TrendingUp, DollarSign, AlertTriangle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { PaymentStatusBadge, PaymentMethodBadge } from "@/lib/order-status";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
-}
-
-function methodBadge(method: string) {
-  const map: Record<string, "default" | "success" | "info"> = { cash: "success", transfer: "info", pos: "default" };
-  const labels: Record<string, string> = { cash: "Cash", transfer: "Transfer", pos: "POS" };
-  return <Badge variant={map[method] ?? "outline"} className="text-xs">{labels[method] ?? method}</Badge>;
-}
-
-function statusBadge(status: string) {
-  const map: Record<string, any> = { paid: "success", partial: "warning", unpaid: "destructive" };
-  return <Badge variant={map[status] ?? "outline"} className="text-xs capitalize">{status}</Badge>;
 }
 
 type DateRange = "all" | "today" | "7days" | "30days" | "custom";
@@ -223,14 +213,14 @@ export default function Receipts() {
                       {new Date(r.recordedAt).toLocaleDateString("en-NG")}
                       <div className="text-xs">{new Date(r.recordedAt).toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}</div>
                     </TableCell>
-                    <TableCell>{methodBadge(r.method)}</TableCell>
+                    <TableCell><PaymentMethodBadge method={r.method} className="text-xs" /></TableCell>
                     <TableCell className="text-right font-medium">{fmt(Number(r.amount))}</TableCell>
                     <TableCell className="text-right">
                       {Number(r.remainingBalance) > 0
                         ? <span className="text-red-600 font-medium text-sm">{fmt(Number(r.remainingBalance))}</span>
                         : <span className="text-green-600 text-xs">Clear</span>}
                     </TableCell>
-                    <TableCell>{statusBadge(r.paymentStatus)}</TableCell>
+                    <TableCell><PaymentStatusBadge status={r.paymentStatus} className="text-xs" /></TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" title="View receipt" onClick={() => setSelectedReceiptNumber(r.receiptNumber)}>
