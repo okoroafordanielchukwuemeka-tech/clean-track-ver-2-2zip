@@ -84,6 +84,10 @@ R2_BUCKET_NAME=cleantrack-backups
 
 See `.env.example` for the full list of required and optional variables.
 
+## Replit Setup (updated 2026-07-15)
+- Re-imported project: ran `pnpm install` (node_modules had been dropped by the import) and restarted the workflow — everything else (secrets, DB, workflow config) was already in place from before
+- Verified: API `/api/healthz` returns healthy, frontend login page renders correctly on port 5000
+
 ## Replit Setup (updated 2026-07-14)
 - Dependencies installed via `pnpm install` (661 packages)
 - `JWT_SECRET` and `BACKUP_SECRET` stored as Replit shared env vars
