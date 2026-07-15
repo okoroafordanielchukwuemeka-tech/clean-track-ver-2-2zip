@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ImageOff } from "lucide-react";
 import { DEFAULT_SERVICE_ICONS, resolveServiceImage, getIconByKey } from "@/lib/service-icons";
 import { cn } from "@/lib/utils";
 
@@ -8,15 +10,27 @@ export function ServiceImage({ name, imageUrl, className, iconClassName }: {
   className?: string;
   iconClassName?: string;
 }) {
+  const [imgError, setImgError] = useState(false);
   const resolved = resolveServiceImage(name, imageUrl);
 
-  if (resolved.kind === "photo") {
+  if (resolved.kind === "photo" && !imgError) {
     return (
       <img
         src={resolved.url}
         alt={name}
+        loading="lazy"
         className={cn("object-cover", className)}
+        onError={() => setImgError(true)}
       />
+    );
+  }
+
+  // Broken-image fallback: show a professional placeholder instead of browser's broken-image icon
+  if (resolved.kind === "photo" && imgError) {
+    return (
+      <div className={cn("flex flex-col items-center justify-center gap-1 bg-muted text-muted-foreground/40", className)} title="Image unavailable">
+        <ImageOff className={cn("h-2/3 w-2/3", iconClassName)} />
+      </div>
     );
   }
 

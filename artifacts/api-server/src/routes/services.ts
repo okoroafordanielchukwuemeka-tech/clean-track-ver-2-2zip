@@ -554,7 +554,23 @@ servicesRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
 });
 
 // POST /services/:id/image — upload a custom photo (multipart field "file"); resizes, compresses, generates thumbnail
-servicesRouter.post("/:id/image", requireOwner, upload.single("file"), async (req: AuthRequest, res) => {
+servicesRouter.post("/:id/image", requireOwner, async (req: AuthRequest, res) => {
+  // Run multer inline so LIMIT_FILE_SIZE and UNSUPPORTED_TYPE errors are caught here,
+  // not forwarded to the global error handler (multer calls next(err), not throw).
+  const multerErr = await new Promise<any>((resolve) =>
+    upload.single("file")(req as any, res as any, (err) => resolve(err ?? null))
+  );
+  if (multerErr) {
+    if (multerErr.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Image is too large. Maximum size is 5MB." });
+    }
+    if (multerErr.message === "UNSUPPORTED_TYPE") {
+      return res.status(400).json({ error: "Unsupported file type. Upload a JPG, PNG, or WEBP image." });
+    }
+    console.error("[image-upload] multer error:", multerErr);
+    return res.status(400).json({ error: "Could not read uploaded file." });
+  }
+
   try {
     const laundryId = req.auth!.laundryId;
     const id = parseInt(req.params.id);
@@ -580,13 +596,7 @@ servicesRouter.post("/:id/image", requireOwner, upload.single("file"), async (re
       .returning();
 
     res.json(updated);
-  } catch (err: any) {
-    if (err?.message === "UNSUPPORTED_TYPE") {
-      return res.status(400).json({ error: "Unsupported file type. Upload a JPG, PNG, or WEBP image." });
-    }
-    if (err?.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Image is too large. Maximum size is 5MB." });
-    }
+  } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to upload image" });
   }
