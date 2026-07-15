@@ -1,0 +1,318 @@
+PHASE 7.11.1 — CLOUDINARY IMAGE SYSTEM CERTIFICATION
+
+IMPORTANT
+
+Do NOT implement new features.
+
+Do NOT begin Phase 8.
+
+This phase is strictly a verification, bug-fixing, and certification pass for the new Cloudinary image system.
+
+Assume nothing works until it has been tested.
+
+Every test must be performed using the real frontend, real backend, real database, and the live Cloudinary account already configured.
+
+---
+
+## OBJECTIVE
+
+Completely validate the Cloudinary migration and ensure there are no broken image workflows anywhere in CleanTrack.
+
+Fix every issue discovered before completing this phase.
+
+---
+
+## SECTION 1 — Upload Workflow
+
+Perform a complete frontend test.
+
+Create a brand-new service.
+
+Upload:
+
+* JPG
+* PNG
+* WEBP
+
+Verify:
+
+* upload succeeds
+* preview appears immediately
+* image displays on the Services page
+* image persists after page refresh
+* Cloudinary URL is saved in the database
+* thumbnail URL is generated correctly
+* no browser console errors
+* no failed network requests
+
+Provide screenshots.
+
+---
+
+## SECTION 2 — Replace Image
+
+Choose an existing service.
+
+Replace its image.
+
+Verify:
+
+* old image disappears
+* new image appears immediately
+* thumbnail updates
+* browser cache does not show stale images
+* database points to the new Cloudinary asset
+* previous Cloudinary asset is deleted
+
+Confirm no orphaned image remains.
+
+Provide before/after screenshots.
+
+---
+
+## SECTION 3 — Duplicate Service
+
+Duplicate a service that already contains an image.
+
+Verify the intended behaviour.
+
+If the product intentionally shares the same Cloudinary asset:
+
+* confirm this is documented.
+
+If duplicates should have independent images:
+
+* verify a new Cloudinary asset is created.
+
+Ensure no broken image links.
+
+Provide screenshots.
+
+---
+
+## SECTION 4 — Archive / Restore
+
+Archive a service with an image.
+
+Verify:
+
+* image still renders correctly in archived view
+* restore returns image correctly
+* image URL never changes
+* no missing thumbnails
+
+Provide screenshots.
+
+---
+
+## SECTION 5 — Delete Service
+
+Delete a service containing an image.
+
+Verify:
+
+* database record removed
+* Cloudinary asset deleted
+* thumbnail removed
+* no orphan assets remain
+* no broken links remain
+
+Confirm deletion using the Cloudinary API.
+
+---
+
+## SECTION 6 — CSV Import / Export
+
+Export services.
+
+Verify:
+
+* image URLs export correctly.
+
+Import services.
+
+Verify:
+
+* import behaves correctly
+* existing Cloudinary URLs remain valid
+* imported services render images correctly
+
+If images are intentionally excluded from CSV import, confirm and document this behaviour.
+
+---
+
+## SECTION 7 — Branch Availability
+
+Verify services restricted to individual branches.
+
+Confirm images render correctly:
+
+* Branch A
+* Branch B
+* Owner view
+
+No missing images.
+
+---
+
+## SECTION 8 — Search / Sort / Filters
+
+Verify:
+
+* search
+* category filter
+* alphabetical sort
+* recently used
+* most used
+* price sorting
+
+Confirm images never disappear during filtering.
+
+---
+
+## SECTION 9 — Responsive UI
+
+Test:
+
+Desktop
+
+Tablet
+
+Mobile
+
+Verify:
+
+* images scale correctly
+* cards remain aligned
+* thumbnails stay proportional
+* no layout overflow
+* no cropped icons
+* no broken placeholders
+
+Provide screenshots for each breakpoint.
+
+---
+
+## SECTION 10 — Accessibility
+
+Verify:
+
+* image alt text
+* keyboard navigation
+* screen reader labels where appropriate
+* loading states
+* empty states
+* broken-image fallback
+
+If an image cannot load:
+
+Display a professional placeholder instead of a broken browser icon.
+
+---
+
+## SECTION 11 — Performance
+
+Stress-test with:
+
+* 100 services
+* 500 services
+* 1000 services
+
+Measure:
+
+* initial page load
+* scrolling performance
+* lazy loading
+* thumbnail loading
+* network requests
+* duplicate downloads
+
+Verify browser caching works correctly.
+
+---
+
+## SECTION 12 — Cloudinary Audit
+
+Inspect the Cloudinary account.
+
+Verify:
+
+* no orphan assets
+* folder organisation is correct
+* filenames are consistent
+* thumbnails are generated correctly
+* transformations work
+* upload presets (if used) are correct
+
+Provide:
+
+* total asset count
+* total storage used
+* optimisation status
+
+---
+
+## SECTION 13 — Security
+
+Attempt:
+
+* invalid upload
+* oversized upload
+* unsupported file type
+* malicious filename
+* duplicate upload
+* deleted asset access
+
+Verify:
+
+* correct validation
+* no crashes
+* no leaked information
+
+---
+
+## SECTION 14 — Regression Testing
+
+Verify that Cloudinary integration did NOT break:
+
+* Orders
+* Customers
+* Receipts
+* Expenditures
+* Billing
+* Analytics
+* Branch Management
+* Discount Workflow
+* Worker Station
+
+No regressions.
+
+---
+
+## FINAL REPORT
+
+Provide:
+
+1. Cloudinary Integration Status
+2. Upload Workflow Status
+3. Replace Workflow Status
+4. Duplicate Workflow Status
+5. Archive / Restore Status
+6. Delete Workflow Status
+7. CSV Status
+8. Responsive UI Status
+9. Accessibility Status
+10. Performance Results
+11. Cloudinary Storage Audit
+12. Security Results
+13. Bugs Found
+14. Bugs Fixed
+15. Remaining Risks
+16. Screenshots
+17. Launch Readiness Score
+
+IMPORTANT
+
+Do not state that anything works unless it has been verified through live testing.
+
+Every claim must be backed by actual test evidence or screenshots.
