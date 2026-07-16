@@ -772,7 +772,10 @@ export default function Dashboard() {
                     );
                   })}
                   {!recent?.length && (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">No orders yet</p>
+                    <div className="px-4 py-10 text-center text-muted-foreground">
+                      <p className="text-sm font-medium">No orders yet</p>
+                      <p className="text-xs mt-1">Orders you create will appear here.</p>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -866,7 +869,7 @@ export default function Dashboard() {
               {workerData ? (
                 <>
                   {workerData.workers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No workers configured yet</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">No workers added yet — go to Workers to create your team.</p>
                   ) : (
                     <div className="space-y-2.5">
                       {workerData.workers.filter(w => w.isActive).map((w) => (

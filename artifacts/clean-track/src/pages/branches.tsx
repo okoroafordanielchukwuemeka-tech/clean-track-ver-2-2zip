@@ -62,11 +62,11 @@ export default function BranchesPage() {
     mutationFn: (data: { name: string; address?: string }) => api.branches.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["branches"] });
-      toast.success("Branch created");
+      toast.success("Branch created successfully");
       setDialogOpen(false);
       setForm({ name: "", address: "" });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not create branch — " + (e.message || "please try again.")),
   });
 
   const updateMut = useMutation({
@@ -74,11 +74,11 @@ export default function BranchesPage() {
       api.branches.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["branches"] });
-      toast.success("Branch updated");
+      toast.success("Branch details updated");
       setEditing(null);
       setDialogOpen(false);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update branch — " + (e.message || "please try again.")),
   });
 
   const deleteMut = useMutation({
@@ -88,7 +88,7 @@ export default function BranchesPage() {
       toast.success("Branch deleted");
       setDeleteId(null);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete branch — " + (e.message || "please try again.")),
   });
 
   const handleOpen = (branch?: typeof branches[0]) => {

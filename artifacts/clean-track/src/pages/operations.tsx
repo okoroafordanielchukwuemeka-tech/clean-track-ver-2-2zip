@@ -236,7 +236,7 @@ function AuditLogTab() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading...</div>
+        <div className="space-y-2 py-4 px-2 animate-pulse">{[...Array(4)].map((_,i)=><div key={i} className="h-8 bg-muted rounded" />)}</div>
       ) : entries.length === 0 ? (
         <EmptyState label="audit log entries" />
       ) : (
@@ -347,7 +347,7 @@ function PaymentsTab() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading...</div>
+        <div className="space-y-2 py-4 px-2 animate-pulse">{[...Array(4)].map((_,i)=><div key={i} className="h-8 bg-muted rounded" />)}</div>
       ) : payments.length === 0 ? (
         <EmptyState label="payments" />
       ) : (
@@ -449,7 +449,7 @@ function PickupsTab() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading...</div>
+        <div className="space-y-2 py-4 px-2 animate-pulse">{[...Array(4)].map((_,i)=><div key={i} className="h-8 bg-muted rounded" />)}</div>
       ) : pickups.length === 0 ? (
         <EmptyState label="pickups" />
       ) : (
@@ -569,7 +569,7 @@ function WorkerActivityTab() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading...</div>
+        <div className="space-y-2 py-4 px-2 animate-pulse">{[...Array(4)].map((_,i)=><div key={i} className="h-8 bg-muted rounded" />)}</div>
       ) : entries.length === 0 ? (
         <EmptyState label="worker actions" />
       ) : (
@@ -649,7 +649,7 @@ function HealthTab() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading...</div>
+        <div className="space-y-2 py-4 px-2 animate-pulse">{[...Array(4)].map((_,i)=><div key={i} className="h-8 bg-muted rounded" />)}</div>
       ) : !health ? null : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>
@@ -833,7 +833,7 @@ function SyncHealthTab() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm animate-pulse">Loading...</div>
+        <div className="space-y-2 py-4 px-2 animate-pulse">{[...Array(4)].map((_,i)=><div key={i} className="h-8 bg-muted rounded" />)}</div>
       ) : devices.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">
           <Monitor className="h-8 w-8 mx-auto mb-3 opacity-30" />

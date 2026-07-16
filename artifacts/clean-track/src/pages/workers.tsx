@@ -53,9 +53,9 @@ export default function Workers() {
       qc.invalidateQueries({ queryKey: ["workers"] });
       setShowDialog(false);
       setForm(emptyForm);
-      toast.success("Worker added");
+      toast.success("Worker added successfully");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not add worker — " + (e.message || "please try again.")),
   });
 
   const updateMutation = useMutation({
@@ -65,9 +65,9 @@ export default function Workers() {
       setShowDialog(false);
       setEditId(null);
       setForm(emptyForm);
-      toast.success("Worker updated");
+      toast.success("Worker details updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update worker — " + (e.message || "please try again.")),
   });
 
   const deleteMutation = useMutation({
@@ -77,7 +77,7 @@ export default function Workers() {
       setShowDelete(null);
       toast.success("Worker removed");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not remove worker — " + (e.message || "please try again.")),
   });
 
   const openEdit = (w: any) => {

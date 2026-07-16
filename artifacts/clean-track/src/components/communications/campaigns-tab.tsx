@@ -588,7 +588,7 @@ function CampaignDetail({
       qc.invalidateQueries({ queryKey: ["campaign-detail", campaign.id] });
       toast.success(`${data.message}`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not send campaign — " + (e.message || "please try again.")),
   });
 
   const { mutate: cancelCampaign, isPending: isCancelling } = useMutation({
@@ -598,7 +598,7 @@ function CampaignDetail({
       qc.invalidateQueries({ queryKey: ["campaign-detail", campaign.id] });
       toast.success("Campaign cancelled");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not cancel campaign — " + (e.message || "please try again.")),
   });
 
   const { mutate: retryCampaign, isPending: isRetrying } = useMutation({
@@ -608,7 +608,7 @@ function CampaignDetail({
       qc.invalidateQueries({ queryKey: ["campaign-detail", campaign.id] });
       toast.success(`Retrying ${data.recipientsQueued} failed messages`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not retry campaign — " + (e.message || "please try again.")),
   });
 
   const c = detail ?? campaign;
@@ -758,7 +758,7 @@ function CampaignCard({
       qc.invalidateQueries({ queryKey: ["campaigns"] });
       toast.success(data.message);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not send campaign — " + (e.message || "please try again.")),
   });
 
   return (
@@ -887,7 +887,7 @@ export function CampaignsTab() {
       toast.success("Campaign deleted");
       setDeleteTarget(null);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete campaign — " + (e.message || "please try again.")),
   });
 
   // If we have a selected campaign, keep it fresh

@@ -186,9 +186,9 @@ export default function WorkerStation() {
     mutationFn: ({ id, data }: { id: number; data: Record<string, any> }) => api.orders.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Order updated");
+      toast.success("Order status updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update order — " + (e.message || "please try again.")),
   });
 
   const orders = rawOrders.map(o => {

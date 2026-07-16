@@ -342,7 +342,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
       handleClose();
       onSuccess?.();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not create order — " + (e.message || "please try again.")),
   });
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────

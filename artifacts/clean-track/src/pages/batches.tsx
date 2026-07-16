@@ -37,7 +37,7 @@ export default function Batches() {
       setSelectedOrders([]);
       toast.success("Batch created successfully");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not create batch — " + (e.message || "please try again.")),
   });
 
   const completeMutation = useMutation({
@@ -47,7 +47,7 @@ export default function Batches() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Batch marked as completed");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not complete batch — " + (e.message || "please try again.")),
   });
 
   const pendingOrders = orders.filter((o) => o.status === "pending");
@@ -129,8 +129,16 @@ export default function Batches() {
                 ))}
                 {!batches.length && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
-                      No batches yet
+                    <TableCell colSpan={5}>
+                      <div className="py-12 text-center text-muted-foreground">
+                        <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No batches yet</p>
+                        <p className="text-sm mt-1">Group orders into batches to track production and manage pickup together.</p>
+                        <Button variant="outline" className="mt-4 gap-2" onClick={() => setShowCreate(true)}>
+                          <Plus className="h-4 w-4" />
+                          Create First Batch
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

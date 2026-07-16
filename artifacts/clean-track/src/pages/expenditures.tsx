@@ -216,9 +216,9 @@ export default function Expenditures() {
       queryClient.invalidateQueries({ queryKey: ["expenditures"] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
       setFormOpen(false);
-      toast.success("Expense added");
+      toast.success("Expense recorded successfully");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not record expense — " + (e.message || "please try again.")),
   });
 
   const updateMutation = useMutation({
@@ -228,9 +228,9 @@ export default function Expenditures() {
       queryClient.invalidateQueries({ queryKey: ["expenditures"] });
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
       setEditTarget(null);
-      toast.success("Expense updated");
+      toast.success("Expense updated successfully");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update expense — " + (e.message || "please try again.")),
   });
 
   const deleteMutation = useMutation({
@@ -241,7 +241,7 @@ export default function Expenditures() {
       setDeleteTarget(null);
       toast.success("Expense deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete expense — " + (e.message || "please try again.")),
   });
 
   const sortedCategories = summary

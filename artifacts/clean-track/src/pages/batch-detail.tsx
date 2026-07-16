@@ -29,7 +29,7 @@ export default function BatchDetail() {
       setShowConfirm(false);
       toast.success("Batch completed");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not complete batch — " + (e.message || "please try again.")),
   });
 
   if (isLoading) return (

@@ -182,8 +182,14 @@ export default function Receipts() {
               ))}
             </div>
           ) : receipts.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              {search ? `No receipts match "${search}"` : "No receipts found for this period."}
+            <div className="py-14 text-center text-muted-foreground">
+              <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">
+                {search ? `No receipts match "${search}"` : "No receipts for this period"}
+              </p>
+              <p className="text-sm mt-1">
+                {search ? "Try a different receipt number or customer name." : "Receipts are created automatically when payments are recorded on orders."}
+              </p>
             </div>
           ) : (
             <Table>

@@ -343,6 +343,7 @@ export default function Orders() {
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search orders"
               />
             </div>
             <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>

@@ -125,7 +125,7 @@ export default function DiscountApprovals() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       toast.success(status === "approved" ? "Discount approved — order updated" : "Discount request rejected");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not process discount request — " + (e.message || "please try again.")),
   });
 
   const pending = pendingCount?.count ?? 0;

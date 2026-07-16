@@ -97,87 +97,87 @@ export default function Services() {
   const createMutation = useMutation({
     mutationFn: (data: ServiceInput) => api.services.create(data),
     onSuccess: () => { invalidate(); setShowDialog(false); setForm(emptyForm); toast.success("Service created"); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not create service — " + (e.message || "please try again.")),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<ServiceInput> }) => api.services.update(id, data),
     onSuccess: () => { invalidate(); setShowDialog(false); setEditId(null); setForm(emptyForm); toast.success("Service updated"); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update service — " + (e.message || "please try again.")),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.services.delete(id),
     onSuccess: () => { invalidate(); setShowDelete(null); toast.success("Service deleted"); },
-    onError: (e: Error) => { setShowDelete(null); toast.error(e.message); },
+    onError: (e: Error) => { setShowDelete(null); toast.error("Could not delete service — " + (e.message || "please try again.")); },
   });
 
   const archiveMutation = useMutation({
     mutationFn: (id: number) => api.services.archive(id),
     onSuccess: () => { invalidate(); toast.success("Service archived — it won't appear in new orders."); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not archive service — " + (e.message || "please try again.")),
   });
 
   const restoreMutation = useMutation({
     mutationFn: (id: number) => api.services.restore(id),
     onSuccess: () => { invalidate(); toast.success("Service restored — it's available for new orders again."); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not restore service — " + (e.message || "please try again.")),
   });
 
   const reorderMutation = useMutation({
     mutationFn: ({ id, direction }: { id: number; direction: "up" | "down" }) => api.services.reorder(id, direction),
     onSuccess: () => invalidate(),
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not reorder service — " + (e.message || "please try again.")),
   });
 
   const duplicateMutation = useMutation({
     mutationFn: (id: number) => api.services.duplicate(id),
-    onSuccess: () => { invalidate(); toast.success("Service duplicated"); },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { invalidate(); toast.success("Service duplicated successfully"); },
+    onError: (e: Error) => toast.error("Could not duplicate service — " + (e.message || "please try again.")),
   });
 
   const uploadImageMutation = useMutation({
     mutationFn: ({ id, file }: { id: number; file: File }) => api.services.uploadImage(id, file),
-    onSuccess: () => { invalidate(); toast.success("Image uploaded"); },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { invalidate(); toast.success("Service photo updated"); },
+    onError: (e: Error) => toast.error("Could not upload photo — " + (e.message || "please try again.")),
   });
 
   const deleteImageMutation = useMutation({
     mutationFn: (id: number) => api.services.deleteImage(id),
-    onSuccess: () => { invalidate(); toast.success("Image removed"); },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { invalidate(); toast.success("Service photo removed"); },
+    onError: (e: Error) => toast.error("Could not remove photo — " + (e.message || "please try again.")),
   });
 
   const bulkArchiveMutation = useMutation({
     mutationFn: (ids: number[]) => api.services.bulkArchive(ids),
     onSuccess: (r) => { invalidate(); setSelected(new Set()); toast.success(`${r.updated} service(s) archived`); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not archive services — " + (e.message || "please try again.")),
   });
   const bulkRestoreMutation = useMutation({
     mutationFn: (ids: number[]) => api.services.bulkRestore(ids),
     onSuccess: (r) => { invalidate(); setSelected(new Set()); toast.success(`${r.updated} service(s) restored`); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not restore services — " + (e.message || "please try again.")),
   });
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: number[]) => api.services.bulkDelete(ids),
     onSuccess: (r) => { invalidate(); setSelected(new Set()); toast.success(r.note); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete services — " + (e.message || "please try again.")),
   });
   const bulkCategoryMutation = useMutation({
     mutationFn: ({ ids, category }: { ids: number[]; category: string }) => api.services.bulkCategory(ids, category),
     onSuccess: (r) => { invalidate(); setSelected(new Set()); setBulkCategoryOpen(false); toast.success(`Updated category for ${r.updated} service(s)`); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update categories — " + (e.message || "please try again.")),
   });
   const bulkPriceMutation = useMutation({
     mutationFn: (data: Parameters<typeof api.services.bulkPrice>[0]) => api.services.bulkPrice(data),
     onSuccess: (r) => { invalidate(); setSelected(new Set()); setBulkPriceOpen(false); toast.success(`Updated pricing for ${r.updated} service(s)`); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update pricing — " + (e.message || "please try again.")),
   });
 
   const importMutation = useMutation({
     mutationFn: (file: File) => api.services.importCsv(file),
     onSuccess: (r) => { invalidate(); setImportResult(r); if (r.created > 0) toast.success(`Imported ${r.created} service(s)`); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not import services — " + (e.message || "please try again.")),
   });
 
   const { data: analytics } = useQuery({
@@ -274,7 +274,7 @@ export default function Services() {
               <Button variant="outline" size="sm" onClick={() => setShowAnalytics(true)}>
                 <BarChart3 className="h-4 w-4" /> Analytics
               </Button>
-              <Button variant="outline" size="sm" onClick={() => api.services.exportCsv().catch((e) => toast.error(e.message))}>
+              <Button variant="outline" size="sm" onClick={() => api.services.exportCsv().catch((e) => toast.error("Could not export services — " + (e.message || "please try again.")))}>
                 <Download className="h-4 w-4" /> Export
               </Button>
               <Button variant="outline" size="sm" onClick={() => { setImportResult(null); setShowImport(true); }}>
@@ -319,6 +319,7 @@ export default function Services() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search services by name or category..."
             className="pl-8"
+            aria-label="Search services"
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -744,7 +745,15 @@ export default function Services() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Service Analytics</DialogTitle></DialogHeader>
           {!analytics ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>
+            <div className="py-6 space-y-4 animate-pulse">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-3 w-24 bg-muted rounded" />
+                  <div className="h-4 w-full bg-muted rounded" />
+                  <div className="h-4 w-3/4 bg-muted rounded" />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="space-y-6">
               <div>

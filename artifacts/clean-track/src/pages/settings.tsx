@@ -158,7 +158,7 @@ function BusinessProfileSection() {
       setIsDirty(false);
       toast.success("Business profile saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save business profile — " + (e.message || "please try again.")),
   });
 
   if (isLoading && !isViewingCache) return <SkeletonRows rows={6} />;
@@ -301,7 +301,7 @@ function BrandingSection() {
       setIsDirty(false);
       toast.success("Branding settings saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save branding — " + (e.message || "please try again.")),
   });
 
   if (isLoading && !isViewingCache) return <SkeletonRows rows={3} />;
@@ -401,7 +401,7 @@ function OperationalSection() {
       setIsDirty(false);
       toast.success("Operational settings saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save operational settings — " + (e.message || "please try again.")),
   });
 
   if (isLoading && !isViewingCache) return <SkeletonRows rows={8} />;
@@ -570,7 +570,7 @@ function WorkerPermissionCard({
       setIsDirty(false);
       toast.success(`Permissions saved for ${worker.name}`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save permissions — " + (e.message || "please try again.")),
   });
 
   return (
@@ -721,7 +721,7 @@ function AutomationSection() {
       setIsDirty(false);
       toast.success("Automation settings saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save automation settings — " + (e.message || "please try again.")),
   });
 
   if (isLoading) return <SkeletonRows rows={5} />;
@@ -771,7 +771,7 @@ function MessageTemplateCard({ template }: { template: MessageTemplate }) {
       qc.invalidateQueries({ queryKey: ["message-templates"] });
       toast.success(`"${template.name}" saved`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save template — " + (e.message || "please try again.")),
   });
 
   const hints = Object.entries(TEMPLATE_VARIABLE_HINTS).find(([k]) => template.name.includes(k))?.[1] ?? [];
@@ -884,7 +884,7 @@ function ExpenseCategoriesSection() {
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       api.expenseCategories.update(id, { isActive }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["expense-categories"] }); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update category — " + (e.message || "please try again.")),
   });
 
   const createMutation = useMutation({
@@ -894,7 +894,7 @@ function ExpenseCategoriesSection() {
       setNewName("");
       toast.success("Category added");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not add category — " + (e.message || "please try again.")),
   });
 
   const deleteMutation = useMutation({
@@ -903,7 +903,7 @@ function ExpenseCategoriesSection() {
       qc.invalidateQueries({ queryKey: ["expense-categories"] });
       toast.success("Category deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete category — " + (e.message || "please try again.")),
   });
 
   return (
@@ -1020,7 +1020,7 @@ function DiscountSettingsSection() {
       setIsDirty(false);
       toast.success("Discount rules saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save discount rules — " + (e.message || "please try again.")),
   });
 
   const update = (key: keyof DiscountSettings, value: number) => {
@@ -1223,7 +1223,7 @@ function DashboardPreferencesSection() {
       setIsDirty(false);
       toast.success("Dashboard preferences saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save dashboard preferences — " + (e.message || "please try again.")),
   });
 
   if (isLoading) return <SkeletonRows rows={6} />;

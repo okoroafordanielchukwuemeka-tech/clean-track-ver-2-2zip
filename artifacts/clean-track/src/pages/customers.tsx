@@ -279,7 +279,7 @@ export default function Customers() {
   const backfillMutation = useMutation({
     mutationFn: () => api.customers.backfill(),
     onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["customers"] }); toast.success(r.message); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not run backfill — " + (e.message || "please try again.")),
   });
 
   const createMutation = useMutation<CustomerWithMetrics | null, Error, CustomerInput>({
@@ -310,10 +310,10 @@ export default function Customers() {
         toast.info("Saved offline. Will sync automatically when connection returns.");
       } else {
         qc.invalidateQueries({ queryKey: ["customers"] });
-        toast.success("Customer created");
+        toast.success("Customer created successfully");
       }
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not create customer — " + (e.message || "please try again.")),
   });
 
   const updateMutation = useMutation({
@@ -322,9 +322,9 @@ export default function Customers() {
       qc.invalidateQueries({ queryKey: ["customers"] });
       qc.invalidateQueries({ queryKey: ["customers", editForm.id] });
       setShowEdit(false);
-      toast.success("Customer updated");
+      toast.success("Customer updated successfully");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update customer — " + (e.message || "please try again.")),
   });
 
   const updateNotesMutation = useMutation({
@@ -334,7 +334,7 @@ export default function Customers() {
       setEditingNotes(false);
       toast.success("Notes saved");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not save notes — " + (e.message || "please try again.")),
   });
 
   const updateTagsMutation = useMutation({
@@ -345,7 +345,7 @@ export default function Customers() {
       setEditingTags(false);
       toast.success("Tags updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update tags — " + (e.message || "please try again.")),
   });
 
   const deleteMutation = useMutation({
@@ -356,7 +356,7 @@ export default function Customers() {
       setShowDelete(false);
       toast.success("Customer archived");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not archive customer — " + (e.message || "please try again.")),
   });
 
   const restoreMutation = useMutation({
@@ -366,7 +366,7 @@ export default function Customers() {
       setSelectedId(null);
       toast.success("Customer restored");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not restore customer — " + (e.message || "please try again.")),
   });
 
   // ── Derived values ─────────────────────────────────────────────────────────────
@@ -481,6 +481,7 @@ export default function Customers() {
               className="pl-9"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
+              aria-label="Search customers"
             />
             {search && (
               <button

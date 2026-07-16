@@ -24,8 +24,10 @@ export default function ReceiptPrint() {
 
   if (isLoading) {
     return (
-      <div className="receipt-print-loading">
-        Loading receipt...
+      <div className="receipt-print-loading" aria-live="polite" aria-busy="true">
+        <div style={{ textAlign: "center", padding: "2rem", color: "#888", fontSize: "0.875rem" }}>
+          Preparing receipt…
+        </div>
       </div>
     );
   }

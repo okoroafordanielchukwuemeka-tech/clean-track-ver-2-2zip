@@ -225,7 +225,7 @@ export default function OrderDetail() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Order updated");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not update order — " + (e.message || "please try again.")),
   });
 
   const deleteMutation = useMutation({
@@ -235,7 +235,7 @@ export default function OrderDetail() {
       navigate("/orders");
       toast.success("Order deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete order — " + (e.message || "please try again.")),
   });
 
   const paymentMutation = useMutation({
@@ -254,7 +254,7 @@ export default function OrderDetail() {
         setDuplicateWarning(e.data as DuplicatePaymentWarning);
         return;
       }
-      toast.error(e.message);
+      toast.error("Could not record payment — " + (e.message || "please try again."));
     },
   });
 
@@ -335,7 +335,7 @@ export default function OrderDetail() {
       setDeletePaymentId(null);
       toast.success("Payment deleted");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not delete payment — " + (e.message || "please try again.")),
   });
 
   const pickupMutation = useMutation({
@@ -359,7 +359,7 @@ export default function OrderDetail() {
         toast.success(`Pickup recorded — ${res.order.remainingShirts}S / ${res.order.remainingTrousers}T remaining`);
       }
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not record pickup — " + (e.message || "please try again.")),
   });
 
   const adjMutation = useMutation({
@@ -370,7 +370,7 @@ export default function OrderDetail() {
       setAdjForm({ type: "discount", amount: 0, reason: "" });
       toast.success("Price adjustment added");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not add adjustment — " + (e.message || "please try again.")),
   });
 
   const sendNotificationMutation = useMutation({
@@ -380,17 +380,17 @@ export default function OrderDetail() {
       setShowMessages(true);
       setTimeout(() => refetchMessages(), 1500);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not send notification — " + (e.message || "please try again.")),
   });
 
   const retryMessageMutation = useMutation({
     mutationFn: (msgId: number) => api.orders.retryMessage(orderId, msgId),
     onSuccess: (res) => {
-      if (res.success) toast.success("Message retry queued");
-      else toast.error(res.error ?? "Retry failed");
+      if (res.success) toast.success("Message queued for retry");
+      else toast.error(res.error ?? "Could not retry the message — please try again shortly.");
       refetchMessages();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error("Could not retry message — " + (e.message || "please try again.")),
   });
 
   // ── Loading / not-found ──────────────────────────────────────────────────
@@ -1018,7 +1018,8 @@ export default function OrderDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <Table>
+                  <div className="overflow-x-auto">
+                  <Table className="min-w-[520px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item</TableHead>
@@ -1061,6 +1062,7 @@ export default function OrderDetail() {
                       </TableRow>
                     </TableBody>
                   </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}
