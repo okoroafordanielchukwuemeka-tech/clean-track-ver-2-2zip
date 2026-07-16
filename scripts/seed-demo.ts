@@ -21,6 +21,7 @@ const {
   expenditures, expenseCategories, messageTemplates,
   conversations, conversationMessages,
   notifications, notificationEvents, activationEvents,
+  batches,
 } = schema;
 
 const RESET_MODE = process.argv.includes("--reset");
@@ -150,6 +151,7 @@ async function resetDemoData() {
   await db.execute(sql`DELETE FROM expense_categories WHERE laundry_id = ${laundryId}`);
   await db.execute(sql`DELETE FROM message_templates WHERE laundry_id = ${laundryId}`);
   await db.execute(sql`DELETE FROM activation_events WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM batches WHERE laundry_id = ${laundryId}`);
   await db.execute(sql`DELETE FROM laundries WHERE id = ${laundryId}`);
 
   console.log("✅ Demo data cleared.\n");
@@ -273,7 +275,10 @@ async function main() {
       const existingInBranch = workerList.filter(w => w.branchId === branch.id);
       const needed = 4 - existingInBranch.length;
       for (let i = 0; i < needed; i++) {
-        const pin = WORKER_PINS[wIdx % WORKER_PINS.length];
+        const plainPin = WORKER_PINS[wIdx % WORKER_PINS.length];
+        // Hash PIN using the same bcrypt workflow as production (workers.ts POST /)
+        const pinHash = await bcrypt.hash(plainPin, 12);
+        const pinChangedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
         const name = randomName();
         const phone = randomPhone();
         const [w] = await db.insert(workers).values({
@@ -281,24 +286,31 @@ async function main() {
           branchId: branch.id,
           name,
           phone,
-          pin,
+          pin: pinHash,           // bcrypt hash — identical to production
+          pinChangedAt,           // required for token invalidation check
           role: i === 0 ? "admin" : "worker",
           isActive: true,
         }).returning();
         workersCreated.push(w);
-        workerCredentials.push({ branch: branch.name, name, phone, pin });
+        workerCredentials.push({ branch: branch.name, name, phone, pin: plainPin });
         wIdx++;
       }
     }
     workerList = [...workerList, ...workersCreated];
-    console.log(`✅ Created ${workersCreated.length} workers (total: ${workerList.length})`);
+    console.log(`✅ Created ${workersCreated.length} workers with bcrypt-hashed PINs (total: ${workerList.length})`);
   } else {
     console.log(`ℹ️  Reusing ${workerList.length} existing workers`);
-    // Build credentials from existing
-    for (const w of workerList) {
-      const branch = branchList.find(b => b.id === w.branchId);
-      if (w.phone && w.pin) {
-        workerCredentials.push({ branch: branch?.name ?? "?", name: w.name, phone: w.phone, pin: w.pin });
+    // We cannot recover plain PINs from bcrypt hashes — show known PIN list for demo workers.
+    // WORKER_PINS[index % length] matches the insertion order used above.
+    let wIdx = 0;
+    for (const branch of branchList) {
+      const branchWorkers = workerList.filter(w => w.branchId === branch.id);
+      for (const w of branchWorkers) {
+        const knownPin = WORKER_PINS[wIdx % WORKER_PINS.length];
+        if (w.phone) {
+          workerCredentials.push({ branch: branch.name, name: w.name, phone: w.phone, pin: knownPin });
+        }
+        wIdx++;
       }
     }
   }
@@ -549,7 +561,57 @@ async function main() {
     console.log(`✅ Created expenditures for all branches`);
   }
 
-  // ── 7. WhatsApp Conversations ─────────────────────────────────────────────
+  // ── 7. Batches (2 per branch = 10 total) ──────────────────────────────────
+  const existingBatchCount = await db.select().from(batches).where(eq(batches.laundryId, laundryId));
+  if (existingBatchCount.length > 0) {
+    console.log(`ℹ️  Skipping batches — already seeded (${existingBatchCount.length} found)`);
+  } else {
+    console.log("Creating demo batches...");
+    let batchesCreated = 0;
+    for (const branch of branchList) {
+      // Collect 'processing' orders for this branch to populate batches
+      const branchOrders = await db.select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.laundryId, laundryId), eq(orders.branchId, branch.id), eq(orders.status, "processing")))
+        .limit(16);
+
+      // Batch 1: active (currently being processed)
+      const [activeBatch] = await db.insert(batches).values({
+        laundryId,
+        batchCode: `DEMO-${branch.name.replace(/\s+/g, "").toUpperCase().slice(0, 6)}-A`,
+        status: "active",
+        orderCount: Math.min(8, branchOrders.length),
+        createdAt: daysAgo(rand(1, 3)),
+      }).returning();
+      // Link first 8 orders to the active batch
+      if (branchOrders.length > 0) {
+        const active8 = branchOrders.slice(0, 8).map(o => o.id);
+        await db.update(orders).set({ batchId: activeBatch.id }).where(
+          inArray(orders.id, active8)
+        );
+      }
+
+      // Batch 2: completed (processed earlier)
+      const [completedBatch] = await db.insert(batches).values({
+        laundryId,
+        batchCode: `DEMO-${branch.name.replace(/\s+/g, "").toUpperCase().slice(0, 6)}-C`,
+        status: "completed",
+        orderCount: Math.min(8, Math.max(0, branchOrders.length - 8)),
+        createdAt: daysAgo(rand(5, 14)),
+      }).returning();
+      if (branchOrders.length > 8) {
+        const completed8 = branchOrders.slice(8, 16).map(o => o.id);
+        await db.update(orders).set({ batchId: completedBatch.id }).where(
+          inArray(orders.id, completed8)
+        );
+      }
+
+      batchesCreated += 2;
+    }
+    console.log(`✅ Created ${batchesCreated} batches (1 active + 1 completed per branch)`);
+  }
+
+  // ── 8. WhatsApp Conversations ─────────────────────────────────────────────
   function normalizePhone(raw: string): string {
     const s = raw.replace(/[\s\-().+]/g, "");
     if (s.startsWith("0") && s.length === 11) return "+234" + s.slice(1);

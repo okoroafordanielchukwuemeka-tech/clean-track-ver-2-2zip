@@ -126,9 +126,8 @@ productionHealthRouter.get("/production", requireOwner, async (req: AuthRequest,
       db
         .select({
           deviceId: deviceHeartbeats.deviceId,
-          userType: deviceHeartbeats.userType,
-          userName: deviceHeartbeats.userName,
-          syncStatus: deviceHeartbeats.syncStatus,
+          userType: deviceHeartbeats.actorType,
+          userName: deviceHeartbeats.workerName,
           pendingCount: deviceHeartbeats.pendingCount,
           failedCount: deviceHeartbeats.failedCount,
           lastSeenAt: deviceHeartbeats.lastSeenAt,

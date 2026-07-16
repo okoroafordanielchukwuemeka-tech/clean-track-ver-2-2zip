@@ -1,0 +1,256 @@
+# Phase 7.15.1 – Final Production Certification & Milestone 1 Sign-Off
+
+## Objective
+
+This is the **final close-out phase for Milestone 1**.
+
+Do **not** build any new customer-facing features.
+
+Do **not** begin Phase 8.
+
+Your only objective is to resolve every issue discovered during Phase 7.15, verify the entire production demo environment, and certify that CleanTrack is genuinely ready for its first production customers.
+
+---
+
+# 1. Resolve Every Certification Finding
+
+Review the entire Phase 7.15 certification report.
+
+Resolve every outstanding issue before proceeding.
+
+This includes, but is not limited to:
+
+* Worker authentication
+* Demo environment consistency
+* Production configuration
+* Demo data quality
+* Seeder reliability
+* Security findings
+
+Do not ignore or downgrade any issue without documenting the reason.
+
+---
+
+# 2. Worker Authentication
+
+The previous audit identified that demo workers were seeded with plain-text PINs while production authentication uses bcrypt.
+
+Correct this completely.
+
+Requirements:
+
+* Seed worker PINs using the exact same hashing workflow used by production.
+* Do not create a separate demo authentication path.
+* Demo workers must authenticate through the normal production login flow.
+
+Verify:
+
+* Owner login
+* Worker login
+* Invalid PIN rejection
+* Incorrect password handling
+* Account status handling (active/inactive if supported)
+
+Document all results.
+
+---
+
+# 3. Rebuild the Demo Environment
+
+Run a complete reset using the production demo seeder.
+
+Use the reset mode to recreate the environment from scratch.
+
+Verify the seeded environment contains realistic production-quality data including:
+
+* Multiple branches
+* Owners
+* Workers
+* Customers
+* Services
+* Orders
+* Payments
+* Receipts
+* Discount requests
+* Approved discounts
+* Rejected discounts
+* Batches
+* Analytics data
+
+Ensure all seeded data is internally consistent.
+
+---
+
+# 4. End-to-End Workflow Verification
+
+Using only the seeded demo environment, verify every major workflow.
+
+## Owner Workflow
+
+Verify:
+
+* Login
+* Dashboard
+* Customer creation
+* Service management
+* Order creation
+* Payment recording
+* Receipt generation
+* Batch creation
+* Discount approval
+* Reports
+* Billing
+* Analytics
+* Branch management
+
+---
+
+## Worker Workflow
+
+Verify:
+
+* Login
+* Order search
+* Status updates
+* Payment recording (where permitted)
+* Partial pickup
+* Full pickup
+* Batch operations
+* Branch isolation
+* Offline queue (if available)
+
+---
+
+## Customer Workflow
+
+Verify:
+
+* Order lifecycle
+* Payment lifecycle
+* Receipt availability
+* Notification triggers
+* Invoice availability
+* Discount visibility
+
+---
+
+# 5. Production Infrastructure Verification
+
+Re-audit all production infrastructure.
+
+Confirm the status of:
+
+* Environment variables
+* JWT secrets
+* Cloudinary integration
+* Paystack integration
+* SMTP configuration
+* CORS
+* Security headers
+* Rate limiting
+* Health endpoints
+* Logging
+* Monitoring
+* Database migrations
+* Storage
+* Deployment configuration
+* Backup procedures
+* Disaster recovery
+
+For each item provide:
+
+* PASS
+* FAIL
+* NOT CONFIGURED
+
+Include supporting evidence.
+
+---
+
+# 6. Backup & Disaster Recovery
+
+Verify the complete recovery process.
+
+Test:
+
+* Database export
+* Database import
+* Demo environment recreation
+* Recovery documentation
+
+Confirm that another developer could restore the application using only the provided documentation.
+
+---
+
+# 7. Demo Environment Certification
+
+Audit the demo environment as if it were being presented to a customer.
+
+Verify:
+
+* No broken images
+* No placeholder text
+* No inconsistent data
+* No missing relationships
+* No authentication issues
+* No permission issues
+* No broken analytics
+* No orphan records
+* No duplicate invoices
+* No duplicate payments
+* No duplicate webhook processing
+
+---
+
+# 8. Re-run the Full Production Launch Certification
+
+After every issue has been resolved, perform the complete certification again.
+
+Do not reuse previous results.
+
+Execute a fresh verification.
+
+---
+
+# 9. Update the Production Readiness Score
+
+Recalculate the readiness score based on the current implementation.
+
+Provide a detailed explanation for every point deducted.
+
+Do not assign a score without justification.
+
+---
+
+# 10. Milestone 1 Completion Report
+
+Produce the final Milestone 1 Completion Report including:
+
+1. Executive Summary
+2. Production Readiness Score
+3. Demo Environment Summary
+4. Authentication Verification
+5. Workflow Verification Results
+6. Infrastructure Audit Results
+7. Backup & Recovery Status
+8. Remaining Risks
+9. Critical Blockers (if any)
+10. Deployment Checklist
+11. First 100 Customers Readiness Assessment
+12. Milestone 1 Sign-Off Recommendation
+
+---
+
+# IMPORTANT
+
+Do **not** implement new functionality.
+
+Do **not** begin Phase 8.
+
+Do **not** declare Milestone 1 complete until:
+
+* Every critical certification issue has been resolved.
+* Every production workflow has been verified.
+* The demo environment accurately reflects the production application.
+* The final certification report has been completed.
+* A Milestone 1 Sign-Off recommendation has been provided based on the verified evidence.
