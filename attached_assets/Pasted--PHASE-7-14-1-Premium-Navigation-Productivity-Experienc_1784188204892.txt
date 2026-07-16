@@ -1,0 +1,379 @@
+# PHASE 7.14.1 — Premium Navigation & Productivity Experience
+
+## IMPORTANT
+
+This is a UX polish phase.
+
+Do NOT build new business features.
+
+Do NOT modify pricing, billing, permissions, workflows, or business logic unless required to support this UX work.
+
+Focus only on making CleanTrack feel like a premium SaaS product.
+
+---
+
+# OBJECTIVE
+
+Improve usability, speed, navigation, and professionalism while preserving all existing functionality.
+
+Nothing should regress.
+
+---
+
+# PART 1 — Dynamic Browser Titles
+
+Audit every route.
+
+Replace the generic browser title with contextual titles.
+
+Examples:
+
+Dashboard • CleanTrack
+
+Orders • CleanTrack
+
+Customers • CleanTrack
+
+Services • CleanTrack
+
+Workers • CleanTrack
+
+Branches • CleanTrack
+
+Receipts • CleanTrack
+
+Discount Approvals • CleanTrack
+
+Billing • CleanTrack
+
+Settings • CleanTrack
+
+Analytics • CleanTrack
+
+Marketing • CleanTrack
+
+Operations Center • CleanTrack
+
+Worker Station • CleanTrack
+
+Create Order • CleanTrack
+
+Customer Details • CleanTrack
+
+Order #12345 • CleanTrack
+
+Dialog pages should update titles where appropriate.
+
+Verify titles update correctly when navigating without page refresh.
+
+---
+
+# PART 2 — Validation Experience
+
+Audit every form.
+
+Replace generic validation.
+
+Instead of:
+
+"Invalid Input"
+
+Use meaningful messages.
+
+Examples:
+
+Worker PIN must contain exactly 4 digits.
+
+Phone number must contain 11 digits.
+
+Customer name is required.
+
+Service already exists.
+
+Discount exceeds branch limit.
+
+Payment amount must be greater than zero.
+
+Branch name already exists.
+
+Email format is invalid.
+
+Password must contain at least 8 characters.
+
+Every validation must explain:
+
+• What happened
+• Why
+• How to fix it
+
+No technical language.
+
+---
+
+# PART 3 — Error Messages
+
+Audit every toast.
+
+No raw API messages.
+
+No stack traces.
+
+No SQL errors.
+
+No generic:
+
+Something went wrong.
+
+Every toast should follow this pattern:
+
+Action
+
+↓
+
+Reason
+
+↓
+
+Suggestion
+
+Example:
+
+Could not record payment.
+
+The payment exceeds the outstanding balance.
+
+Please enter a smaller amount.
+
+Apply this throughout the application.
+
+---
+
+# PART 4 — Global Command Palette
+
+Implement a global command palette.
+
+Shortcut:
+
+Ctrl + K
+
+Mac:
+
+⌘ + K
+
+The command palette should open from anywhere.
+
+Search should be instant.
+
+Searchable items include:
+
+Orders
+
+Customers
+
+Workers
+
+Services
+
+Receipts
+
+Branches
+
+Settings
+
+Billing
+
+Discount Approvals
+
+Analytics
+
+Marketing
+
+Operations Center
+
+Worker Station
+
+Create Order
+
+Create Customer
+
+Create Service
+
+Search Orders
+
+Search Customers
+
+Search Services
+
+Recent Orders
+
+Recent Customers
+
+Navigation should occur immediately after selection.
+
+Support:
+
+Keyboard navigation
+
+Arrow keys
+
+Enter
+
+Escape
+
+Search highlighting
+
+Recent commands
+
+No page reloads.
+
+---
+
+# PART 5 — Keyboard Shortcuts
+
+Implement:
+
+Ctrl + K
+
+Open Command Palette
+
+Ctrl + N
+
+Create Order
+
+Ctrl + Shift + C
+
+Create Customer
+
+/
+
+Focus search (when applicable)
+
+Escape
+
+Close dialogs
+
+?
+
+Open keyboard shortcut help
+
+Shortcuts must not interfere with text inputs.
+
+---
+
+# PART 6 — Accessibility
+
+Verify:
+
+Focus states visible.
+
+Keyboard navigation works.
+
+Dialogs trap focus correctly.
+
+Escape closes dialogs.
+
+Buttons have aria-labels.
+
+Search fields have labels.
+
+No keyboard traps.
+
+---
+
+# PART 7 — Performance
+
+Command palette opens instantly.
+
+No noticeable lag.
+
+Navigation remains client-side.
+
+No unnecessary API calls.
+
+Search indexes should be reused where possible.
+
+---
+
+# PART 8 — Regression Testing
+
+Verify:
+
+Orders
+
+Customers
+
+Workers
+
+Services
+
+Receipts
+
+Discounts
+
+Billing
+
+Analytics
+
+Marketing
+
+Operations Center
+
+Worker Station
+
+still function exactly as before.
+
+No broken routing.
+
+No broken forms.
+
+No broken validation.
+
+No broken keyboard input.
+
+---
+
+# PART 9 — Screenshots
+
+Provide screenshots for:
+
+Dashboard
+
+Command Palette
+
+Validation example
+
+Keyboard shortcut help
+
+Updated browser titles
+
+---
+
+# PART 10 — Final Report
+
+Provide:
+
+1. Browser Title Audit
+
+2. Validation Improvements
+
+3. Error Message Improvements
+
+4. Command Palette Status
+
+5. Keyboard Shortcut Status
+
+6. Accessibility Results
+
+7. Performance Results
+
+8. Regression Test Results
+
+9. Bugs Fixed
+
+10. Remaining Risks
+
+11. Production Readiness Score
+
+IMPORTANT
+
+Do NOT continue to Phase 7.14.2 until this phase has been fully implemented, tested, and verified.

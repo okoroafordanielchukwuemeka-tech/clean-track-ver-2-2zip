@@ -1,4 +1,6 @@
 import { useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
 import { PendingSyncBadge } from "@/components/pending-sync-badge";
@@ -171,12 +173,14 @@ function BulkActionBar({
 }
 
 export default function Orders() {
+  usePageTitle("Orders");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("urgency");
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(() => searchParams.get("create") === "1");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const { activeBranchId } = useBranch();

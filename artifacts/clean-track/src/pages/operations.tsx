@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { APP_VERSION as CURRENT_APP_VERSION } from "@/lib/version";
 import type {
   OpsAuditLogResponse,
@@ -2165,6 +2166,7 @@ function FailedMessagesTab() {
 }
 
 export default function OperationsPage() {
+  usePageTitle("Operations Center");
   return (
     <div className="space-y-5">
       <div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Expenditure, type ExpenditureInput, type ExpenseCategory } from "@/lib/api";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { UpgradeRequired } from "@/components/upgrade-required";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,7 +89,7 @@ function ExpenseForm({ initial, onClose, onSave, loading }: ExpenseFormProps) {
     e.preventDefault();
     const num = parseFloat(amount);
     if (isNaN(num) || num <= 0) {
-      toast.error("Enter a valid amount");
+      toast.error("Expense amount must be greater than zero. Please enter a valid number.");
       return;
     }
     onSave({ category, amount: num, notes: notes || undefined, isRecurring });
@@ -164,6 +165,7 @@ function ExpenseForm({ initial, onClose, onSave, loading }: ExpenseFormProps) {
 }
 
 export default function Expenditures() {
+  usePageTitle("Expenditures");
   const [period, setPeriod] = useState("30d");
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Expenditure | null>(null);

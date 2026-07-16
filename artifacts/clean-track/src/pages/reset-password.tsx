@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { WashingMachine, Eye, EyeOff, ArrowLeft, CheckCircle, XCircle } from "lu
 import { toast } from "sonner";
 
 export default function ResetPassword() {
+  usePageTitle("Reset Password");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";

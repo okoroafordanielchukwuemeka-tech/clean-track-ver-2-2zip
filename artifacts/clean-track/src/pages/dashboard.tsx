@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { api, type AnalyticsPeriod } from "@/lib/api";
 import { useBranch } from "@/context/branch-context";
 import { useAuth } from "@/context/auth-context";
@@ -215,6 +216,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function Dashboard() {
+  usePageTitle("Dashboard");
   const [period, setPeriod] = useState<AnalyticsPeriod>("7d");
   const { activeBranchId, activeBranch } = useBranch();
   const { user } = useAuth();

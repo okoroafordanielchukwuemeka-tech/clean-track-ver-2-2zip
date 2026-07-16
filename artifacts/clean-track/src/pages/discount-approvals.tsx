@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { api, type DiscountApproval } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -102,6 +103,7 @@ function DiscountCard({ approval, onApprove, onReject, isPending }: {
 }
 
 export default function DiscountApprovals() {
+  usePageTitle("Discount Approvals");
   const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
   const qc = useQueryClient();
 

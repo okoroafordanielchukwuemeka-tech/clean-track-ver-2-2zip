@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { WashingMachine, Eye, EyeOff, CheckCircle2, FlaskConical } from "lucide-
 import { toast } from "sonner";
 
 export default function Signup() {
+  usePageTitle("Create Workspace");
   const navigate = useNavigate();
   const { login } = useAuth();
   const [form, setForm] = useState({

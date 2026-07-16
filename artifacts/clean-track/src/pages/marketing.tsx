@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Sparkles, Copy, Check, ChevronDown, ChevronUp, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -137,6 +138,7 @@ function PromptSuggestions({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MarketingPage() {
+  usePageTitle("AI Marketing");
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<GenerateResponse | null>(null);
 

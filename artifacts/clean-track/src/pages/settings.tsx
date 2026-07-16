@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
@@ -2127,6 +2128,7 @@ function WhatsAppBusinessSection() {
 
 
 export default function SettingsPage() {
+  usePageTitle("Settings");
   const { isOwner } = useAuth();
   const { isOnline } = useNetworkStatus();
   const [searchParams] = useSearchParams();

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,6 +151,7 @@ function NoPermissionsScreen({ name }: { name: string }) {
 }
 
 export default function WorkerStation() {
+  usePageTitle("Worker Station");
   const { user } = useAuth();
   const { activeBranchId } = useBranch();
   const qc = useQueryClient();

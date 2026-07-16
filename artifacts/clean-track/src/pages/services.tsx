@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { CachedDataBadge } from "@/components/cached-data-badge";
 import { api, type Service, type ServiceInput } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
@@ -57,6 +58,7 @@ const emptyForm: Partial<ServiceInput> & { branchIds?: number[] | null } = {
 };
 
 export default function Services() {
+  usePageTitle("Services");
   const qc = useQueryClient();
   const { isOwner } = useAuth();
   const [filter, setFilter] = useState<Filter>("active");
@@ -219,7 +221,7 @@ export default function Services() {
 
   const handleSave = () => {
     if (!form.name || !form.category || form.standardPrice == null) {
-      toast.error("Name, category and standard price are required");
+      toast.error("Service name, category, and standard price are all required. Please fill in the highlighted fields.");
       return;
     }
     const data: ServiceInput = {

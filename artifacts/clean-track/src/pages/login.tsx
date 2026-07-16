@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/auth-context";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { WashingMachine, Eye, EyeOff, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Login() {
+  usePageTitle("Sign In");
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useCachedQuery } from "@/hooks/use-cached-query";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { CachedDataBadge } from "@/components/cached-data-badge";
 import { useAuth } from "@/context/auth-context";
 import { api, type ReceiptListItem } from "@/lib/api";
@@ -22,6 +23,7 @@ function fmt(v: number) {
 type DateRange = "all" | "today" | "7days" | "30days" | "custom";
 
 export default function Receipts() {
+  usePageTitle("Receipts");
   const { isOwner } = useAuth();
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>("all");

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { UpgradeRequired } from "@/components/upgrade-required";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { InboxTab } from "@/components/inbox-tab";
@@ -913,6 +914,7 @@ function AnalyticsTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CustomerHubPage() {
+  usePageTitle("Customer Hub");
   const qc = useQueryClient();
   const [tab, setTab] = useState("overview");
   const [formOpen, setFormOpen] = useState(false);

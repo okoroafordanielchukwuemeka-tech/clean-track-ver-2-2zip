@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type BatchInput } from "@/lib/api";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import { useBranch } from "@/context/branch-context";
 
 export default function Batches() {
+  usePageTitle("Batches");
   const qc = useQueryClient();
   const { activeBranchId } = useBranch();
   const [showCreate, setShowCreate] = useState(false);

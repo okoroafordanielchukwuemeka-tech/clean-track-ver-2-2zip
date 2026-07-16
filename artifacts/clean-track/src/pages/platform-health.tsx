@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -170,6 +171,7 @@ function formatAgeHours(h: number) {
 }
 
 export default function PlatformHealthPage() {
+  usePageTitle("Platform Health");
   const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } = useQuery<ProductionHealthData>({
     queryKey: ["platform-health"],
     queryFn: () => api.health.production() as Promise<ProductionHealthData>,

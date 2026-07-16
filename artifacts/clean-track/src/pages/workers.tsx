@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type WorkerInput } from "@/lib/api";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ const emptyForm: Partial<WorkerInput> = {
 };
 
 export default function Workers() {
+  usePageTitle("Workers");
   const qc = useQueryClient();
   const [showDialog, setShowDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -87,9 +89,11 @@ export default function Workers() {
   };
 
   const handleSave = () => {
-    if (!form.name) { toast.error("Name is required"); return; }
+    if (!form.name?.trim()) { toast.error("Worker name is required. Please enter the worker's full name."); return; }
+    if (form.pin && !/^\d{4}$/.test(form.pin)) { toast.error("Worker PIN must contain exactly 4 digits. For example: 1234."); return; }
+    if (form.phone && !/^\d{11}$/.test(form.phone.replace(/\s/g, ""))) { toast.error("Phone number must contain 11 digits. For example: 08012345678."); return; }
     const data: WorkerInput = {
-      name: form.name,
+      name: form.name ?? "",
       phone: form.phone || "",
       role: (form.role ?? "worker") as "admin" | "worker",
       pin: form.pin || "",

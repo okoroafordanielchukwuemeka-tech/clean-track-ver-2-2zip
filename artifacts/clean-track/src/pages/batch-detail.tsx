@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { ArrowLeft, CheckCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BatchDetail() {
+  usePageTitle("Batch Details");
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const batchId = parseInt(id!);

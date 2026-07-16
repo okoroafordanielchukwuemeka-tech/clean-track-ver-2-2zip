@@ -7,7 +7,8 @@ import { usePendingLocalCustomers } from "@/hooks/use-pending-local";
 import { enqueueCustomerCreate } from "@/lib/queue-service";
 import { getIsOnline } from "@/lib/network-state";
 import { localDb, type LocalCustomer } from "@/lib/local-db";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
 import {
@@ -121,6 +122,8 @@ function StatTile({ label, value, sub, color }: { label: string; value: string |
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Customers() {
+  usePageTitle("Customers");
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { isOwner, laundryId, hasPermission } = useAuth();
@@ -135,7 +138,7 @@ export default function Customers() {
   // Profile / dialog state
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [profileTab, setProfileTab] = useState<"orders" | "payments" | "statement">("orders");
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(() => searchParams.get("create") === "1");
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [createForm, setCreateForm] = useState<CustomerInput>({ fullName: "", phone: "" });
@@ -1441,7 +1444,8 @@ export default function Customers() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                if (!createForm.fullName || !createForm.phone) { toast.error("Name and phone are required"); return; }
+                if (!createForm.fullName.trim()) { toast.error("Customer name is required. Please enter the customer's full name."); return; }
+                if (!createForm.phone.trim()) { toast.error("Phone number is required. Please enter an 11-digit number, e.g. 08012345678."); return; }
                 createMutation.mutate(createForm);
               }}
               disabled={createMutation.isPending}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ const DEMO_WORKER_PHONE = "08034191399";
 const DEMO_WORKER_PIN = "1234";
 
 export default function WorkerLogin() {
+  usePageTitle("Worker Sign In");
   const navigate = useNavigate();
   const { login } = useAuth();
   const [phone, setPhone] = useState("");

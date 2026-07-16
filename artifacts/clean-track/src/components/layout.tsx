@@ -24,8 +24,10 @@ import {
   Moon,
   Megaphone,
   Lock,
+  Keyboard,
+  Search,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "@/context/theme-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/auth-context";
@@ -40,6 +42,9 @@ import { OutdatedClientBanner } from "@/components/outdated-client-banner";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { SyncProgressBar } from "@/components/sync-progress-bar";
 import { FeedbackButton } from "@/components/feedback-button";
+import { CommandPalette } from "@/components/command-palette";
+import { KeyboardShortcutsHelp } from "@/components/keyboard-shortcuts-help";
+import { CommandPaletteProvider, useCommandPalette } from "@/context/command-palette-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -49,17 +54,20 @@ const workerNavItems = [
   { to: "/customers", label: "Customers", icon: UserCircle },
 ];
 
-export function Layout() {
+function LayoutInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isOwner, logout } = useAuth();
   const { activeBranch } = useBranch();
   const { resolvedTheme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(() => {
     const advancedPaths = ["/operations", "/customer-hub", "/platform-health"];
     return advancedPaths.some((p) => location.pathname.startsWith(p));
   });
+
+  const { openPalette } = useCommandPalette();
 
   const { data: pendingCount } = useQuery({
     queryKey: ["discount-approvals", "pending-count"],
@@ -74,7 +82,6 @@ export function Layout() {
     enabled: isOwner,
     staleTime: 5 * 60_000,
   });
-  // Starter (or free/no-status) users don't have pro features
   const isProOrAbove =
     !subStatus ||
     subStatus.status === "trial" ||
@@ -121,6 +128,63 @@ export function Layout() {
     navigate("/login", { replace: true });
   };
 
+  // ── Global keyboard shortcuts ─────────────────────────────────────────────
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const inInput =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Ctrl/⌘ + K — command palette
+      if (mod && e.key === "k") {
+        e.preventDefault();
+        openPalette();
+        return;
+      }
+
+      // Ctrl/⌘ + N — create order
+      if (mod && !e.shiftKey && e.key === "n") {
+        e.preventDefault();
+        navigate("/orders?create=1");
+        return;
+      }
+
+      // Ctrl/⌘ + Shift + C — create customer
+      if (mod && e.shiftKey && e.key === "C") {
+        e.preventDefault();
+        navigate("/customers?create=1");
+        return;
+      }
+
+      // Skip remaining shortcuts when inside a text input
+      if (inInput) return;
+
+      // ? — keyboard shortcut help
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+
+      // / — open command palette (search intent)
+      if (e.key === "/") {
+        e.preventDefault();
+        openPalette();
+        return;
+      }
+    },
+    [navigate, openPalette]
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
   return (
     <div className="flex h-screen bg-background">
       {sidebarOpen && (
@@ -150,7 +214,22 @@ export function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {/* Search / command palette trigger */}
+        <div className="px-3 pt-3 pb-1">
+          <button
+            onClick={() => openPalette()}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-sidebar-accent/40 text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/70 text-sm transition-colors"
+            aria-label="Open command palette"
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 text-left text-xs">Search…</span>
+            <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-sidebar-border/40 bg-sidebar/40 px-1.5 font-mono text-[10px] text-sidebar-foreground/40">
+              ⌘K
+            </kbd>
+          </button>
+        </div>
+
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           <BranchSelector />
           {navItems.map(({ to, label, icon: Icon, badge }: any) => (
             <Link
@@ -184,7 +263,6 @@ export function Layout() {
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", advancedOpen && "rotate-180")} />
               </button>
               {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => {
-                // Show a lock indicator on pro-gated items when on Starter/free
                 const isPremium = (to === "/marketing" || to === "/customer-hub") && !isProOrAbove;
                 return (
                   <Link
@@ -201,7 +279,7 @@ export function Layout() {
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="flex-1">{label}</span>
                     {isPremium && (
-                      <Lock className="h-3 w-3 text-sidebar-foreground/40 shrink-0" title="Requires Professional plan" />
+                      <Lock className="h-3 w-3 text-sidebar-foreground/40 shrink-0" aria-label="Requires Professional plan" />
                     )}
                     {badge != null && !isPremium && (
                       <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
@@ -232,9 +310,20 @@ export function Layout() {
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => setShortcutsOpen(true)}
+              className="text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent"
+              title="Keyboard shortcuts (?)"
+              aria-label="View keyboard shortcuts"
+            >
+              <Keyboard className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={toggleTheme}
               className="text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent"
               title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
@@ -245,6 +334,7 @@ export function Layout() {
               onClick={handleLogout}
               className="text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent"
               title="Sign out"
+              aria-label="Sign out"
             >
               <LogOut className="h-4 w-4" />
             </Button>
@@ -258,6 +348,7 @@ export function Layout() {
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label={sidebarOpen ? "Close menu" : "Open menu"}
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
@@ -265,6 +356,15 @@ export function Layout() {
             <WashingMachine className="h-5 w-5 text-primary" />
             <span className="font-bold">CleanTrack</span>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => openPalette()}
+            aria-label="Open command palette"
+            className="text-muted-foreground"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
           <div className="bg-sidebar rounded-lg">
             <NotificationCenter />
           </div>
@@ -279,6 +379,17 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      <CommandPalette />
+      <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
+  );
+}
+
+export function Layout() {
+  return (
+    <CommandPaletteProvider>
+      <LayoutInner />
+    </CommandPaletteProvider>
   );
 }

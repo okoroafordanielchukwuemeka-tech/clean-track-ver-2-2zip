@@ -1,4 +1,5 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { usePageTitle } from "@/hooks/use-page-title";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
@@ -152,6 +153,9 @@ export default function OrderDetail() {
     queryFn: () => api.orders.get(orderId),
   });
 
+  // Dynamic browser title — updates once order data loads
+  usePageTitle(order ? `Order #${order.orderId}` : "Order");
+
   const { data: payments = [] } = useQuery({
     queryKey: ["orders", orderId, "payments"],
     queryFn: () => api.orders.payments(orderId),
@@ -260,7 +264,7 @@ export default function OrderDetail() {
 
   const handlePaymentSubmit = async (formData: PaymentInput) => {
     if (!formData.amount || formData.amount <= 0) {
-      toast.error("Enter a valid amount");
+      toast.error("Payment amount must be greater than zero. Please enter the amount received.");
       return;
     }
 
