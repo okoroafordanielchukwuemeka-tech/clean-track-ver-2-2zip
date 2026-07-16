@@ -1,0 +1,515 @@
+# PHASE 7.13 — PREMIUM EXPERIENCE CERTIFICATION
+
+## IMPORTANT
+
+CleanTrack has completed its core feature set.
+
+Do NOT build new business features.
+
+Do NOT redesign the application.
+
+Do NOT change workflows unless they are objectively improving usability.
+
+This phase is entirely about making CleanTrack feel like a polished, premium SaaS product.
+
+Think like the product teams behind:
+
+* Stripe
+* Shopify
+* Linear
+* Notion
+* Slack
+
+Focus on refinement, consistency, speed, clarity, and user confidence.
+
+---
+
+# PART 1 — COMPLETE WORKFLOW CERTIFICATION
+
+Perform a real end-to-end usability walkthrough.
+
+Owner workflow:
+
+Login
+
+↓
+
+Dashboard
+
+↓
+
+Create Customer
+
+↓
+
+Create Order
+
+↓
+
+Search Service
+
+↓
+
+Upload Service Image
+
+↓
+
+Apply Discount
+
+↓
+
+Record Payment
+
+↓
+
+Generate Receipt
+
+↓
+
+Assign Batch
+
+↓
+
+Mark Ready
+
+↓
+
+Partial Pickup
+
+↓
+
+Final Pickup
+
+↓
+
+Analytics
+
+↓
+
+Billing
+
+↓
+
+Logout
+
+Worker workflow:
+
+Login
+
+↓
+
+Find Order
+
+↓
+
+Update Order Status
+
+↓
+
+Batch Assignment
+
+↓
+
+Ready
+
+↓
+
+Pickup
+
+↓
+
+Logout
+
+For every step measure:
+
+* Number of clicks
+* Time required
+* Confusing UI
+* Duplicate actions
+* Unnecessary navigation
+* Missing feedback
+* Poor wording
+
+If a workflow can be simplified WITHOUT changing business logic:
+
+Improve it.
+
+---
+
+# PART 2 — CLICK REDUCTION AUDIT
+
+Identify unnecessary clicks.
+
+Example:
+
+Current:
+
+Orders
+
+↓
+
+Open Order
+
+↓
+
+Actions
+
+↓
+
+Record Payment
+
+↓
+
+Confirm
+
+If this can safely become:
+
+Orders
+
+↓
+
+Record Payment
+
+↓
+
+Confirm
+
+Implement the improvement.
+
+Do NOT remove confirmation dialogs where they protect data.
+
+Document every click reduction.
+
+---
+
+# PART 3 — MICRO INTERACTION AUDIT
+
+Audit every interaction.
+
+Verify:
+
+Hover animations
+
+Button feedback
+
+Loading feedback
+
+Success notifications
+
+Error notifications
+
+Modal opening
+
+Modal closing
+
+Dropdown animation
+
+Drawer animation
+
+Search interaction
+
+Filter interaction
+
+Tab switching
+
+Page transitions
+
+Nothing should feel abrupt or unfinished.
+
+Improve only where necessary.
+
+---
+
+# PART 4 — FORM EXPERIENCE
+
+Audit every form.
+
+Verify:
+
+Validation
+
+Required fields
+
+Helpful error messages
+
+Inline validation
+
+Loading state
+
+Disabled state
+
+Duplicate submission prevention
+
+Autocomplete
+
+Keyboard navigation
+
+Focus management
+
+Tab order
+
+Paste behaviour
+
+Mobile keyboard behaviour
+
+Improve where necessary.
+
+---
+
+# PART 5 — FEEDBACK QUALITY
+
+Every action should clearly communicate what happened.
+
+Examples:
+
+Instead of:
+
+"Error"
+
+Prefer:
+
+"Payment could not be recorded.
+
+Please check your connection and try again."
+
+Instead of:
+
+"Saved"
+
+Prefer:
+
+"Customer updated successfully."
+
+Audit every notification.
+
+---
+
+# PART 6 — VISUAL CONSISTENCY
+
+Verify consistency across the entire application.
+
+Spacing
+
+Margins
+
+Padding
+
+Card heights
+
+Table spacing
+
+Button sizes
+
+Input heights
+
+Badge sizes
+
+Typography
+
+Icons
+
+Colors
+
+Shadows
+
+Borders
+
+Radius
+
+There should be one visual language throughout the application.
+
+---
+
+# PART 7 — PREMIUM POLISH
+
+Identify opportunities to improve perceived quality.
+
+Examples:
+
+Better skeleton loaders
+
+Better empty states
+
+Improved loading animations
+
+Cleaner success screens
+
+More informative error screens
+
+Better search highlighting
+
+Smarter placeholder text
+
+Cleaner helper text
+
+Only implement improvements that genuinely increase perceived quality.
+
+Do NOT add decorative animations.
+
+---
+
+# PART 8 — PERFORMANCE FEEL
+
+Measure perceived responsiveness.
+
+Audit:
+
+Dashboard
+
+Orders
+
+Customers
+
+Services
+
+Receipts
+
+Analytics
+
+Billing
+
+Search
+
+Navigation
+
+Images
+
+If any page feels slow:
+
+Identify the bottleneck.
+
+Optimize.
+
+Do not introduce regressions.
+
+---
+
+# PART 9 — MOBILE EXPERIENCE
+
+Audit on mobile-sized layouts.
+
+Verify:
+
+Navigation
+
+Tables
+
+Cards
+
+Forms
+
+Dialogs
+
+Buttons
+
+Images
+
+Touch targets
+
+Scrolling
+
+No horizontal scrolling.
+
+No clipped content.
+
+No overlapping elements.
+
+---
+
+# PART 10 — ACCESSIBILITY
+
+Verify:
+
+Keyboard navigation
+
+Focus rings
+
+Tab order
+
+Contrast
+
+ARIA labels
+
+Button labels
+
+Image alt text
+
+Modal focus trapping
+
+Escape key behaviour
+
+Screen reader friendliness
+
+Fix accessibility issues.
+
+---
+
+# PART 11 — USER CONFIDENCE
+
+Evaluate the application from the perspective of a first-time laundry owner.
+
+Ask:
+
+Would I immediately trust this software?
+
+Would I feel safe entering customer information?
+
+Would I understand every screen?
+
+Would I know what to do next?
+
+Would I feel confident paying for this?
+
+If not:
+
+Improve the experience.
+
+---
+
+# PART 12 — FINAL CERTIFICATION REPORT
+
+Provide:
+
+1. Workflow Audit Results
+
+2. Click Reduction Summary
+
+3. UX Improvements
+
+4. Form Improvements
+
+5. Performance Improvements
+
+6. Accessibility Results
+
+7. Mobile Results
+
+8. Visual Consistency Results
+
+9. Premium Polish Improvements
+
+10. Bugs Found
+
+11. Bugs Fixed
+
+12. Before/After Screenshots
+
+13. Remaining Risks
+
+14. Premium Experience Readiness Score
+
+15. Launch Recommendation
+
+IMPORTANT
+
+Do NOT begin Phase 8.
+
+Do NOT add WhatsApp enhancements.
+
+Do NOT add SMS.
+
+Do NOT add PDF Statements.
+
+Do NOT add new business features.
+
+Focus entirely on delivering a product that feels premium, refined, reliable, and production-ready.

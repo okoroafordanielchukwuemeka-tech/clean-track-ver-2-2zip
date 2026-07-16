@@ -231,5 +231,42 @@ export function validateEnvironment(): void {
     );
   }
 
+  // ── Paystack (billing & subscriptions) ──────────────────────────────────
+  const paystackConfigured =
+    !!process.env.PAYSTACK_SECRET_KEY?.trim() &&
+    !!process.env.PAYSTACK_PUBLIC_KEY?.trim();
+  if (paystackConfigured) {
+    console.log("[env]   ✓ Paystack billing is configured — recurring charges and checkout enabled.");
+  } else {
+    console.warn("[env] ⚠ Paystack not configured — billing and subscription flows disabled.");
+  }
+
+  // ── Cloudinary (image storage) ───────────────────────────────────────────
+  const cloudinaryConfigured =
+    !!process.env.CLOUDINARY_CLOUD_NAME?.trim() &&
+    !!process.env.CLOUDINARY_API_KEY?.trim() &&
+    !!process.env.CLOUDINARY_API_SECRET?.trim();
+  if (cloudinaryConfigured) {
+    console.log(
+      `[env]   ✓ Cloudinary image storage is configured — cloud: ${process.env.CLOUDINARY_CLOUD_NAME?.trim()}.`
+    );
+  } else {
+    console.warn("[env] ⚠ Cloudinary not configured — image uploads will use local disk storage.");
+  }
+
+  // ── SMTP / Email ─────────────────────────────────────────────────────────
+  const smtpHost = process.env.SMTP_HOST?.trim();
+  const smtpPass =
+    process.env.SMTP_PASS?.trim() ||
+    process.env.SMTP_PASSWORD?.trim() ||
+    process.env.RESEND_API_KEY?.trim();
+  if (smtpHost && smtpPass) {
+    console.log(
+      `[env]   ✓ SMTP email is configured — host: ${smtpHost}, from: ${process.env.SMTP_FROM?.trim() ?? "(unset)"}.`
+    );
+  } else {
+    console.warn("[env] ⚠ SMTP not fully configured — transactional emails will not be sent.");
+  }
+
   console.log("[env] ✓ Environment validation passed.\n");
 }
