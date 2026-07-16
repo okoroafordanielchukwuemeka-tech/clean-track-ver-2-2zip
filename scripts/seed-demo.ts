@@ -9,7 +9,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import * as schema from "../lib/db/src/schema/index.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -20,7 +20,10 @@ const {
   paymentRecords, priceAdjustments, discountApprovals, services,
   expenditures, expenseCategories, messageTemplates,
   conversations, conversationMessages,
+  notifications, notificationEvents, activationEvents,
 } = schema;
+
+const RESET_MODE = process.argv.includes("--reset");
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function rand(min: number, max: number) {
@@ -86,16 +89,16 @@ const BRANCH_ADDRESSES = [
 ];
 
 const SERVICE_CATALOG = [
-  { name: "Shirts (Wash & Iron)", category: "clothing", standardPrice: "800", expressPrice: "1200", premiumPrice: "1500" },
-  { name: "Trousers (Wash & Iron)", category: "clothing", standardPrice: "1000", expressPrice: "1500", premiumPrice: "2000" },
-  { name: "Suits (Full Dry Clean)", category: "formal", standardPrice: "4000", expressPrice: "6000", premiumPrice: "8000" },
-  { name: "Dresses", category: "clothing", standardPrice: "1500", expressPrice: "2200", premiumPrice: "3000" },
-  { name: "Bedsheets (Single)", category: "bedding", standardPrice: "1200", expressPrice: "1800", premiumPrice: "2500" },
-  { name: "Duvet / Comforter", category: "bedding", standardPrice: "3500", expressPrice: "5000", premiumPrice: "7000" },
-  { name: "Agbada (Full Set)", category: "traditional", standardPrice: "5000", expressPrice: "7500", premiumPrice: "10000" },
-  { name: "Ankara Fabric (Piece)", category: "traditional", standardPrice: "1800", expressPrice: "2500", premiumPrice: "3500" },
-  { name: "Sneakers (Pair)", category: "footwear", standardPrice: "2500", expressPrice: "3500", premiumPrice: "5000" },
-  { name: "Leather Shoes (Pair)", category: "footwear", standardPrice: "2000", expressPrice: "3000", premiumPrice: "4500" },
+  { name: "Shirts (Wash & Iron)",   category: "clothing",    imageUrl: "icon:shirt",    standardPrice: "800",  expressPrice: "1200", premiumPrice: "1500"  },
+  { name: "Trousers (Wash & Iron)", category: "clothing",    imageUrl: "icon:pants",    standardPrice: "1000", expressPrice: "1500", premiumPrice: "2000"  },
+  { name: "Suits (Full Dry Clean)", category: "formal",      imageUrl: "icon:suit",     standardPrice: "4000", expressPrice: "6000", premiumPrice: "8000"  },
+  { name: "Dresses",                category: "clothing",    imageUrl: "icon:dress",    standardPrice: "1500", expressPrice: "2200", premiumPrice: "3000"  },
+  { name: "Bedsheets (Single)",     category: "bedding",     imageUrl: "icon:bedsheet", standardPrice: "1200", expressPrice: "1800", premiumPrice: "2500"  },
+  { name: "Duvet / Comforter",      category: "bedding",     imageUrl: "icon:duvet",    standardPrice: "3500", expressPrice: "5000", premiumPrice: "7000"  },
+  { name: "Agbada (Full Set)",      category: "traditional", imageUrl: "icon:agbada",   standardPrice: "5000", expressPrice: "7500", premiumPrice: "10000" },
+  { name: "Ankara Fabric (Piece)",  category: "traditional", imageUrl: "icon:ankara",   standardPrice: "1800", expressPrice: "2500", premiumPrice: "3500"  },
+  { name: "Sneakers (Pair)",        category: "footwear",    imageUrl: "icon:sneaker",  standardPrice: "2500", expressPrice: "3500", premiumPrice: "5000"  },
+  { name: "Leather Shoes (Pair)",   category: "footwear",    imageUrl: "icon:shoe",     standardPrice: "2000", expressPrice: "3000", premiumPrice: "4500"  },
 ];
 
 const EXPENSE_NAMES = ["electricity","detergent","water","salaries","transport","maintenance","packaging","miscellaneous"];
@@ -117,8 +120,47 @@ const DEFAULT_TEMPLATES = [
   },
 ];
 
+// ── reset ──────────────────────────────────────────────────────────────────
+async function resetDemoData() {
+  const DEMO_EMAIL = "demo@cleantrack.ng";
+  const [existing] = await db.select().from(laundries).where(eq(laundries.ownerEmail, DEMO_EMAIL));
+  if (!existing) {
+    console.log("ℹ️  No demo data found — nothing to reset.");
+    return;
+  }
+  const laundryId = existing.id;
+  console.log(`🗑️  Resetting demo data for laundryId=${laundryId}...`);
+
+  // Delete in dependency order (children before parents)
+  await db.execute(sql`DELETE FROM conversation_messages WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM conversations WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM notification_events WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM notifications WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM discount_approvals WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM price_adjustments WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM payment_records WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM pickup_records WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM orders WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM expenditures WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM customers WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM workers WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM service_branches WHERE service_id IN (SELECT id FROM services WHERE laundry_id = ${laundryId})`);
+  await db.execute(sql`DELETE FROM services WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM branches WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM expense_categories WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM message_templates WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM activation_events WHERE laundry_id = ${laundryId}`);
+  await db.execute(sql`DELETE FROM laundries WHERE id = ${laundryId}`);
+
+  console.log("✅ Demo data cleared.\n");
+}
+
 // ── main ───────────────────────────────────────────────────────────────────
 async function main() {
+  if (RESET_MODE) {
+    console.log("🔄 RESET MODE — wiping all demo data before re-seeding...\n");
+    await resetDemoData();
+  }
   console.log("🚀 Starting demo seed...\n");
 
   // ── 1. Create or reuse demo laundry ──────────────────────────────────────
@@ -296,7 +338,7 @@ async function main() {
     console.log(`ℹ️  Already have ${existingOrderCount.length} orders — skipping order creation`);
   } else {
     console.log("Creating 1000 orders across 5 branches...");
-    const STATUSES: Array<"pending"|"processing"|"ready"|"completed"> = ["pending","processing","ready","completed"];
+    type OrderStatus = "pending"|"processing"|"ready"|"partial_pickup"|"completed"|"cancelled";
     const PAY_STATUSES: Array<"unpaid"|"partial"|"paid"> = ["unpaid","partial","paid"];
     const SVC_TYPES: Array<"standard"|"express"|"premium"> = ["standard","express","premium"];
     let ordersCreated = 0;
@@ -318,23 +360,47 @@ async function main() {
         const daysBack = rand(0, 90);
         const createdAt = daysAgo(daysBack);
 
-        // Determine status based on age
-        let status: "pending"|"processing"|"ready"|"completed" = "pending";
-        if (daysBack > 60) status = "completed";
-        else if (daysBack > 30) status = pick(["processing","ready","completed"]);
-        else if (daysBack > 7) status = pick(["pending","processing","ready"]);
-        else status = pick(["pending","processing"]);
+        // Determine status with realistic age-based distribution.
+        // All 6 schema statuses represented: pending, processing, ready,
+        // partial_pickup, completed, cancelled.
+        let status: OrderStatus = "pending";
+        if (daysBack > 60) {
+          status = pick<OrderStatus>(["completed","completed","completed","cancelled","partial_pickup"]);
+        } else if (daysBack > 30) {
+          status = pick<OrderStatus>(["processing","ready","completed","completed","partial_pickup","cancelled"]);
+        } else if (daysBack > 7) {
+          status = pick<OrderStatus>(["pending","processing","ready","partial_pickup","cancelled"]);
+        } else {
+          status = pick<OrderStatus>(["pending","pending","processing","ready"]);
+        }
 
         // Payment aligned with status
         let paymentStatus: "unpaid"|"partial"|"paid" = "unpaid";
         let amountPaid = 0;
         if (status === "completed") {
           paymentStatus = Math.random() > 0.1 ? "paid" : "partial";
+        } else if (status === "cancelled") {
+          // cancelled orders: mostly unpaid, occasionally partially paid (refund scenario)
+          paymentStatus = Math.random() > 0.8 ? "partial" : "unpaid";
+        } else if (status === "partial_pickup") {
+          paymentStatus = pick(["partial", "paid"]);
         } else {
           paymentStatus = pick(PAY_STATUSES);
         }
         if (paymentStatus === "paid") amountPaid = basePrice;
         else if (paymentStatus === "partial") amountPaid = Math.floor(basePrice * rand(30, 70) / 100);
+
+        // Partial pickup quantities
+        const shirtsPickedUp = status === "completed"
+          ? shirts
+          : status === "partial_pickup"
+            ? rand(1, Math.max(1, shirts - 1))
+            : 0;
+        const trousersPickedUp = status === "completed"
+          ? trousers
+          : status === "partial_pickup" && trousers > 0
+            ? rand(0, trousers - 1)
+            : 0;
 
         const worker = pick(branchWorkers);
         const orderId = nextOrderId();
@@ -349,8 +415,8 @@ async function main() {
           serviceType,
           shirts,
           trousers,
-          shirtsPickedUp: status === "completed" ? shirts : 0,
-          trousersPickedUp: status === "completed" ? trousers : 0,
+          shirtsPickedUp,
+          trousersPickedUp,
           status,
           paymentStatus,
           price: basePrice.toString(),
@@ -701,6 +767,12 @@ async function main() {
   console.log(`  Workers    : ${workerList.length}`);
   console.log(`  Customers  : ${customerList.length}`);
   console.log(`  Orders     : ${allOrders.length}`);
+  console.log(`    pending        : ${allOrders.filter(o => o.status === "pending").length}`);
+  console.log(`    processing     : ${allOrders.filter(o => o.status === "processing").length}`);
+  console.log(`    ready          : ${allOrders.filter(o => o.status === "ready").length}`);
+  console.log(`    partial_pickup : ${allOrders.filter(o => o.status === "partial_pickup").length}`);
+  console.log(`    completed      : ${allOrders.filter(o => o.status === "completed").length}`);
+  console.log(`    cancelled      : ${allOrders.filter(o => o.status === "cancelled").length}`);
   console.log(`  Discount Requests: ${allDiscounts.length}`);
   console.log(`    Pending  : ${allDiscounts.filter(d => d.status === "pending").length}`);
   console.log(`    Approved : ${allDiscounts.filter(d => d.status === "approved").length}`);

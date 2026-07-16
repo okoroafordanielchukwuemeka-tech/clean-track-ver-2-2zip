@@ -4,6 +4,8 @@
   "scripts": {
     "dev": "bash start.sh",
     "build": "pnpm --filter @workspace/api-server build && pnpm --filter @workspace/clean-track build",
+    "seed-demo": "npx tsx scripts/seed-demo.ts",
+    "seed-demo:reset": "npx tsx scripts/seed-demo.ts --reset",
     "db:push": "pnpm --filter @workspace/db push",
     "db:push-force": "pnpm --filter @workspace/db push-force",
     "db:migrate:generate": "pnpm --filter @workspace/db generate",

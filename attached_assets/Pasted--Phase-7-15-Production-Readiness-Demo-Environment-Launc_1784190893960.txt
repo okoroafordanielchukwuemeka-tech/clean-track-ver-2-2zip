@@ -1,0 +1,460 @@
+# Phase 7.15 — Production Readiness, Demo Environment & Launch Certification
+
+## IMPORTANT
+
+This phase is **NOT** about adding new customer-facing features.
+
+The objective is to transform CleanTrack from a feature-complete application into a **production-ready SaaS platform** capable of supporting its first 100 paying laundries.
+
+Before making any changes:
+
+* Audit the current implementation.
+* Reuse existing architecture whenever possible.
+* Preserve all existing functionality.
+* Do not introduce regressions.
+* Do not remove or redesign completed features unless required to fix a verified issue.
+
+---
+
+# PART 1 — Full Production Audit
+
+Perform a complete audit of the application.
+
+Review:
+
+* Backend architecture
+* Frontend architecture
+* Database schema
+* Multi-tenant isolation
+* Authentication
+* Authorization
+* Billing
+* Payments
+* Storage
+* File uploads
+* Offline sync
+* Service workers
+* Logging
+* Error handling
+* Analytics
+* Deployment configuration
+
+For every area report:
+
+* Current implementation
+* Missing items
+* Risks
+* Recommended fixes
+
+Implement only verified improvements.
+
+---
+
+# PART 2 — Complete Demo Environment
+
+Create a fully populated demonstration environment.
+
+Requirements:
+
+## Branches
+
+Create at least:
+
+* 5 branches
+
+Each branch should contain unique data.
+
+---
+
+## Workers
+
+Create:
+
+* Owner
+* Branch Managers
+* Front Desk Staff
+* Washing Staff
+* Delivery Staff
+
+Each role must have realistic permissions.
+
+---
+
+## Customers
+
+Generate at least:
+
+* 200 realistic customers
+
+Include:
+
+* Names
+* Phone numbers
+* Addresses
+* Different customer histories
+
+---
+
+## Services
+
+Populate every branch with realistic services including:
+
+* Images
+* Categories
+* Pricing
+* Branch availability
+
+---
+
+## Orders
+
+Generate at least:
+
+* 1000 realistic orders
+
+Include every possible state:
+
+* Pending
+* Washing
+* Drying
+* Ready
+* Partially Picked Up
+* Completed
+* Delivered
+* Cancelled
+
+---
+
+## Payments
+
+Generate:
+
+* Full payments
+* Partial payments
+* Outstanding balances
+* Failed payments
+
+---
+
+## Receipts
+
+Generate realistic receipts linked correctly to orders.
+
+---
+
+## Discount Workflow
+
+Populate:
+
+* Auto-approved discounts
+* Pending approvals
+* Approved discounts
+* Rejected discounts
+
+---
+
+## Analytics
+
+Ensure dashboards display meaningful production-like statistics.
+
+---
+
+# PART 3 — Repeatable Demo Seeder
+
+Create a repeatable seeding system.
+
+Examples:
+
+* npm run seed-demo
+* pnpm seed-demo
+
+The command must:
+
+* Clear previous demo data safely
+* Recreate the complete demo environment
+* Produce identical structure every time
+
+Support:
+
+* Fresh installation
+* Existing development environment
+
+---
+
+# PART 4 — Backup & Disaster Recovery
+
+Implement production-grade backup procedures.
+
+Support:
+
+* Database backup
+* Database restore
+* Export
+* Import
+* Disaster recovery documentation
+
+Provide:
+
+* Recovery Time Objective (RTO)
+* Recovery Point Objective (RPO)
+
+Document every recovery step.
+
+Never risk production customer data.
+
+---
+
+# PART 5 — Production Infrastructure Audit
+
+Verify every production dependency.
+
+Audit:
+
+## Cloudinary
+
+Verify:
+
+* Upload
+* Delete
+* Image replacement
+* Thumbnail generation
+* CDN URLs
+
+---
+
+## Paystack
+
+Verify:
+
+* Checkout
+* Webhooks
+* Idempotency
+* Recurring billing
+* Subscription lifecycle
+
+---
+
+## Email
+
+Verify:
+
+* SMTP configuration
+* Email templates
+* Invoice emails
+* Payment emails
+* Password reset emails
+
+---
+
+## Environment Variables
+
+Verify every required secret exists.
+
+Report:
+
+Missing
+
+Optional
+
+Critical
+
+---
+
+## Security
+
+Verify:
+
+* CORS
+* Rate limiting
+* Helmet/security headers
+* CSRF strategy
+* XSS protection
+* SQL injection protection
+* Authentication middleware
+* Authorization middleware
+
+---
+
+## Storage
+
+Verify:
+
+* Cloudinary
+* Static assets
+* Legacy image compatibility
+
+---
+
+## Database
+
+Verify:
+
+* Indexes
+* Constraints
+* Foreign keys
+* Migrations
+* Seed scripts
+
+---
+
+## Monitoring
+
+Audit:
+
+* Logging
+* Health checks
+* Error tracking
+* Performance monitoring
+
+Recommend improvements where missing.
+
+---
+
+# PART 6 — End-to-End Workflow Verification
+
+Using the seeded demo data, perform complete workflow testing.
+
+Owner:
+
+* Complete operational workflow
+
+Worker:
+
+* Complete operational workflow
+
+Customer:
+
+* Complete customer journey
+
+Verify:
+
+Customer
+
+↓
+
+Order
+
+↓
+
+Payment
+
+↓
+
+Receipt
+
+↓
+
+Batch
+
+↓
+
+Ready
+
+↓
+
+Partial Pickup
+
+↓
+
+Final Pickup
+
+↓
+
+Analytics
+
+No failures permitted.
+
+---
+
+# PART 7 — Production Deployment Checklist
+
+Verify readiness for deployment.
+
+Checklist includes:
+
+* Domain
+* SSL
+* Environment variables
+* Cloudinary
+* Paystack
+* SMTP
+* Database
+* Backups
+* Monitoring
+* Logging
+* Security
+* Performance
+* Storage
+* Health endpoints
+
+Report anything preventing production launch.
+
+---
+
+# PART 8 — Launch Certification
+
+Produce a comprehensive certification report.
+
+Include:
+
+1. Architecture Summary
+
+2. Production Readiness Score
+
+3. Demo Environment Summary
+
+4. Seeder Status
+
+5. Backup Strategy
+
+6. Disaster Recovery Procedure
+
+7. Deployment Checklist
+
+8. Security Audit Results
+
+9. Infrastructure Audit Results
+
+10. Performance Summary
+
+11. Remaining Risks
+
+12. Failed Tests
+
+13. Fixed Issues
+
+14. Recommended Improvements
+
+15. First 100 Customer Readiness Assessment
+
+Every statement must be backed by evidence from testing.
+
+---
+
+# COMPLETION CRITERIA
+
+This phase is complete only when:
+
+* All production infrastructure has been verified.
+* Demo environment works correctly.
+* Demo seeding is repeatable.
+* Backup and recovery are documented.
+* Owner workflow passes.
+* Worker workflow passes.
+* Customer workflow passes.
+* No critical production blockers remain.
+* Production readiness score is provided with justification.
+
+---
+
+## DO NOT START PHASE 8
+
+Do **NOT** begin:
+
+* Laundry Academy
+* AI Marketing enhancements
+* Smart Templates
+* Business Coaching
+* Any additional customer-facing features
+
+until every critical production item above has been completed, tested, documented, and certified.
