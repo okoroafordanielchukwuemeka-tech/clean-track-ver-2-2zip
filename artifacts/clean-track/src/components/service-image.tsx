@@ -34,6 +34,7 @@ export function ServiceImage({ name, imageUrl, className, iconClassName }: {
     );
   }
 
+  if (resolved.kind !== "icon" || !resolved.icon) return null;
   const Icon = resolved.icon.Icon;
   return (
     <div className={cn("flex items-center justify-center bg-muted text-muted-foreground", className)} title={resolved.isSuggested ? `Suggested: ${resolved.icon.label}` : resolved.icon.label}>

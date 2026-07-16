@@ -320,7 +320,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </>
       )}
 
-      {balance > 0 && laundry.paymentDetails && (laundry.paymentDetails.bankName || laundry.paymentDetails.instructions) && (
+      {pricing.balance > 0 && laundry.paymentDetails && (laundry.paymentDetails.bankName || laundry.paymentDetails.instructions) && (
         <>
           <div className="receipt-divider" />
           <div className="receipt-section">

@@ -1164,7 +1164,6 @@ export default function Customers() {
                           const bizEmail = businessProfile?.email ?? "";
                           const logoUrl = businessProfile?.logoUrl ?? "";
                           const footerText = brandingSettings?.receiptFooterText ?? "";
-                          printWindow?.close();
                           const pw = window.open("", "_blank");
                           if (!pw) return;
                           // Same header/footer/typography language as ReceiptView (receipt-view.tsx)

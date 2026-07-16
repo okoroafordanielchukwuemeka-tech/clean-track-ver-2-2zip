@@ -48,3 +48,4 @@
 - [Cloudinary Storage Driver](cloudinary-storage-driver.md) — Cloudinary active when 3 secrets present; thumbnails via transformation URL (no 2nd upload); delete() parses public_id from secure_url; legacy local images still served via express.static
 - [pnpm workspace package installs](pnpm-workspace-installs.md) — installLanguagePackages targeted repo root instead of the workspace member and corrupted node_modules; use `pnpm --filter <pkg> add` directly in this monorepo
 - [Cloudinary Image System Certification](cloudinary-certification.md) — multer-bypass bug + broken-image fallback + lazy-load fixed; duplicate shares URL (by design); 0 orphans post-audit
+- [RC1 Certification & Launch Gate](rc1-certification.md) — Phase 7.16 GO verdict; 3 TS build errors fixed; prod build passes; 5 pre-launch secrets required; score 89/100; report at docs/RC1_CERTIFICATION_REPORT.md

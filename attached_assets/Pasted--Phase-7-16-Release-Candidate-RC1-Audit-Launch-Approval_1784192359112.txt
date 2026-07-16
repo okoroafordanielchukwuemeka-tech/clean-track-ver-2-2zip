@@ -1,0 +1,329 @@
+# Phase 7.16 — Release Candidate (RC1) Audit & Launch Approval
+
+## Objective
+
+This is the **final gate** before Milestone 1 is considered complete.
+
+Assume CleanTrack is about to onboard its **first 100 production customers**.
+
+Do **not** build new customer-facing features.
+
+Do **not** redesign the application.
+
+Your responsibility is to perform an independent **Release Candidate (RC1) certification** and identify every issue that could prevent a successful production launch.
+
+Act as:
+
+* Senior QA Engineer
+* Release Manager
+* SaaS Production Engineer
+* Security Auditor
+* DevOps Reviewer
+* Product Owner performing final acceptance testing
+
+Be extremely critical.
+
+Do **not** assume anything works.
+
+Verify everything with evidence.
+
+---
+
+# PART 1 — Owner Workflow Certification
+
+Test every owner workflow using the seeded production demo environment.
+
+Verify the complete lifecycle:
+
+* Login
+* Dashboard
+* Customer creation
+* Service creation
+* Order creation
+* Payment recording
+* Receipt generation
+* Batch management
+* Worker management
+* Branch management
+* Discount approval
+* Analytics
+* Billing
+* Settings
+* AI Marketing
+* Customer Hub
+* Operations Center
+* Platform Health
+
+Verify:
+
+* No console errors
+* No failed API requests
+* No broken navigation
+* No broken buttons
+* No missing pages
+* No stale data
+* No unexpected loading states
+
+Record every issue found.
+
+---
+
+# PART 2 — Worker Workflow Certification
+
+Test every worker role.
+
+Verify:
+
+* Login
+* PIN authentication
+* Assigned orders
+* Status updates
+* Batch interaction
+* Pickup workflow
+* Partial pickup workflow
+* Payment visibility
+* Receipt visibility
+* Branch isolation
+
+Attempt unauthorized actions.
+
+Workers must never access:
+
+* Other branches
+* Billing
+* Owner analytics
+* Settings
+* Other workers' data
+
+Verify permissions are enforced.
+
+---
+
+# PART 3 — Billing Certification
+
+Perform a complete billing verification.
+
+Test:
+
+* Trial
+* Subscription
+* Upgrade
+* Downgrade
+* Renewal
+* Failed payment
+* Retry payment
+* Grace period
+* Suspension
+* Reactivation
+* Cancellation
+
+Verify:
+
+* Correct feature entitlements
+* Invoice generation
+* Payment history
+* Transaction records
+* Webhook processing
+* Idempotency
+* Audit logs
+
+Confirm no duplicate invoices or duplicate payment records exist.
+
+---
+
+# PART 4 — Security Certification
+
+Perform a penetration-style audit.
+
+Attempt:
+
+* Direct API access without authentication
+* Cross-tenant access
+* Cross-branch access
+* Privilege escalation
+* JWT tampering
+* Invalid webhook signatures
+* Duplicate webhook replay
+* SQL injection
+* XSS
+* CSRF where applicable
+
+Verify:
+
+* Proper HTTP status codes
+* No sensitive information leakage
+* No stack traces exposed
+* No secrets returned by the API
+
+Search the entire repository for:
+
+* console.log
+* debugger
+* TODO
+* FIXME
+* HACK
+* test credentials
+* hardcoded secrets
+* API keys
+* JWT_SECRET
+* PAYSTACK
+* CLOUDINARY
+* SMTP
+* SECRET
+* TOKEN
+
+Confirm sensitive values exist only in environment variables or Replit Secrets.
+
+---
+
+# PART 5 — Backup & Disaster Recovery
+
+Verify backup readiness.
+
+Confirm:
+
+* Database export procedure
+* Database restore procedure
+* Demo reseeding
+* Media recovery
+* Cloudinary recovery
+* Configuration recovery
+
+Produce a documented recovery procedure.
+
+Estimate Recovery Time Objective (RTO).
+
+Estimate Recovery Point Objective (RPO).
+
+---
+
+# PART 6 — Deployment Readiness
+
+Audit production configuration.
+
+Verify:
+
+* Environment variables
+* JWT secret
+* Cloudinary
+* Paystack
+* SMTP
+* CORS
+* Security headers
+* Rate limiting
+* Health endpoints
+* Logging
+* Monitoring
+* Database migrations
+* Storage configuration
+* Build process
+* Production mode
+* HTTPS readiness
+* PWA configuration
+
+List anything preventing production deployment.
+
+---
+
+# PART 7 — Demo Environment Certification
+
+Audit the demo environment.
+
+Verify realistic seeded data exists for:
+
+* Multiple branches
+* Owners
+* Workers
+* Customers
+* Orders
+* Payments
+* Receipts
+* Discounts
+* Batches
+* Analytics
+
+Confirm:
+
+* Demo login credentials work
+* Demo data is internally consistent
+* Demo data demonstrates every major feature
+* Demo environment can be recreated from scratch using the seed command
+
+---
+
+# PART 8 — Code Quality Audit
+
+Search for:
+
+* Dead code
+* Duplicate logic
+* Duplicate components
+* Unused imports
+* Unused routes
+* Placeholder assets
+* Broken image references
+* Broken links
+* Unreachable pages
+
+Remove or report anything that should not exist in a release candidate.
+
+---
+
+# PART 9 — Performance Verification
+
+Measure:
+
+* Initial page load
+* Dashboard loading
+* Order creation
+* Customer creation
+* Search
+* Analytics
+* Billing
+* Image loading
+* Large dataset performance
+
+Verify:
+
+* No major regressions
+* Acceptable response times
+* No memory leaks
+* No unnecessary API requests
+
+---
+
+# PART 10 — Production Launch Certification Report
+
+Produce a comprehensive report containing:
+
+1. Executive Summary
+2. Owner Workflow Status
+3. Worker Workflow Status
+4. Billing Status
+5. Security Audit Results
+6. Backup & Recovery Status
+7. Deployment Readiness
+8. Demo Environment Status
+9. Performance Results
+10. Code Quality Findings
+11. Bugs Found
+12. Bugs Fixed
+13. Remaining Risks
+14. Critical Blockers
+15. Recommended Improvements (non-blocking)
+16. Production Readiness Score (/100)
+17. GO / NO-GO Recommendation
+
+A **GO** recommendation may only be given if there are **no critical blockers**.
+
+If any critical issue remains, return **NO-GO** and explain exactly what must be fixed before launch.
+
+---
+
+## Rules
+
+* Do not implement Phase 8.
+* Do not add new customer-facing functionality.
+* Focus only on production readiness.
+* Verify every claim with evidence.
+* Treat this as the final release gate before onboarding the first 100 customers.

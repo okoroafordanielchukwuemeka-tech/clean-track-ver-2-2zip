@@ -1,8 +1,0 @@
-{
-  "timestamp": "20260604_103715",
-  "file": "cleantrack_20260604_103715.sql.gz",
-  "sizeBytes": 6251,
-  "sha256": "b93eb4bc3f0aa49c842ba3cbd12d894390b1f50b4a46d284fcc9c4e04f597f78",
-  "databaseUrl": "postgresql://postgres:password@***",
-  "createdAt": "2026-06-04T10:37:15Z"
-}
