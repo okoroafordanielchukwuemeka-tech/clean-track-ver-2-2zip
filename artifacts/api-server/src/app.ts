@@ -60,12 +60,17 @@ const allowedOrigins = rawAllowedOrigins
   ? rawAllowedOrigins.split(",").map((s) => s.trim()).filter(Boolean)
   : null;
 
+// Always allow the current Replit dev domain (changes on every re-import)
+const replitDevDomain = process.env.REPLIT_DEV_DOMAIN
+  ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+  : null;
+
 app.use(
   cors({
     exposedHeaders: ["X-Server-Version", "X-Min-Client-Version", "X-Version-Warning"],
     origin: allowedOrigins
       ? (origin, callback) => {
-          if (!origin || allowedOrigins.includes(origin)) {
+          if (!origin || allowedOrigins.includes(origin) || (replitDevDomain && origin === replitDevDomain)) {
             callback(null, true);
           } else {
             callback(new Error(`CORS: origin ${origin} not allowed`));
