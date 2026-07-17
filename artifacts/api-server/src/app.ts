@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import crypto from "crypto";
+import { fileURLToPath } from "url";
+import { join, dirname } from "path";
 import { router } from "./routes/index.js";
 import { versionMiddleware } from "./middleware/version.js";
 import {
@@ -126,6 +128,29 @@ app.use("/api", apiLimiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────
 app.use("/api", router);
+
+// ── Production: serve built React frontend ────────────────────────────────
+// In development the Vite dev server (port 5000) handles the frontend.
+// In production the built static files live in artifacts/clean-track/dist and
+// are served here so a single process (port 5000) handles both the API and the
+// React SPA — satisfying the Cloud Run health-check on GET /.
+if (process.env.NODE_ENV === "production") {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  // From artifacts/api-server/src/ → artifacts/clean-track/dist
+  const frontendDist = join(__dirname, "..", "..", "clean-track", "dist");
+
+  // Hashed asset files (JS, CSS, images) get long-lived immutable caching.
+  app.use(express.static(frontendDist, { maxAge: "1y", immutable: true, index: false }));
+
+  // SPA fallback: any GET that isn't an /api route gets index.html so the
+  // client-side router can handle it. index.html itself is never cached so
+  // users always receive the latest entry point.
+  app.get(/^(?!\/api\/).*$/, (_req: Request, res: Response) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(join(frontendDist, "index.html"));
+  });
+}
 
 // ── Phase C: Global error handler middleware ──────────────────────────────
 // Must be defined AFTER all routes (Express requires 4-arg error handlers).

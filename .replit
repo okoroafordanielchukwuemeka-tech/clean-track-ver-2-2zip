@@ -50,3 +50,8 @@ JWT_SECRET = "30d6c734dab65b4f1df99883362a32dbaa224653a2df7e1702d4df433751bea9a4
 ALLOWED_ORIGINS = "https://clean-track-ver-2-2-zip-4--westk7111.replit.app,https://4a55ce1d-59df-4944-a3f5-28c45c3c4c14-00-1ovuxs7tlmwgn.kirk.replit.dev"
 APP_BASE_URL = "https://clean-track-ver-2-2-zip-4--westk7111.replit.app"
 NODE_ENV = "production"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["bash", "-c", "cd artifacts/api-server && PORT=5000 node_modules/.bin/tsx src/index.ts"]
+build = ["pnpm", "--filter", "@workspace/clean-track", "build"]
