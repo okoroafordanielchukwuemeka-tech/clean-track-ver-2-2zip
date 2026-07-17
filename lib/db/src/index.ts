@@ -7,7 +7,7 @@ const { Pool } = pg;
 const isProduction = process.env.NODE_ENV === "production";
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.EXTERNAL_DATABASE_URL ?? process.env.DATABASE_URL,
   max: isProduction ? 20 : 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
