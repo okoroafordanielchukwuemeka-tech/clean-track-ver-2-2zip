@@ -94,6 +94,11 @@ R2_BUCKET_NAME=cleantrack-backups
 
 See `.env.example` for the full list of required and optional variables.
 
+## Replit Setup (updated 2026-07-17, external DB connected)
+- Switched to external PostgreSQL via `EXTERNAL_DATABASE_URL` Replit Secret
+- `lib/db/src/index.ts` and `lib/db/drizzle.config.ts` now prefer `EXTERNAL_DATABASE_URL` over Replit's managed `DATABASE_URL`
+- Schema synced to external DB on startup; API healthz confirmed healthy (149ms)
+
 ## Replit Setup (updated 2026-07-17, re-imported)
 - Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
 - Secrets, DB, and workflow config already in place; no changes needed
