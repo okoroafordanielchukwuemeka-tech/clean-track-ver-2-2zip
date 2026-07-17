@@ -30,7 +30,7 @@ import {
 import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "@/context/theme-context";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/context/auth-context";
+import { useAuth, type WorkerPermissions } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
 import { Button } from "@/components/ui/button";
 import { NotificationCenter } from "@/components/notification-center";
@@ -47,12 +47,6 @@ import { KeyboardShortcutsHelp } from "@/components/keyboard-shortcuts-help";
 import { CommandPaletteProvider, useCommandPalette } from "@/context/command-palette-context";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-
-const workerNavItems = [
-  { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
-  { to: "/orders", label: "Orders", icon: ShoppingCart },
-  { to: "/customers", label: "Customers", icon: UserCircle },
-];
 
 function LayoutInner() {
   const location = useLocation();
@@ -88,15 +82,28 @@ function LayoutInner() {
     subStatus.plan === "pro" ||
     subStatus.plan === "business";
 
+  const workerPerms = user?.permissions as WorkerPermissions | undefined;
+  const workerCanWhatsApp = isOwner || workerPerms?.canViewWhatsApp === true;
+
   const { data: unreadConvData } = useQuery({
     queryKey: ["conversations-unread"],
     queryFn: () => api.conversations.getUnreadCount(),
-    enabled: isOwner,
+    enabled: workerCanWhatsApp,
     refetchInterval: 30_000,
   });
 
   const pending = pendingCount?.count ?? 0;
   const unreadConversations = unreadConvData?.unreadCount ?? 0;
+
+  // Worker nav is permission-aware: only show items the worker can actually use
+  const workerNavItems = [
+    { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+    { to: "/orders", label: "Orders", icon: ShoppingCart },
+    { to: "/customers", label: "Customers", icon: UserCircle },
+    ...(workerPerms?.canViewOrders ? [{ to: "/receipts", label: "Receipts", icon: FileText }] : []),
+    ...(workerPerms?.canViewOrders || workerPerms?.canProcessOrders ? [{ to: "/batches", label: "Batches", icon: Package }] : []),
+    ...(workerPerms?.canViewWhatsApp ? [{ to: "/customer-hub", label: "Customer Hub", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined }] : []),
+  ];
 
   const ownerNavItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },

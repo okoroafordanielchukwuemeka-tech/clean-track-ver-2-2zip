@@ -66,6 +66,11 @@ conversationsRouter.get("/", requireAuth, checkPermission("view:whatsapp"), asyn
 
   try {
     const conditions = [eq(conversations.laundryId, laundryId)];
+    // Branch isolation: workers only see conversations for their assigned branch
+    const workerBranchId = req.auth!.branchId;
+    if (workerBranchId) {
+      conditions.push(eq(conversations.branchId, workerBranchId));
+    }
     if (statusFilter && ["open", "resolved", "archived"].includes(statusFilter)) {
       conditions.push(eq(conversations.status, statusFilter as "open" | "resolved" | "archived"));
     }
@@ -135,10 +140,19 @@ conversationsRouter.get("/", requireAuth, checkPermission("view:whatsapp"), asyn
 conversationsRouter.get("/unread-count", requireAuth, checkPermission("view:whatsapp"), async (req: AuthRequest, res) => {
   const { laundryId } = req.auth!;
   try {
+    const unreadConditions: any[] = [
+      eq(conversations.laundryId, laundryId),
+      eq(conversations.status, "open"),
+    ];
+    // Branch isolation: workers only count unread for their branch
+    const workerBranchId = req.auth!.branchId;
+    if (workerBranchId) {
+      unreadConditions.push(eq(conversations.branchId, workerBranchId));
+    }
     const [{ totalUnread }] = await db
       .select({ totalUnread: sql<number>`coalesce(sum(unread_count),0)::int` })
       .from(conversations)
-      .where(and(eq(conversations.laundryId, laundryId), eq(conversations.status, "open")));
+      .where(and(...unreadConditions));
     return res.json({ unreadCount: totalUnread });
   } catch (err) {
     console.error("[conversations] GET /unread-count error:", err);

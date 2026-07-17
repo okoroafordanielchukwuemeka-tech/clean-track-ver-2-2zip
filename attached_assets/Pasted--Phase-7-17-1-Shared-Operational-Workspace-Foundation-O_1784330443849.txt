@@ -1,0 +1,205 @@
+# Phase 7.17.1 — Shared Operational Workspace Foundation
+
+## Objective
+
+Redesign the Owner and Worker operational workflow so that both roles operate on the **same live operational workspace**, while preserving strict branch isolation and role permissions.
+
+This phase is the foundation for all future work (WhatsApp, AI Marketing, customer onboarding, Meta integration, etc.).
+
+Do **NOT** implement any unrelated features.
+
+Do **NOT** modify pricing, subscriptions, AI Marketing, WhatsApp integrations, analytics, or UI styling beyond what is necessary for this workflow redesign.
+
+---
+
+# Core Business Rule
+
+A laundry has **one operational database**, not separate Owner and Worker systems.
+
+Owner and Workers must always work on the **same live operational records**.
+
+There must never be duplicate customer lists, duplicate orders, duplicate receipts, or isolated worker datasets.
+
+Workers simply receive **restricted access** to the same operational data.
+
+---
+
+# Step 1 — Audit Current Architecture
+
+Perform a full audit.
+
+Determine:
+
+* Whether Owner and Worker currently query different datasets.
+* Whether workers have isolated order lists.
+* Whether workers have isolated customer lists.
+* Whether workers can record payments.
+* Whether workers can update order stages.
+* Whether workers can access customer history.
+* Whether workers can access receipts.
+* Whether workers can access branch WhatsApp conversations.
+* Whether workers are correctly filtered by branch.
+
+Document every issue before making changes.
+
+---
+
+# Step 2 — Shared Operational Workspace
+
+Implement a single operational workspace.
+
+Owner and Worker must reference the same:
+
+* Customers
+* Orders
+* Payments
+* Receipts
+* Pickups
+* Deliveries
+* Batches
+* WhatsApp conversations
+
+Workers must never have duplicate copies of these records.
+
+---
+
+# Step 3 — Branch Isolation
+
+Branch isolation must remain fully enforced.
+
+If Worker A belongs to Branch A:
+
+They can only access:
+
+* Branch A customers
+* Branch A orders
+* Branch A receipts
+* Branch A batches
+* Branch A WhatsApp conversations
+* Branch A payments
+
+Attempting to access Branch B data must return 403 or 404.
+
+Owner continues to see all branches.
+
+---
+
+# Step 4 — Worker Operational Permissions
+
+Workers should automatically receive operational permissions for their assigned branch.
+
+Workers must be able to:
+
+* Create customers
+* Edit customers
+* View customer history
+* Create orders
+* Edit orders
+* Update order stages
+* Record payments
+* View receipts
+* Perform full pickup
+* Perform partial pickup
+* View branch batches
+* Add/remove orders from batches
+* Send customer notifications
+* Use the shared branch WhatsApp inbox
+
+Workers must NOT access:
+
+* Subscription
+* Billing
+* Pricing plans
+* Platform diagnostics
+* Developer tools
+* Security settings
+* Business settings
+* Worker management
+* Branch management
+* System configuration
+
+---
+
+# Step 5 — Owner Permissions
+
+Owner continues to have unrestricted access.
+
+Owner can perform every worker action plus:
+
+* Manage workers
+* Move workers between branches
+* Manage branches
+* Configure pricing
+* Configure discount rules
+* Configure integrations
+* View analytics
+* Manage subscriptions
+* Manage business profile
+
+---
+
+# Step 6 — Branch Assignment
+
+Audit worker assignment.
+
+Verify that moving a worker from:
+
+Branch A
+
+↓
+
+Branch B
+
+Immediately changes their operational workspace.
+
+They should instantly see:
+
+* Branch B customers
+* Branch B orders
+* Branch B WhatsApp
+* Branch B receipts
+
+Without requiring manual permission changes.
+
+---
+
+# Step 7 — Testing
+
+Create:
+
+Owner
+
+Worker A
+
+Worker B
+
+Branch A
+
+Branch B
+
+Verify:
+
+Worker A cannot see Branch B.
+
+Worker B cannot see Branch A.
+
+Owner sees everything.
+
+Workers and Owner always view the same live operational records within their permitted scope.
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Architecture changes made.
+2. Workflow changes made.
+3. Security verification.
+4. Branch isolation verification.
+5. Owner workflow verification.
+6. Worker workflow verification.
+7. Remaining risks.
+8. Regression risks.
+
+Do NOT proceed to UI simplification, WhatsApp, AI Marketing, pricing, or Meta integration until this phase passes completely.

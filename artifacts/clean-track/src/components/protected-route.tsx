@@ -10,6 +10,9 @@ const WORKER_ALLOWED_PREFIXES = [
   "/worker-station",
   "/orders",
   "/customers",
+  "/receipts",
+  "/batches",
+  "/customer-hub",
 ];
 
 export function ProtectedRoute({ children, ownerOnly = false }: ProtectedRouteProps) {

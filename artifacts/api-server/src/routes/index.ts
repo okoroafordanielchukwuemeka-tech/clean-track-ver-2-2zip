@@ -51,7 +51,8 @@ router.use("/settings", requireAuth, settingsRouter);
 // Analytics: workers access their own branch data; owners see all (or filter by ?branchId)
 router.use("/analytics", requireAuth, analyticsRouter);
 router.use("/workers", requireOwner, workersRouter);
-router.use("/batches", requireOwner, batchesRouter);
+// Workers can view and manage batches for their branch (permission-gated inside the router)
+router.use("/batches", requireAuth, batchesRouter);
 router.use("/expenditures", requireOwner, expendituresRouter);
 router.use("/expense-categories", requireOwner, expenseCategoriesRouter);
 router.use("/message-templates", requireOwner, messageTemplatesRouter);

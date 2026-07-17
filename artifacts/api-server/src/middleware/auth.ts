@@ -103,7 +103,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   if (payload.type === "worker" && payload.workerId && iat) {
     try {
       const [row] = await db
-        .select({ pinChangedAt: workers.pinChangedAt })
+        .select({ pinChangedAt: workers.pinChangedAt, branchId: workers.branchId })
         .from(workers)
         .where(eq(workers.id, payload.workerId));
 
@@ -116,6 +116,13 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
             code: "PIN_CHANGED",
           });
         }
+      }
+
+      // Override JWT branchId with the live value from the DB.
+      // When an owner moves a worker to a different branch, the change
+      // takes effect on the worker's very next API call — no re-login needed.
+      if (row) {
+        payload.branchId = row.branchId ?? undefined;
       }
     } catch {
       // DB lookup failure: fail open to preserve availability.

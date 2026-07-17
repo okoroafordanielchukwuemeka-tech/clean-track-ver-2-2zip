@@ -39,14 +39,17 @@ export const ADMIN_DEFAULT_PERMISSIONS = {
 };
 
 export const WORKER_DEFAULT_PERMISSIONS = {
-  canViewCustomers: false,
-  canCreateCustomers: false,
-  canViewCustomerBalances: false,
-  canRecordPayments: false,
-  canRecordPickups: false,
-  canViewOrders: false,
-  canProcessOrders: false,
+  // Core operational permissions — workers can do daily laundry work by default.
+  // Owners can restrict individual permissions via the Workers settings page.
+  canViewCustomers: true,
+  canCreateCustomers: true,
+  canViewCustomerBalances: true,
+  canRecordPayments: true,
+  canRecordPickups: true,
+  canViewOrders: true,
+  canProcessOrders: true,
   canAssignOrders: false,
+  // WhatsApp access: opt-in — owner enables per-worker
   canViewWhatsApp: false,
   canReplyWhatsApp: false,
   canManageWhatsApp: false,
