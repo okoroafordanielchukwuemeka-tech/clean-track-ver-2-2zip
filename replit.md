@@ -94,6 +94,11 @@ R2_BUCKET_NAME=cleantrack-backups
 
 See `.env.example` for the full list of required and optional variables.
 
+## Replit Setup (updated 2026-07-17, re-imported)
+- Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
+- Secrets, DB, and workflow config already in place; no changes needed
+- Verified: API server on port 3001, frontend login page renders correctly on port 5000
+
 ## Replit Setup (updated 2026-07-15, re-verified)
 - Re-imported project again: node_modules was missing (dropped by import) — ran `pnpm install` (678 packages) and restarted the workflow
 - Secrets, DB, and workflow config were already in place from previous sessions, no changes needed
