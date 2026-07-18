@@ -1,0 +1,335 @@
+# Phase 7.17.2A Part 2 — Layout & Navigation Polish
+
+## Objective
+
+Continue the UX refinement of CleanTrack.
+
+The brand refresh is already complete.
+
+Do NOT modify:
+
+* business logic
+* APIs
+* database schema
+* permissions
+* workflows
+* billing
+* authentication
+
+Focus ONLY on layout, spacing, navigation, discoverability, and usability.
+
+This phase is purely visual and UX.
+
+---
+
+# 1. Dashboard Cleanup
+
+Audit every dashboard.
+
+Owner Dashboard
+
+Worker Dashboard
+
+Marketing
+
+Operations
+
+Settings
+
+Customer pages
+
+Order pages
+
+Remove visual clutter.
+
+Reduce information overload.
+
+Group related information together.
+
+Improve hierarchy.
+
+Every page should answer:
+
+"What are the most important things this user needs right now?"
+
+Avoid long walls of cards.
+
+Prefer smaller grouped sections.
+
+---
+
+# 2. Spacing Audit
+
+Perform a complete spacing audit.
+
+Standardize:
+
+* page padding
+* card padding
+* section spacing
+* table spacing
+* margins
+* button spacing
+
+No page should feel crowded.
+
+No page should feel empty.
+
+Whitespace should improve readability.
+
+---
+
+# 3. Sidebar Cleanup
+
+Simplify the sidebar.
+
+Group related items logically.
+
+Example:
+
+Operations
+
+* Orders
+* Customers
+* Workers
+* Receipts
+* Batches
+
+Business
+
+* Marketing
+* Billing
+* Reports
+
+Settings
+
+* Business Profile
+* Discounts
+* Integrations
+
+Avoid long unorganized navigation.
+
+Improve active page highlighting.
+
+Collapse secondary items where appropriate.
+
+---
+
+# 4. Global Search
+
+Implement a permanent visual search.
+
+DO NOT rely on keyboard shortcuts.
+
+Place a search field near the top of the sidebar.
+
+Placeholder:
+
+Search...
+
+The search should quickly navigate to:
+
+Orders
+
+Customers
+
+Workers
+
+Receipts
+
+Payments
+
+Marketing
+
+Reports
+
+Branches
+
+Settings
+
+Discounts
+
+Batches
+
+Services
+
+Typing should instantly filter matching destinations.
+
+Clicking a result should navigate directly to that page.
+
+This is a navigation tool.
+
+Not database search.
+
+---
+
+# 5. Mobile Audit
+
+Audit every major screen.
+
+Check:
+
+tables
+
+cards
+
+forms
+
+buttons
+
+navigation
+
+modals
+
+dialogs
+
+touch targets
+
+spacing
+
+No horizontal scrolling.
+
+Buttons must remain easy to tap.
+
+Cards should stack naturally.
+
+---
+
+# 6. Consistency Audit
+
+Review the entire application.
+
+Standardize:
+
+Card styles
+
+Button sizes
+
+Input sizes
+
+Table headers
+
+Typography
+
+Heading sizes
+
+Icon sizes
+
+Empty states
+
+Loading indicators
+
+Page titles
+
+Section titles
+
+Visual consistency is critical.
+
+Nothing should feel like it belongs to another application.
+
+---
+
+# 7. Empty States
+
+Improve empty states.
+
+Instead of:
+
+"No data"
+
+Use helpful guidance.
+
+Example:
+
+"No customers yet.
+
+Create your first customer to begin tracking orders."
+
+Apply throughout the application.
+
+---
+
+# 8. Tables
+
+Audit every table.
+
+Improve:
+
+row spacing
+
+header styling
+
+pagination
+
+sorting visibility
+
+status badges
+
+action buttons
+
+Tables should feel modern and easy to scan.
+
+---
+
+# 9. Forms
+
+Review all forms.
+
+Improve:
+
+field spacing
+
+section grouping
+
+helper text
+
+validation placement
+
+primary action visibility
+
+Forms should guide users naturally.
+
+---
+
+# 10. Navigation Flow
+
+Reduce unnecessary clicks.
+
+Frequently used workflows should require fewer steps.
+
+Example:
+
+Orders
+
+Customer
+
+Payments
+
+Receipts
+
+should be easily reachable from one another.
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Dashboard Improvements
+2. Sidebar Improvements
+3. Global Search Implementation
+4. Mobile Improvements
+5. Spacing Improvements
+6. Table Improvements
+7. Form Improvements
+8. Empty State Improvements
+9. Before/After Screenshots
+10. Remaining UX Recommendations
+
+Do not introduce new business features.
+
+Do not modify workflows.
+
+Do not alter backend logic.
+
+Focus entirely on making CleanTrack feel simple, polished, premium, and effortless to use.
