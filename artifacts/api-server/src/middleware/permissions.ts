@@ -26,7 +26,7 @@ const OWNER_ONLY = new Set<Permission>([
   "delete:customers",
   "delete:orders",
   "delete:payments",
-  "edit:customer-identity",
+  // edit:customer-identity is handled by canCreateCustomers — see WORKER_PERM_FIELD
   "modify:order-price",
   "modify:order-items",
   "apply:price-adjustment",
@@ -40,6 +40,9 @@ const WORKER_PERM_FIELD: Partial<Record<Permission, keyof WorkerPermissions>> = 
   "record:pickups": "canRecordPickups",
   "view:customers": "canViewCustomers",
   "create:customers": "canCreateCustomers",
+  // Editing customer identity (name, phone, address) requires the same permission
+  // as creating — if you can create customers you can also update them.
+  "edit:customer-identity": "canCreateCustomers",
   "view:customer-balances": "canViewCustomerBalances",
   "assign:orders": "canAssignOrders",
   "view:whatsapp": "canViewWhatsApp",

@@ -1,0 +1,263 @@
+# Phase 7.17.1B — Shared Operational Workspace Verification
+
+## Objective
+
+Do **NOT** build new features.
+
+Do **NOT** redesign the UI.
+
+Do **NOT** modify pricing, AI Marketing, WhatsApp, Operational Center, Platform Health, dashboards, or navigation.
+
+Your only objective is to **verify that the Shared Operational Workspace implemented in Phase 7.17.1 behaves correctly from the user's perspective.**
+
+This is a business workflow certification.
+
+---
+
+# Test Environment
+
+Create or use the seeded demo environment.
+
+Use:
+
+* Owner
+* Worker A
+* Worker B
+
+Branches:
+
+* Branch A
+* Branch B
+
+Populate both branches with realistic data.
+
+---
+
+# End-to-End Workflow Verification
+
+## Customer Synchronization
+
+Verify:
+
+Owner creates a customer.
+
+Immediately confirm:
+
+* Worker assigned to the same branch can view the customer.
+* Worker can edit the customer.
+* Worker can view customer history.
+* Worker can view outstanding balances.
+* Worker cannot see customers belonging to another branch.
+
+---
+
+## Order Synchronization
+
+Verify:
+
+Worker creates an order.
+
+Immediately confirm:
+
+* Owner sees the order.
+* Worker sees the same order.
+* No duplicate order exists.
+* Order IDs match.
+* Customer linkage remains correct.
+
+---
+
+## Order Stage Updates
+
+Verify Worker can move an order through:
+
+* Pending
+* Processing
+* Ready
+* Partial Pickup
+* Completed
+
+After every stage change:
+
+Confirm Owner immediately sees the updated status.
+
+No refresh inconsistencies.
+
+No stale data.
+
+---
+
+## Payment Synchronization
+
+Worker records payment.
+
+Confirm:
+
+* Owner immediately sees payment.
+* Receipt generated correctly.
+* Outstanding balance updated.
+* Customer history updated.
+
+---
+
+## Receipt Verification
+
+Worker opens receipt.
+
+Owner opens same receipt.
+
+Confirm both view the exact same receipt.
+
+Verify:
+
+* Payment history
+* Customer information
+* Pricing
+* Totals
+
+No duplicate receipts.
+
+---
+
+## Batch Verification
+
+Worker:
+
+* Views branch batches.
+* Assigns order to batch.
+* Removes order from batch.
+
+Owner must immediately see the same changes.
+
+Workers must never access another branch's batches.
+
+---
+
+## WhatsApp Verification
+
+If WhatsApp is currently enabled:
+
+Worker:
+
+* Opens branch inbox.
+* Sends message.
+
+Confirm:
+
+Owner sees:
+
+* Same conversation.
+* Same messages.
+* Same timestamps.
+
+Workers must never see conversations belonging to another branch.
+
+If WhatsApp is not yet connected:
+
+Document that the architecture is ready for verification after Meta integration.
+
+---
+
+## Branch Reassignment
+
+Move Worker A:
+
+Branch A
+
+↓
+
+Branch B
+
+Without logging out.
+
+Verify:
+
+Worker immediately loses access to Branch A.
+
+Worker immediately gains access to Branch B.
+
+Confirm:
+
+Customers
+
+Orders
+
+Receipts
+
+Payments
+
+Batches
+
+WhatsApp
+
+All automatically switch.
+
+No manual permission changes required.
+
+---
+
+## Branch Isolation Security
+
+Attempt:
+
+Worker A accesses:
+
+* Branch B order
+* Branch B customer
+* Branch B receipt
+* Branch B payment
+* Branch B batch
+
+Expected:
+
+403 or 404.
+
+No data leakage.
+
+---
+
+## Owner Verification
+
+Confirm Owner can:
+
+* View all branches.
+* Perform every worker operation.
+* Monitor every update in real time.
+* Continue managing workers and branches.
+
+---
+
+# Existing Worker Migration
+
+Audit workers created before Phase 7.17.1.
+
+Verify they receive the new operational permissions.
+
+If they do not:
+
+Implement a safe migration so existing workers are automatically upgraded.
+
+The Owner must never need to manually repair permissions after upgrading.
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Customer synchronization results.
+2. Order synchronization results.
+3. Payment synchronization results.
+4. Receipt synchronization results.
+5. Batch synchronization results.
+6. WhatsApp synchronization results.
+7. Branch reassignment verification.
+8. Branch isolation security verification.
+9. Existing worker migration status.
+10. Failed tests.
+11. Fixes implemented.
+12. Remaining risks.
+
+Only declare Phase 7.17.1 complete if every critical workflow passes successfully.
+
+Do NOT begin Phase 7.17.2 until this certification passes.

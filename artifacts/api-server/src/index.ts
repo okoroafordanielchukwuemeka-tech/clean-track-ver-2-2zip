@@ -13,6 +13,7 @@ import { startMessageQueueWorker } from "./lib/message-queue-worker.js";
 import { startSubscriptionLifecycleScheduler } from "./lib/subscription-lifecycle.js";
 import { startNudgeScheduler } from "./lib/nudge-engine.js";
 import { startRenewalBillingScheduler } from "./lib/billing-renewal.js";
+import { migrateWorkerPermissions } from "./lib/migrate-worker-permissions.js";
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
@@ -25,6 +26,8 @@ if (!process.env.ALLOWED_ORIGINS) {
 
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`API server running on port ${PORT}`);
+  // Run idempotent backfill migration for workers created before Phase 7.17.1
+  migrateWorkerPermissions().catch(() => {});
   scheduleIdempotencyCleanup();
   scheduleAlertChecks();
   // Phase B: start daily backup scheduler

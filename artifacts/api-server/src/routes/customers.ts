@@ -17,6 +17,9 @@ const customerInputSchema = z.object({
   phone: z.string().min(1),
   address: z.string().optional(),
   notes: z.string().optional(),
+  // Owners pass branchId to assign a customer to a specific branch.
+  // Workers always use their own branchId from the JWT (branchId ignored even if sent).
+  branchId: z.number().int().optional(),
 });
 
 const customerUpdateSchema = z.object({
@@ -282,10 +285,15 @@ customersRouter.post("/", checkPermission("create:customers"), requireOperationa
       .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, data.phone)));
     if (existing) return res.status(409).json({ error: "A customer with this phone number already exists" });
 
+    // Workers: branchId comes from JWT (live DB value — always current).
+    // Owners: use the branchId from the request body if provided.
+    const effectiveBranchId = req.auth!.branchId ?? data.branchId ?? undefined;
+    const { branchId: _ignored, ...customerData } = data;
+
     const [customer] = await db.insert(customers).values({
       laundryId,
-      branchId: req.auth!.branchId ?? undefined,
-      ...data,
+      branchId: effectiveBranchId,
+      ...customerData,
     }).returning();
     trackActivationEvent(laundryId, "customer_created");
     res.status(201).json({ ...customer, ...computeMetrics([]) });
