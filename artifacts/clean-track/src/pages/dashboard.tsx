@@ -282,12 +282,13 @@ export default function Dashboard() {
       <SubscriptionBanner sub={subStatus ?? null} />
       {!isDemo && <GettingStartedChecklist />}
       {!isDemo && <TipBanner />}
+
+      {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            {activeBranch ? `Branch: ${activeBranch.name}` : "All branches"}
-            {" · "}Operational control center
+            {activeBranch ? activeBranch.name : "All branches"} · Overview
           </p>
         </div>
         <Tabs value={period} onValueChange={(v) => setPeriod(v as AnalyticsPeriod)}>
@@ -301,85 +302,77 @@ export default function Dashboard() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => (
-            <Card key={i}><CardContent className="p-5"><div className="h-16 bg-muted animate-pulse rounded" /></CardContent></Card>
-          ))}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}><CardContent className="p-5"><div className="h-16 bg-muted animate-pulse rounded" /></CardContent></Card>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-14 bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              label="Total Revenue"
-              value={fmtShort(ov?.totalRevenue ?? 0)}
-              sub={PERIOD_LABELS[period]}
-              icon={DollarSign}
-              iconBg="bg-green-100 dark:bg-green-950/40"
-              iconColor="text-green-600"
-              growth={gr?.revenue}
-            />
-            <KpiCard
-              label="Collected"
-              value={fmtShort(ov?.collectedRevenue ?? 0)}
-              sub={`${fmtShort(ov?.outstandingBalance ?? 0)} outstanding`}
-              icon={TrendingUp}
-              iconBg="bg-blue-100 dark:bg-blue-950/40"
-              iconColor="text-blue-600"
-              growth={gr?.collected}
-            />
-            <KpiCard
-              label="Total Expenses"
-              value={fmtShort(ov?.totalExpenses ?? 0)}
-              sub="Operational costs"
-              icon={TrendingDown}
-              iconBg="bg-red-100 dark:bg-red-950/40"
-              iconColor="text-red-600"
-            />
-            <KpiCard
-              label="Est. Profit"
-              value={fmtShort(Math.abs(profit))}
-              sub={isProfitable ? "Revenue − Expenses" : "Running at a loss"}
-              icon={isProfitable ? TrendingUp : AlertTriangle}
-              iconBg={isProfitable ? "bg-emerald-100 dark:bg-emerald-950/40" : "bg-red-100 dark:bg-red-950/40"}
-              iconColor={isProfitable ? "text-emerald-600" : "text-red-600"}
-              valueClass={isProfitable ? "text-emerald-600" : "text-red-600"}
-            />
+          {/* ── Financial summary ─────────────────────────────── */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-3">
+              Financial Summary · {PERIOD_LABELS[period]}
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiCard
+                label="Total Revenue"
+                value={fmtShort(ov?.totalRevenue ?? 0)}
+                sub={`${fmtShort(ov?.collectedRevenue ?? 0)} collected`}
+                icon={DollarSign}
+                iconBg="bg-green-100 dark:bg-green-950/40"
+                iconColor="text-green-600"
+                growth={gr?.revenue}
+              />
+              <KpiCard
+                label="Outstanding"
+                value={fmtShort(ov?.outstandingBalance ?? 0)}
+                sub={`${full?.paymentCounts.unpaid ?? 0} unpaid orders`}
+                icon={AlertTriangle}
+                iconBg="bg-rose-100 dark:bg-rose-950/40"
+                iconColor="text-rose-600"
+              />
+              <KpiCard
+                label="Total Expenses"
+                value={fmtShort(ov?.totalExpenses ?? 0)}
+                sub="Operational costs"
+                icon={TrendingDown}
+                iconBg="bg-red-100 dark:bg-red-950/40"
+                iconColor="text-red-600"
+              />
+              <KpiCard
+                label="Est. Profit"
+                value={fmtShort(Math.abs(profit))}
+                sub={isProfitable ? "Revenue − Expenses" : "Running at a loss"}
+                icon={isProfitable ? TrendingUp : AlertTriangle}
+                iconBg={isProfitable ? "bg-emerald-100 dark:bg-emerald-950/40" : "bg-red-100 dark:bg-red-950/40"}
+                iconColor={isProfitable ? "text-emerald-600" : "text-red-600"}
+                valueClass={isProfitable ? "text-emerald-600" : "text-red-600"}
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              label="Active Orders"
-              value={String(ov?.activeOrders ?? 0)}
-              sub="In progress"
-              icon={Activity}
-              iconBg="bg-orange-100 dark:bg-orange-950/40"
-              iconColor="text-orange-600"
-            />
-            <KpiCard
-              label="Total Orders"
-              value={String(ov?.totalOrders ?? 0)}
-              sub={`Avg ${fmt(ov?.avgOrderValue ?? 0)}/order`}
-              icon={ShoppingCart}
-              iconBg="bg-purple-100 dark:bg-purple-950/40"
-              iconColor="text-purple-600"
-              growth={gr?.orders}
-            />
-            <KpiCard
-              label="Partial Pickups"
-              value={String(ov?.partialPickup ?? 0)}
-              sub={`${ov?.totalRemainingItems ?? 0} items remaining`}
-              icon={ShoppingBag}
-              iconBg="bg-amber-100 dark:bg-amber-950/40"
-              iconColor="text-amber-600"
-            />
-            <KpiCard
-              label="Outstanding Balance"
-              value={fmtShort(ov?.outstandingBalance ?? 0)}
-              sub={`${full?.paymentCounts.unpaid ?? 0} unpaid orders`}
-              icon={AlertTriangle}
-              iconBg="bg-rose-100 dark:bg-rose-950/40"
-              iconColor="text-rose-600"
-            />
+          {/* ── Operational snapshot ──────────────────────────── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "Active Orders", value: ov?.activeOrders ?? 0, sub: "In progress", color: "text-orange-600" },
+              { label: "Total Orders", value: ov?.totalOrders ?? 0, sub: `Avg ${fmt(ov?.avgOrderValue ?? 0)}/order`, color: "text-purple-600" },
+              { label: "Partial Pickups", value: ov?.partialPickup ?? 0, sub: `${ov?.totalRemainingItems ?? 0} items left`, color: "text-amber-600" },
+              { label: "Unpaid Orders", value: full?.paymentCounts.unpaid ?? 0, sub: "Need collection", color: "text-red-600" },
+            ].map(({ label, value, sub, color }) => (
+              <div key={label} className="rounded-lg border bg-card px-4 py-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className={`text-xl font-bold ${color}`}>{value}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+              </div>
+            ))}
           </div>
 
           {!isProfitable && (ov?.totalExpenses ?? 0) > 0 && (
@@ -452,6 +445,11 @@ export default function Dashboard() {
               )}
             </div>
           )}
+
+          {/* ── SLA & Trends ─────────────────────────────────── */}
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 -mb-3">
+            SLA & Trends
+          </p>
 
           <Card>
             <CardHeader className="pb-3">
@@ -537,7 +535,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 -mt-2">
             <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -614,7 +612,7 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 -mt-2">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -682,7 +680,12 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* ── Alerts & Recent ──────────────────────────────── */}
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 -mb-3">
+            Alerts & Recent Activity
+          </p>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 -mt-2">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -786,7 +789,12 @@ export default function Dashboard() {
         </>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ── Team ─────────────────────────────────────────── */}
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 -mb-3">
+        Team & Customers
+      </p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 -mt-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base flex items-center gap-2">

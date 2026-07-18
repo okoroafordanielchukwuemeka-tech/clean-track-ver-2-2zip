@@ -2158,7 +2158,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
-        <nav className="w-full md:w-52 shrink-0">
+        <nav className="w-full md:w-52 shrink-0 md:sticky md:top-6">
           <div className="md:hidden mb-3">
             <select
               value={activeSection}

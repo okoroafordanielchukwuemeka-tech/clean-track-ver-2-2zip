@@ -105,20 +105,44 @@ function LayoutInner() {
     ...(workerPerms?.canViewWhatsApp ? [{ to: "/customer-hub", label: "Customer Hub", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined }] : []),
   ];
 
-  const ownerNavItems = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/orders", label: "Orders", icon: ShoppingCart },
-    { to: "/customers", label: "Customers", icon: UserCircle },
-    { to: "/receipts", label: "Receipts", icon: FileText },
-    { to: "/batches", label: "Batches", icon: Package },
-    { to: "/expenditures", label: "Expenditures", icon: Receipt },
-    { to: "/discount-approvals", label: "Discounts", icon: Percent, badge: pending > 0 ? pending : undefined },
-    { to: "/services", label: "Services", icon: Wrench },
-    { to: "/workers", label: "Workers", icon: Users },
-    { to: "/branches", label: "Branches", icon: GitBranch },
-    { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
-    { to: "/settings", label: "Settings", icon: Settings },
-  ];
+  // Owner nav broken into named groups for sidebar rendering
+  const ownerNavGroups = [
+    {
+      label: null,
+      items: [
+        { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: "Operations",
+      items: [
+        { to: "/orders", label: "Orders", icon: ShoppingCart },
+        { to: "/customers", label: "Customers", icon: UserCircle },
+        { to: "/workers", label: "Workers", icon: Users },
+        { to: "/receipts", label: "Receipts", icon: FileText },
+        { to: "/batches", label: "Batches", icon: Package },
+      ],
+    },
+    {
+      label: "Business",
+      items: [
+        { to: "/expenditures", label: "Expenditures", icon: Receipt },
+        { to: "/discount-approvals", label: "Discounts", icon: Percent, badge: pending > 0 ? pending : undefined },
+        { to: "/services", label: "Services", icon: Wrench },
+        { to: "/branches", label: "Branches", icon: GitBranch },
+      ],
+    },
+    {
+      label: null,
+      items: [
+        { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
+        { to: "/settings", label: "Settings", icon: Settings },
+      ],
+    },
+  ] as Array<{ label: string | null; items: Array<{ to: string; label: string; icon: any; badge?: number }> }>;
+
+  // Keep flat list for worker nav (unchanged)
+  const ownerNavItems = ownerNavGroups.flatMap((g) => g.items);
 
   const advancedNavItems = [
     { to: "/marketing", label: "AI Marketing", icon: Megaphone, badge: undefined as number | undefined },
@@ -222,58 +246,103 @@ function LayoutInner() {
         </div>
 
         {/* Search / command palette trigger */}
-        <div className="px-3 pt-3 pb-1">
+        <div className="px-3 pt-3 pb-2">
           <button
             onClick={() => openPalette()}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-sidebar-accent/40 text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/70 text-sm transition-colors"
-            aria-label="Open command palette"
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/30 text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground/80 hover:border-sidebar-border/50 text-sm transition-all"
+            aria-label="Search"
           >
-            <Search className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1 text-left text-xs">Search…</span>
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left text-sm">Search…</span>
             <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-sidebar-border/40 bg-sidebar/40 px-1.5 font-mono text-[10px] text-sidebar-foreground/40">
               ⌘K
             </kbd>
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-1 overflow-y-auto">
           <BranchSelector />
-          {navItems.map(({ to, label, icon: Icon, badge }: any) => {
-            const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
-            return (
-              <Link
-                key={to}
-                to={to}
-                onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
-                  isActive
-                    ? "bg-sidebar-primary text-white font-semibold shadow-sm"
-                    : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-70")} />
-                <span className="flex-1">{label}</span>
-                {badge != null && (
-                  <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                    {badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
 
-          {isOwner && (
-            <div className="pt-1">
-              <button
-                onClick={() => setAdvancedOpen((v) => !v)}
-                className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors"
-              >
-                <span className="flex-1 text-left">Advanced</span>
-                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", advancedOpen && "rotate-180")} />
-              </button>
-              {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => {
-                const isPremium = (to === "/marketing" || to === "/customer-hub") && !isProOrAbove;
+          {/* Owner nav with labeled groups */}
+          {isOwner ? (
+            <div className="space-y-1">
+              {ownerNavGroups.map((group, gi) => (
+                <div key={gi} className={gi > 0 ? "pt-2" : ""}>
+                  {group.label && (
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/35 select-none">
+                      {group.label}
+                    </p>
+                  )}
+                  {group.items.map(({ to, label, icon: Icon, badge }) => {
+                    const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
+                    return (
+                      <Link
+                        key={to}
+                        to={to}
+                        onClick={() => setSidebarOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                          isActive
+                            ? "bg-sidebar-primary text-white font-semibold shadow-sm"
+                            : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-70")} />
+                        <span className="flex-1">{label}</span>
+                        {badge != null && (
+                          <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                            {badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+
+              {/* Advanced section */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setAdvancedOpen((v) => !v)}
+                  className="flex items-center gap-2 w-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/35 hover:text-sidebar-foreground/55 transition-colors select-none"
+                >
+                  <span className="flex-1 text-left">Advanced</span>
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", advancedOpen && "rotate-180")} />
+                </button>
+                {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => {
+                  const isPremium = (to === "/marketing" || to === "/customer-hub") && !isProOrAbove;
+                  const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
+                  return (
+                    <Link
+                      key={to}
+                      to={to}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                        isActive
+                          ? "bg-sidebar-primary text-white font-semibold shadow-sm"
+                          : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="flex-1">{label}</span>
+                      {isPremium && (
+                        <Lock className="h-3 w-3 text-sidebar-foreground/40 shrink-0" aria-label="Requires Professional plan" />
+                      )}
+                      {badge != null && !isPremium && (
+                        <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                          {badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Worker nav — flat, unchanged */
+            <div className="space-y-0.5">
+              {navItems.map(({ to, label, icon: Icon, badge }: any) => {
                 const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
                 return (
                   <Link
@@ -281,19 +350,16 @@ function LayoutInner() {
                     to={to}
                     onClick={() => setSidebarOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                       isActive
                         ? "bg-sidebar-primary text-white font-semibold shadow-sm"
                         : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     )}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
+                    <Icon className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-70")} />
                     <span className="flex-1">{label}</span>
-                    {isPremium && (
-                      <Lock className="h-3 w-3 text-sidebar-foreground/40 shrink-0" aria-label="Requires Professional plan" />
-                    )}
-                    {badge != null && !isPremium && (
-                      <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {badge != null && (
+                      <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                         {badge}
                       </span>
                     )}
