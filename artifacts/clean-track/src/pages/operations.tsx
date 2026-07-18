@@ -2175,7 +2175,7 @@ export default function OperationsPage() {
           Operations Center
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Audit trail, system health, message queue, and operational tools.
+          Audit trail, payments, pickups, sync health, alerts, and backup management.
         </p>
       </div>
 
@@ -2193,9 +2193,6 @@ export default function OperationsPage() {
           <TabsTrigger value="worker-activity" className="text-xs gap-1.5">
             <Users className="h-3.5 w-3.5" /> Worker Activity
           </TabsTrigger>
-          <TabsTrigger value="health" className="text-xs gap-1.5">
-            <Heart className="h-3.5 w-3.5" /> System Health
-          </TabsTrigger>
           <TabsTrigger value="sync-health" className="text-xs gap-1.5">
             <Wifi className="h-3.5 w-3.5" /> Sync Health
           </TabsTrigger>
@@ -2203,10 +2200,7 @@ export default function OperationsPage() {
             <MessageSquareX className="h-3.5 w-3.5" /> Failed Messages
           </TabsTrigger>
           <TabsTrigger value="recovery" className="text-xs gap-1.5">
-            <RotateCcw className="h-3.5 w-3.5" /> Recovery
-          </TabsTrigger>
-          <TabsTrigger value="runbook" className="text-xs gap-1.5">
-            <BookOpen className="h-3.5 w-3.5" /> Runbook
+            <RotateCcw className="h-3.5 w-3.5" /> Backup & Recovery
           </TabsTrigger>
           <TabsTrigger value="alerts" className="text-xs gap-1.5">
             <Bell className="h-3.5 w-3.5" /> Alert Center
@@ -2217,11 +2211,9 @@ export default function OperationsPage() {
         <TabsContent value="payments" className="mt-4"><PaymentsTab /></TabsContent>
         <TabsContent value="pickups" className="mt-4"><PickupsTab /></TabsContent>
         <TabsContent value="worker-activity" className="mt-4"><WorkerActivityTab /></TabsContent>
-        <TabsContent value="health" className="mt-4"><HealthTab /></TabsContent>
         <TabsContent value="sync-health" className="mt-4"><SyncHealthTab /></TabsContent>
         <TabsContent value="failed-messages" className="mt-4"><FailedMessagesTab /></TabsContent>
         <TabsContent value="recovery" className="mt-4"><RecoveryTab /></TabsContent>
-        <TabsContent value="runbook" className="mt-4"><RunbookTab /></TabsContent>
         <TabsContent value="alerts" className="mt-4"><AlertCenterTab /></TabsContent>
       </Tabs>
     </div>

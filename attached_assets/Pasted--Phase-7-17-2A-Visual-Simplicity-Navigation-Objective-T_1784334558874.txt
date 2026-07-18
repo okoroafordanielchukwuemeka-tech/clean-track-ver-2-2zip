@@ -1,0 +1,253 @@
+# Phase 7.17.2A — Visual Simplicity & Navigation
+
+## Objective
+
+This phase focuses entirely on improving the user experience and visual design of CleanTrack.
+
+Do **NOT** modify any business logic, database schema, APIs, permissions, workflows, billing, automation, or backend behavior.
+
+Only improve usability, layout, navigation, and visual consistency.
+
+This is a UX refinement phase.
+
+---
+
+# Design Philosophy
+
+The goal is to make CleanTrack feel like a polished commercial SaaS product built for laundry businesses.
+
+Priorities:
+
+* simplicity
+* clarity
+* speed
+* consistency
+* reduced visual clutter
+
+Owners should immediately understand where everything is.
+
+Workers should never feel overwhelmed.
+
+Less is more.
+
+---
+
+# Brand Refresh
+
+Update the application's visual identity.
+
+Primary Brand Color:
+
+Deep Teal
+
+`#0F766E`
+
+Supporting Colors:
+
+Background:
+`#FAFAF9`
+
+Cards:
+`#FFFFFF`
+
+Borders:
+`#E5E7EB`
+
+Primary Text:
+`#1F2937`
+
+Success:
+`#16A34A`
+
+Warning:
+`#F59E0B`
+
+Danger:
+`#DC2626`
+
+Use color sparingly.
+
+Prefer whitespace over colored backgrounds.
+
+---
+
+# Dashboard Cleanup
+
+Audit every dashboard.
+
+Reduce unnecessary visual noise.
+
+Improve spacing between:
+
+* cards
+* tables
+* charts
+* sections
+
+Standardize:
+
+* padding
+* margins
+* card radius
+* shadows
+
+Avoid oversized cards.
+
+Avoid crowded layouts.
+
+---
+
+# Consistent Cards
+
+Every card across the application should have the same visual language.
+
+Standardize:
+
+* border radius
+* shadow
+* spacing
+* headings
+* icons
+* action buttons
+
+---
+
+# Navigation
+
+Simplify sidebar navigation.
+
+Group related items logically.
+
+Reduce cognitive load.
+
+Highlight the active page more clearly.
+
+Improve mobile navigation.
+
+---
+
+# Global Search
+
+Implement a permanent search entry point.
+
+Do NOT rely on keyboard shortcuts.
+
+Requirements:
+
+Visible search control in the sidebar.
+
+Placeholder:
+
+"Search..."
+
+Search should quickly navigate to:
+
+* Orders
+* Customers
+* Workers
+* Receipts
+* Services
+* Settings
+* Marketing
+* Branches
+* Payments
+* Discounts
+
+Search should remain available on desktop and mobile.
+
+Keyboard shortcuts remain supported, but search must be discoverable visually.
+
+---
+
+# Operational Center Cleanup
+
+Keep the Operational Center.
+
+However:
+
+Remove developer-oriented information from the owner interface.
+
+Hide:
+
+* API diagnostics
+* internal server information
+* developer-only metrics
+* implementation details
+
+Keep only business-relevant operational information.
+
+---
+
+# Platform Health Cleanup
+
+Keep Platform Health.
+
+Remove technical diagnostics that ordinary laundry owners do not understand.
+
+Focus on information such as:
+
+* backup status
+* subscription status
+* storage usage
+* connected integrations
+* system availability
+* synchronization status
+
+Developer diagnostics should be reserved for the platform administrator.
+
+---
+
+# Mobile Experience
+
+Audit every major page on mobile.
+
+Improve:
+
+* spacing
+* scrolling
+* touch targets
+* button sizes
+* card stacking
+* typography
+
+Avoid horizontal scrolling.
+
+---
+
+# Visual Consistency Audit
+
+Review the entire application.
+
+Verify consistency of:
+
+* typography
+* icon sizing
+* headings
+* button styles
+* spacing
+* table layouts
+* empty states
+* loading states
+
+Remove any visual inconsistencies.
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Dashboard Improvements
+2. Navigation Improvements
+3. Search Improvements
+4. Operational Center Changes
+5. Platform Health Changes
+6. Mobile UX Improvements
+7. Before/After Screenshots
+8. Remaining UX Recommendations
+
+Do not implement new features.
+
+Do not modify business logic.
+
+Focus entirely on creating a clean, premium, intuitive interface suitable for onboarding the first 100 customers.

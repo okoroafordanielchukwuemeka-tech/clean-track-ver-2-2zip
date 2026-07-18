@@ -63,20 +63,20 @@ export default function Signup() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#0F766E] mb-4">
             <WashingMachine className="h-9 w-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">CleanTrack</h1>
           <p className="text-slate-400 mt-1">Create your laundry workspace</p>
         </div>
 
-        <div className="bg-blue-600/20 border border-blue-500/40 rounded-xl px-4 py-3 flex items-start gap-3">
-          <FlaskConical className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+        <div className="bg-[#0F766E]/20 border border-teal-500/40 rounded-xl px-4 py-3 flex items-start gap-3">
+          <FlaskConical className="h-5 w-5 text-teal-400 shrink-0 mt-0.5" />
           <div>
-            <p className="text-blue-200 text-sm font-semibold">14-day free trial — no payment required</p>
+            <p className="text-teal-200 text-sm font-semibold">14-day free trial — no payment required</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1.5">
               {["Analytics & reports", "Up to 20 workers", "Multiple branches", "Unlimited orders"].map((f) => (
-                <div key={f} className="flex items-center gap-1.5 text-xs text-blue-300">
+                <div key={f} className="flex items-center gap-1.5 text-xs text-teal-300">
                   <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
                   {f}
                 </div>
@@ -100,7 +100,7 @@ export default function Signup() {
                   value={form.businessName}
                   onChange={set("businessName")}
                   placeholder="e.g. Bright Wash Laundry"
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600"
                   disabled={loading}
                 />
               </div>
@@ -111,7 +111,7 @@ export default function Signup() {
                   value={form.ownerEmail}
                   onChange={set("ownerEmail")}
                   placeholder="you@yourbusiness.com"
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600"
                   disabled={loading}
                 />
               </div>
@@ -122,7 +122,7 @@ export default function Signup() {
                   value={form.phone}
                   onChange={set("phone")}
                   placeholder="+234 800 000 0000"
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600"
                   disabled={loading}
                 />
               </div>
@@ -134,7 +134,7 @@ export default function Signup() {
                     value={form.password}
                     onChange={set("password")}
                     placeholder="Min. 8 characters"
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 pr-10"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600 pr-10"
                     disabled={loading}
                   />
                   <button
@@ -167,13 +167,13 @@ export default function Signup() {
                   value={form.confirmPassword}
                   onChange={set("confirmPassword")}
                   placeholder="Re-enter your password"
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600"
                   disabled={loading}
                 />
               </div>
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-11 mt-2"
+                className="w-full bg-[#0F766E] hover:bg-teal-800 text-white font-semibold h-11 mt-2"
                 disabled={loading}
               >
                 {loading ? "Creating workspace..." : "Create Workspace"}
@@ -182,7 +182,7 @@ export default function Signup() {
 
             <p className="mt-5 text-center text-sm text-slate-400">
               Already have an account?{" "}
-              <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium">
+              <Link to="/login" className="text-teal-400 hover:text-teal-300 font-medium">
                 Sign in
               </Link>
             </p>

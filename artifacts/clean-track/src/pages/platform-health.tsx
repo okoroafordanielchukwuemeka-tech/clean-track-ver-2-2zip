@@ -150,7 +150,7 @@ function OverallStatusBanner({ status, latencyMs }: { status: string; latencyMs:
         <p className="text-sm text-muted-foreground">{config.sub}</p>
       </div>
       <div className="text-right text-xs text-muted-foreground">
-        <p>Response: {latencyMs}ms</p>
+        <p className="font-medium">{new Date().toLocaleTimeString()}</p>
       </div>
     </div>
   );
@@ -238,13 +238,12 @@ export default function PlatformHealthPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Server className="h-4 w-4" /> API Server
+              <Server className="h-4 w-4" /> Service Status
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <StatusBadge status={data.api.status} />
-              <span className="text-xs text-muted-foreground">{data.api.latencyMs}ms</span>
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between">
@@ -252,8 +251,8 @@ export default function PlatformHealthPage() {
                 <span className="text-foreground font-medium">{formatUptime(data.api.uptimeMs)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Node</span>
-                <span className="text-foreground font-medium">{data.api.nodeVersion}</span>
+                <span>Response time</span>
+                <span className="text-foreground font-medium">{data.api.latencyMs}ms</span>
               </div>
             </div>
           </CardContent>
@@ -263,21 +262,16 @@ export default function PlatformHealthPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Database className="h-4 w-4" /> Database
+              <Database className="h-4 w-4" /> Data Storage
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <StatusBadge status={data.database.status} />
-              <span className="text-xs text-muted-foreground">{data.database.latencyMs}ms</span>
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between">
-                <span>Tables</span>
-                <span className="text-foreground font-medium">{data.database.tables}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Size</span>
+                <span>Storage used</span>
                 <span className="text-foreground font-medium">{data.database.sizePretty}</span>
               </div>
             </div>

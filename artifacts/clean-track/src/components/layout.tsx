@@ -238,27 +238,30 @@ function LayoutInner() {
 
         <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           <BranchSelector />
-          {navItems.map(({ to, label, icon: Icon, badge }: any) => (
-            <Link
-              key={to}
-              to={to}
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                location.pathname === to || location.pathname.startsWith(to + "/")
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">{label}</span>
-              {badge != null && (
-                <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                  {badge}
-                </span>
-              )}
-            </Link>
-          ))}
+          {navItems.map(({ to, label, icon: Icon, badge }: any) => {
+            const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
+            return (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                  isActive
+                    ? "bg-sidebar-primary text-white font-semibold shadow-sm"
+                    : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-70")} />
+                <span className="flex-1">{label}</span>
+                {badge != null && (
+                  <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
 
           {isOwner && (
             <div className="pt-1">
@@ -271,16 +274,17 @@ function LayoutInner() {
               </button>
               {advancedOpen && advancedNavItems.map(({ to, label, icon: Icon, badge }) => {
                 const isPremium = (to === "/marketing" || to === "/customer-hub") && !isProOrAbove;
+                const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
                 return (
                   <Link
                     key={to}
                     to={to}
                     onClick={() => setSidebarOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                      location.pathname === to || location.pathname.startsWith(to + "/")
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                      isActive
+                        ? "bg-sidebar-primary text-white font-semibold shadow-sm"
+                        : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0" />

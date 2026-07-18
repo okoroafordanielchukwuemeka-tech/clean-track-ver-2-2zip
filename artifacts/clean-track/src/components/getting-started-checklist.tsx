@@ -103,11 +103,11 @@ export function GettingStartedChecklist() {
   if (allCoreDone && bonusSteps.every((s) => s.done)) return null;
 
   return (
-    <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20">
+    <Card className="border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/20">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+            <div className="h-8 w-8 rounded-lg bg-[#0F766E] flex items-center justify-center shrink-0">
               <Rocket className="h-4 w-4 text-white" />
             </div>
             <div>
@@ -129,9 +129,9 @@ export function GettingStartedChecklist() {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="mt-3 h-1.5 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+        <div className="mt-3 h-1.5 bg-teal-200 dark:bg-teal-800 rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-600 rounded-full transition-all duration-500"
+            className="h-full bg-[#0F766E] rounded-full transition-all duration-500"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -145,13 +145,13 @@ export function GettingStartedChecklist() {
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors group ${
                 step.done
                   ? "opacity-60 cursor-default"
-                  : "hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer"
+                  : "hover:bg-teal-100 dark:hover:bg-teal-900/20 cursor-pointer"
               }`}
             >
               {step.done ? (
                 <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
               ) : (
-                <Circle className="h-5 w-5 text-blue-400 shrink-0" />
+                <Circle className="h-5 w-5 text-teal-500 shrink-0" />
               )}
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium leading-tight ${step.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
@@ -162,14 +162,14 @@ export function GettingStartedChecklist() {
                 )}
               </div>
               {!step.done && (
-                <ArrowRight className="h-4 w-4 text-blue-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <ArrowRight className="h-4 w-4 text-teal-600 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </Link>
           ))}
         </div>
 
         {!bonusSteps.every((s) => s.done) && (
-          <div className="border-t border-blue-200 dark:border-blue-800 pt-3">
+          <div className="border-t border-teal-200 dark:border-teal-800 pt-3">
             <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 px-3 mb-1.5">
               <Gift className="h-3.5 w-3.5" />
               Optional — unlock more
@@ -178,7 +178,7 @@ export function GettingStartedChecklist() {
               <Link
                 key={step.id}
                 to={step.href}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors group hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors group hover:bg-teal-100 dark:hover:bg-teal-900/20 cursor-pointer"
               >
                 <Circle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
                 <div className="flex-1 min-w-0">

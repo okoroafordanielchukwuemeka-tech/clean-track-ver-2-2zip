@@ -42,7 +42,7 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#0F766E] mb-4">
             <WashingMachine className="h-9 w-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">CleanTrack</h1>
@@ -65,7 +65,7 @@ export default function Login() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@yourbusiness.com"
-                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600"
                   autoComplete="email"
                   disabled={loading}
                 />
@@ -78,7 +78,7 @@ export default function Login() {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 pr-10"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600 pr-10"
                     autoComplete="current-password"
                     disabled={loading}
                   />
@@ -93,7 +93,7 @@ export default function Login() {
               </div>
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-11 mt-2"
+                className="w-full bg-[#0F766E] hover:bg-teal-800 text-white font-semibold h-11 mt-2"
                 disabled={loading}
               >
                 {loading ? "Signing in..." : "Sign In"}
@@ -103,13 +103,13 @@ export default function Login() {
             <div className="mt-6 space-y-3 text-center text-sm">
               <Link
                 to="/forgot-password"
-                className="block text-slate-400 hover:text-blue-400 transition-colors"
+                className="block text-slate-400 hover:text-teal-400 transition-colors"
               >
                 Forgot your password?
               </Link>
               <p className="text-slate-400">
                 New laundry business?{" "}
-                <Link to="/signup" className="text-blue-400 hover:text-blue-300 font-medium">
+                <Link to="/signup" className="text-teal-400 hover:text-teal-300 font-medium">
                   Create your workspace
                 </Link>
               </p>

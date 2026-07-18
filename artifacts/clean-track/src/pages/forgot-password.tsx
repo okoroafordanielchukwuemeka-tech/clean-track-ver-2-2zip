@@ -34,7 +34,7 @@ export default function ForgotPassword() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#0F766E] mb-4">
             <WashingMachine className="h-9 w-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">CleanTrack</h1>
@@ -88,7 +88,7 @@ export default function ForgotPassword() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@yourbusiness.com"
-                        className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500 pl-10"
+                        className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500 focus:border-teal-600 pl-10"
                         autoComplete="email"
                         autoFocus
                         disabled={loading}
@@ -97,7 +97,7 @@ export default function ForgotPassword() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-11 mt-2"
+                    className="w-full bg-[#0F766E] hover:bg-teal-800 text-white font-semibold h-11 mt-2"
                     disabled={loading}
                   >
                     {loading ? "Sending..." : "Send Reset Link"}
