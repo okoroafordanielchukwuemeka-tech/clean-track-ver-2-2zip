@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { UpgradeRequired } from "@/components/upgrade-required";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/context/auth-context";
 import { InboxTab } from "@/components/inbox-tab";
 import { ActivityTab } from "@/components/communications/activity-tab";
 import { AutomationsTab } from "@/components/communications/automations-tab";
@@ -916,7 +917,8 @@ function AnalyticsTab() {
 export default function CustomerHubPage() {
   usePageTitle("Customer Hub");
   const qc = useQueryClient();
-  const [tab, setTab] = useState("overview");
+  const { isOwner } = useAuth();
+  const [tab, setTab] = useState(() => isOwner ? "overview" : "inbox");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<NotifTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<NotifTemplate | null>(null);
@@ -990,7 +992,9 @@ export default function CustomerHubPage() {
         <div>
           <h1 className="text-2xl font-bold">Customer Hub</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            WhatsApp, messaging, automations, and customer engagement.
+            {isOwner
+              ? "WhatsApp, messaging, automations, and customer engagement."
+              : "Shared inbox for customer conversations."}
           </p>
         </div>
 
@@ -1023,7 +1027,7 @@ export default function CustomerHubPage() {
       {/* ── Tabs ── */}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto gap-0.5">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+          {isOwner && <TabsTrigger value="overview">Overview</TabsTrigger>}
           <TabsTrigger value="inbox" className="gap-1.5">
             Inbox
             {inboxUnread > 0 && (
@@ -1032,26 +1036,30 @@ export default function CustomerHubPage() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="templates">
-            Templates
-            {stats && (
-              <span className="ml-1.5 text-xs bg-muted rounded-full px-1.5">
-                {stats.templates.total}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="automations">Automations</TabsTrigger>
-          <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
+          {isOwner && (
+            <TabsTrigger value="templates">
+              Templates
+              {stats && (
+                <span className="ml-1.5 text-xs bg-muted rounded-full px-1.5">
+                  {stats.templates.total}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+          {isOwner && <TabsTrigger value="automations">Automations</TabsTrigger>}
+          {isOwner && <TabsTrigger value="campaigns">Campaigns</TabsTrigger>}
+          {isOwner && <TabsTrigger value="analytics">Analytics</TabsTrigger>}
+          {isOwner && <TabsTrigger value="activity">Activity</TabsTrigger>}
         </TabsList>
 
-        {/* Overview */}
-        <TabsContent value="overview" className="mt-5">
-          <OverviewTab onNavigateToTab={setTab} />
-        </TabsContent>
+        {/* Overview — owner only */}
+        {isOwner && (
+          <TabsContent value="overview" className="mt-5">
+            <OverviewTab onNavigateToTab={setTab} />
+          </TabsContent>
+        )}
 
-        {/* Inbox */}
+        {/* Inbox — all users with canViewWhatsApp */}
         <TabsContent value="inbox" className="mt-4">
           <InboxTab />
         </TabsContent>

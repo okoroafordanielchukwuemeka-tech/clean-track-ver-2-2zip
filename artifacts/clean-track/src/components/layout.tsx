@@ -119,6 +119,7 @@ function LayoutInner() {
       items: [
         ...(workerPerms?.canViewOrders ? [{ to: "/receipts", label: "Receipts", icon: FileText }] : []),
         ...(workerPerms?.canViewOrders || workerPerms?.canProcessOrders ? [{ to: "/batches", label: "Batches", icon: Package }] : []),
+        ...(workerPerms?.canViewWhatsApp ? [{ to: "/customer-hub", label: "Inbox", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined }] : []),
       ],
     },
   ].filter(g => g.items.length > 0) as Array<{ label: string | null; items: Array<{ to: string; label: string; icon: any; badge?: number }> }>;

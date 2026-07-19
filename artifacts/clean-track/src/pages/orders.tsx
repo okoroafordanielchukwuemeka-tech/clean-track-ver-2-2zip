@@ -561,7 +561,7 @@ export default function Orders() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" asChild>
+                          <Button variant="ghost" size="sm" className="h-9 w-9 p-0" asChild>
                             <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
                           </Button>
                         </TableCell>

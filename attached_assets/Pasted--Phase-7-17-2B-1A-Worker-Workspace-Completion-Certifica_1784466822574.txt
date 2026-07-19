@@ -1,0 +1,191 @@
+# Phase 7.17.2B.1A — Worker Workspace Completion & Certification
+
+## Objective
+
+Complete the remaining items from Phase 7.17.2B.1.
+
+Do NOT begin Phase 7.17.2B.2.
+
+Do NOT redesign Order IDs.
+
+Do NOT modify receipt branding.
+
+Do NOT work on logo upload.
+
+Do NOT work on discount workflow.
+
+Focus ONLY on completing the Worker Workspace.
+
+---
+
+## Background
+
+The previous Worker Workspace audit improved:
+
+* Sidebar
+* Navigation
+* Payment shortcuts
+* Pickup shortcuts
+* Worker Station cards
+
+However, several important workflow issues remain before this phase can be certified complete.
+
+These issues came from real user testing and must be resolved before moving to the next phase.
+
+---
+
+# 1. Worker Dashboard Productivity Audit
+
+The Worker Dashboard should answer one question:
+
+"What should I work on next?"
+
+Audit and redesign the dashboard so workers immediately see:
+
+* Orders waiting for processing
+* Orders currently processing
+* Ready for pickup
+* Partial pickups
+* Outstanding payments
+* Today's workload
+
+Reduce unnecessary information.
+
+Prioritize operational actions.
+
+---
+
+# 2. Customer Workflow Audit
+
+Workers should feel like they are working inside the same customer system as the owner.
+
+Audit:
+
+* Customer search
+* Customer creation
+* Customer editing
+* Customer history
+* Outstanding balance
+* Previous orders
+
+Reduce clicks.
+
+Improve clarity.
+
+Improve workflow speed.
+
+---
+
+# 3. Receipt Workflow
+
+Workers perform receipt operations daily.
+
+Audit:
+
+* View receipt
+* Print receipt
+* Reprint receipt
+* Share receipt
+
+If workers have the appropriate permissions, they must be able to access these workflows.
+
+Review frontend and backend authorization together.
+
+Do not create duplicate receipt systems.
+
+---
+
+# 4. Pickup Workflow
+
+Audit the complete pickup experience.
+
+Verify:
+
+* Full Pickup
+* Partial Pickup
+
+Ensure both actions are:
+
+* immediately visible
+* clearly labelled
+* easy to understand
+* mobile friendly
+
+Reduce unnecessary clicks.
+
+---
+
+# 5. WhatsApp Operational Workflow
+
+Do NOT implement Meta integration.
+
+Instead audit the worker workflow.
+
+Determine how workers will eventually:
+
+* Notify customer order ready
+* Notify pickup completed
+* Reply to customer messages
+* Continue conversations started by the owner
+
+Verify the current UI is ready for these future capabilities.
+
+If necessary, improve the layout without implementing Meta integration.
+
+---
+
+# 6. Mobile Audit
+
+Review the complete worker workspace on mobile.
+
+Check:
+
+* spacing
+* buttons
+* scrolling
+* dialogs
+* forms
+* tables
+
+Workers should comfortably operate the application with one hand.
+
+---
+
+# 7. Final Certification
+
+Run a complete Worker Workspace Certification.
+
+Verify:
+
+* Worker productivity
+* Customer workflow
+* Receipt workflow
+* Pickup workflow
+* Dashboard usability
+* Mobile usability
+* Branch isolation
+* Permission enforcement
+
+No regressions.
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Remaining Issues Found
+2. Improvements Made
+3. Worker Dashboard Certification
+4. Customer Workflow Certification
+5. Receipt Workflow Certification
+6. Pickup Workflow Certification
+7. Mobile Certification
+8. Remaining Risks
+9. Worker Workspace Final Readiness Score
+
+If every workflow passes successfully, explicitly certify:
+
+"Phase 7.17.2B.1 Complete"
+
+Only then should we proceed to Phase 7.17.2B.2 — Order Workflow Simplification.

@@ -55,7 +55,86 @@ export default function Receipts() {
   });
 
   if (!isOwner) {
-    return <div className="p-8 text-center text-muted-foreground">Access denied</div>;
+    // Workers get a targeted receipt lookup — search by receipt number, view and print
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Receipt Lookup</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Enter a receipt number to view or reprint a receipt.
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Enter receipt number (e.g. RCP-0001)…"
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && search.trim()) setSelectedReceiptNumber(search.trim());
+                  }}
+                />
+              </div>
+              <Button
+                onClick={() => setSelectedReceiptNumber(search.trim())}
+                disabled={!search.trim()}
+                className="gap-2"
+              >
+                <Search className="h-4 w-4" />
+                Look Up
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Tip: You can also view and print receipts directly from any order's detail page.
+            </p>
+          </CardContent>
+        </Card>
+
+        {selectedReceiptNumber && (
+          <Card>
+            {detailLoading ? (
+              <CardContent className="p-8 text-center text-muted-foreground">Loading receipt…</CardContent>
+            ) : receiptDetail ? (
+              <div>
+                <div className="flex items-center justify-between gap-2 p-4 border-b bg-muted/30 flex-wrap">
+                  <div>
+                    <p className="font-semibold">Receipt {receiptDetail.receipt?.receiptNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {receiptDetail.customer?.fullName} · {receiptDetail.order?.orderId}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {receiptDetail.receipt?.receiptNumber && (
+                      <Button size="sm" onClick={() => handlePrint(receiptDetail.receipt!.receiptNumber!)}>
+                        <Printer className="h-4 w-4 mr-1.5" />
+                        Print / PDF
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={`/orders/${receiptDetail.order?.id}`}>View Order</a>
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <ReceiptView data={receiptDetail} showAllPayments />
+                </div>
+              </div>
+            ) : (
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Receipt className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                <p className="font-medium">No receipt found</p>
+                <p className="text-sm mt-1">No receipt matches "{selectedReceiptNumber}". Check the number and try again.</p>
+              </CardContent>
+            )}
+          </Card>
+        )}
+      </div>
+    );
   }
 
   const receipts = data?.receipts ?? [];

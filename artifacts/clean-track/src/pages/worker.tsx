@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PaymentStatusBadge } from "@/lib/order-status";
 import { toast } from "sonner";
@@ -214,6 +214,9 @@ export default function WorkerStation() {
   const sortByUrgency = (arr: typeof orders) =>
     [...arr].sort((a, b) => a._urgency.hoursRemaining - b._urgency.hoursRemaining);
 
+  const partialPickupOrders = orders.filter(o => o.status === "partial_pickup");
+  const pickupOrders = sortByUrgency([...readyOrders, ...partialPickupOrders]);
+
   const myOverdue = sortByUrgency(myOrders.filter(o => o._urgency.level === "overdue"));
   const myUrgent = sortByUrgency(myOrders.filter(o => o._urgency.level === "urgent"));
   const myAttention = sortByUrgency(myOrders.filter(o => o._urgency.level === "attention"));
@@ -259,14 +262,20 @@ export default function WorkerStation() {
 
   const overdueTotal = orders.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
   const urgentTotal = orders.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;
+  const unpaidActiveTotal = orders.filter(o =>
+    (o.paymentStatus === "unpaid" || o.paymentStatus === "partial") && !["completed"].includes(o.status)
+  ).length;
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayCount = orders.filter(o => new Date(o.createdAt) >= todayStart).length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Worker Station</h1>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Logged in as <strong>{user?.name}</strong>
+            {todayCount > 0 && <span>{todayCount} order{todayCount !== 1 ? "s" : ""} today · </span>}
+            <strong>{user?.name}</strong>
             {user?.role && <span className="ml-1 capitalize">({user.role})</span>}
           </p>
         </div>
@@ -276,37 +285,53 @@ export default function WorkerStation() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* 6-tile workload overview */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         <Card className={cn(overdueTotal > 0 ? "border-red-300 dark:border-red-900" : "")}>
-          <CardContent className="p-4 text-center">
-            <p className={cn("text-2xl font-bold", overdueTotal > 0 ? "text-red-600" : "text-muted-foreground")}>{overdueTotal}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+          <CardContent className="p-3 text-center">
+            <p className={cn("text-xl font-bold", overdueTotal > 0 ? "text-red-600" : "text-muted-foreground")}>{overdueTotal}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
               {overdueTotal > 0 && <AlertTriangle className="h-3 w-3 text-red-500" />}
               Overdue
             </p>
           </CardContent>
         </Card>
-        <Card className={cn(urgentTotal > 0 ? "border-red-200 dark:border-red-900" : "")}>
-          <CardContent className="p-4 text-center">
-            <p className={cn("text-2xl font-bold", urgentTotal > 0 ? "text-red-500" : "text-muted-foreground")}>{urgentTotal}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              {urgentTotal > 0 && <Zap className="h-3 w-3 text-red-400" />}
+        <Card className={cn(urgentTotal > 0 ? "border-orange-200 dark:border-orange-900" : "")}>
+          <CardContent className="p-3 text-center">
+            <p className={cn("text-xl font-bold", urgentTotal > 0 ? "text-orange-500" : "text-muted-foreground")}>{urgentTotal}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
+              {urgentTotal > 0 && <Zap className="h-3 w-3 text-orange-400" />}
               Urgent
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-blue-600">{myOrders.length}</p>
-            <p className="text-xs text-muted-foreground">My Orders</p>
+          <CardContent className="p-3 text-center">
+            <p className={cn("text-xl font-bold", sharedQueue.length > 0 ? "text-blue-600" : "text-muted-foreground")}>{sharedQueue.length}</p>
+            <p className="text-xs text-muted-foreground">In Queue</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-green-600">{readyOrders.length}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-              <CheckCircle className="h-3 w-3" />
-              For Pickup
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-green-600">{readyOrders.length}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
+              <CheckCircle className="h-3 w-3 text-green-500" />
+              Ready
+            </p>
+          </CardContent>
+        </Card>
+        <Card className={cn(partialPickupOrders.length > 0 ? "border-orange-200 dark:border-orange-900" : "")}>
+          <CardContent className="p-3 text-center">
+            <p className={cn("text-xl font-bold", partialPickupOrders.length > 0 ? "text-orange-500" : "text-muted-foreground")}>{partialPickupOrders.length}</p>
+            <p className="text-xs text-muted-foreground">Partial</p>
+          </CardContent>
+        </Card>
+        <Card className={cn(unpaidActiveTotal > 0 ? "border-red-200 dark:border-red-900" : "")}>
+          <CardContent className="p-3 text-center">
+            <p className={cn("text-xl font-bold", unpaidActiveTotal > 0 ? "text-red-600" : "text-muted-foreground")}>{unpaidActiveTotal}</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
+              {unpaidActiveTotal > 0 && <CreditCard className="h-3 w-3 text-red-500" />}
+              Unpaid
             </p>
           </CardContent>
         </Card>
@@ -396,7 +421,7 @@ export default function WorkerStation() {
       {sharedQueue.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-semibold text-base flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
+            <Users className="h-4 w-4 text-primary" />
             Shared Queue ({sharedQueue.length})
           </h2>
           <div className="space-y-2">
@@ -434,29 +459,37 @@ export default function WorkerStation() {
         </div>
       )}
 
-      {readyOrders.length > 0 && (
+      {pickupOrders.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-semibold text-base flex items-center gap-2">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            Ready for Pickup ({readyOrders.length})
+            For Pickup ({pickupOrders.length})
+            {partialPickupOrders.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">
+                · {readyOrders.length} ready, {partialPickupOrders.length} partial
+              </span>
+            )}
           </h2>
           <div className="rounded-xl border overflow-hidden">
             <div className="divide-y">
-              {sortByUrgency(readyOrders).map(order => {
+              {pickupOrders.map(order => {
                 const isPaid = order.paymentStatus === "paid";
                 const isUnpaid = order.paymentStatus === "unpaid";
+                const isPartialPickup = order.status === "partial_pickup";
                 return (
                   <div key={order.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{order.customerName}</span>
                         <span className="font-mono text-xs text-muted-foreground">{order.orderId}</span>
-                        <Badge variant="success" className="text-xs">Ready</Badge>
+                        {isPartialPickup
+                          ? <Badge variant="warning" className="text-xs">Partial Pickup</Badge>
+                          : <Badge variant="success" className="text-xs">Ready</Badge>}
                         {isPaid
                           ? <Badge variant="success" className="text-xs">Paid</Badge>
                           : isUnpaid
                           ? <Badge variant="destructive" className="text-xs">Unpaid</Badge>
-                          : <Badge variant="warning" className="text-xs">Partial</Badge>}
+                          : <Badge variant="warning" className="text-xs">Partial Pay</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         {(order.itemCount ?? 0) > 0
@@ -469,8 +502,11 @@ export default function WorkerStation() {
                         )}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                      <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
+                    <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5 shrink-0" asChild>
+                      <Link to={`/orders/${order.id}`}>
+                        <Eye className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline text-xs">Open</span>
+                      </Link>
                     </Button>
                   </div>
                 );
@@ -480,7 +516,7 @@ export default function WorkerStation() {
         </div>
       )}
 
-      {myOrders.length === 0 && sharedQueue.length === 0 && readyOrders.length === 0 && (
+      {myOrders.length === 0 && sharedQueue.length === 0 && pickupOrders.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
