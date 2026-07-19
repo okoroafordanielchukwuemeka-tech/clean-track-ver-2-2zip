@@ -26,6 +26,8 @@ import {
   Lock,
   Keyboard,
   Search,
+  CreditCard,
+  ShoppingBag,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "@/context/theme-context";
@@ -95,15 +97,34 @@ function LayoutInner() {
   const pending = pendingCount?.count ?? 0;
   const unreadConversations = unreadConvData?.unreadCount ?? 0;
 
-  // Worker nav is permission-aware: only show items the worker can actually use
-  const workerNavItems = [
-    { to: "/worker-station", label: "Worker Station", icon: WashingMachine },
-    { to: "/orders", label: "Orders", icon: ShoppingCart },
-    { to: "/customers", label: "Customers", icon: UserCircle },
-    ...(workerPerms?.canViewOrders ? [{ to: "/receipts", label: "Receipts", icon: FileText }] : []),
-    ...(workerPerms?.canViewOrders || workerPerms?.canProcessOrders ? [{ to: "/batches", label: "Batches", icon: Package }] : []),
-    ...(workerPerms?.canViewWhatsApp ? [{ to: "/customer-hub", label: "Customer Hub", icon: MessageSquare, badge: unreadConversations > 0 ? unreadConversations : undefined }] : []),
-  ];
+  // Worker nav is permission-aware and grouped — only show items the worker can actually use
+  const workerNavGroups = [
+    {
+      label: null,
+      items: [
+        { to: "/worker-station", label: "Dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: "Workspace",
+      items: [
+        { to: "/orders", label: "Orders", icon: ShoppingCart },
+        { to: "/customers", label: "Customers", icon: UserCircle },
+        { to: "/orders?payment=outstanding", label: "Payments", icon: CreditCard },
+        { to: "/orders?status=pickup", label: "Pickups", icon: ShoppingBag },
+      ],
+    },
+    {
+      label: "Tools",
+      items: [
+        ...(workerPerms?.canViewOrders ? [{ to: "/receipts", label: "Receipts", icon: FileText }] : []),
+        ...(workerPerms?.canViewOrders || workerPerms?.canProcessOrders ? [{ to: "/batches", label: "Batches", icon: Package }] : []),
+      ],
+    },
+  ].filter(g => g.items.length > 0) as Array<{ label: string | null; items: Array<{ to: string; label: string; icon: any; badge?: number }> }>;
+
+  // Keep flat list for backward compat (used by command palette)
+  const workerNavItems = workerNavGroups.flatMap(g => g.items);
 
   // Owner nav broken into named groups for sidebar rendering
   const ownerNavGroups = [
@@ -340,32 +361,47 @@ function LayoutInner() {
               </div>
             </div>
           ) : (
-            /* Worker nav — flat, unchanged */
-            <div className="space-y-0.5">
-              {navItems.map(({ to, label, icon: Icon, badge }: any) => {
-                const isActive = location.pathname === to || location.pathname.startsWith(to + "/");
-                return (
-                  <Link
-                    key={to}
-                    to={to}
-                    onClick={() => setSidebarOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                      isActive
-                        ? "bg-sidebar-primary text-white font-semibold shadow-sm"
-                        : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    )}
-                  >
-                    <Icon className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-70")} />
-                    <span className="flex-1">{label}</span>
-                    {badge != null && (
-                      <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                        {badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+            /* Worker nav — grouped by section */
+            <div className="space-y-2">
+              {workerNavGroups.map((group, gi) => (
+                <div key={gi}>
+                  {group.label && (
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/35 select-none">
+                      {group.label}
+                    </p>
+                  )}
+                  <div className="space-y-0.5">
+                    {group.items.map(({ to, label, icon: Icon, badge }: any) => {
+                      const toBase = to.split("?")[0];
+                      const toQuery = to.includes("?") ? to.split("?")[1] : null;
+                      const isActive = toQuery
+                        ? location.pathname === toBase && new URLSearchParams(location.search).has(toQuery.split("=")[0])
+                        : location.pathname === toBase || location.pathname.startsWith(toBase + "/");
+                      return (
+                        <Link
+                          key={to}
+                          to={to}
+                          onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                            isActive
+                              ? "bg-sidebar-primary text-white font-semibold shadow-sm"
+                              : "font-medium text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <Icon className={cn("h-4 w-4 shrink-0", isActive ? "opacity-100" : "opacity-70")} />
+                          <span className="flex-1">{label}</span>
+                          {badge != null && (
+                            <span className="bg-amber-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                              {badge}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </nav>

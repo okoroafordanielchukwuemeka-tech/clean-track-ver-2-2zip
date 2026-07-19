@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard } from "lucide-react";
 import { Link } from "react-router-dom";
+import { PaymentStatusBadge } from "@/lib/order-status";
 import { toast } from "sonner";
 import { CreateOrderDialog } from "@/components/create-order-dialog";
 import { CountdownTimer } from "@/components/countdown-timer";
@@ -77,6 +78,9 @@ function UrgencySection({
                     <Badge variant={order.serviceType === "express" ? "warning" : order.serviceType === "premium" ? "info" : "outline"} className="text-xs capitalize">
                       {order.serviceType}
                     </Badge>
+                    {order.paymentStatus && order.paymentStatus !== "paid" && (
+                      <PaymentStatusBadge status={order.paymentStatus} />
+                    )}
                     {order.isVerified && (
                       <Badge variant="success" className="text-xs">Verified</Badge>
                     )}
@@ -103,8 +107,11 @@ function UrgencySection({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
+                  <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5" asChild>
+                    <Link to={`/orders/${order.id}`}>
+                      <Eye className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline text-xs">Open</span>
+                    </Link>
                   </Button>
                   {order.status === "pending" && onClaim && (
                     <Button size="sm" variant="outline" onClick={() => onClaim(order.id)} disabled={isPending}>
@@ -291,7 +298,7 @@ export default function WorkerStation() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-blue-600">{myOrders.length}</p>
-            <p className="text-xs text-muted-foreground">My Active</p>
+            <p className="text-xs text-muted-foreground">My Orders</p>
           </CardContent>
         </Card>
         <Card>
@@ -299,7 +306,7 @@ export default function WorkerStation() {
             <p className="text-2xl font-bold text-green-600">{readyOrders.length}</p>
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <CheckCircle className="h-3 w-3" />
-              Ready
+              For Pickup
             </p>
           </CardContent>
         </Card>

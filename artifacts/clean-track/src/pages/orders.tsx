@@ -176,8 +176,8 @@ export default function Orders() {
   usePageTitle("Orders");
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "all");
+  const [paymentFilter, setPaymentFilter] = useState(() => searchParams.get("payment") || "all");
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("urgency");
   const [showCreate, setShowCreate] = useState(() => searchParams.get("create") === "1");
@@ -210,8 +210,14 @@ export default function Orders() {
       o.customerName.toLowerCase().includes(search.toLowerCase()) ||
       o.orderId.includes(search) ||
       o.phone.includes(search);
-    const matchStatus = statusFilter === "all" || o.status === statusFilter;
-    const matchPayment = paymentFilter === "all" || o.paymentStatus === paymentFilter;
+    const matchStatus =
+      statusFilter === "all" ? true :
+      statusFilter === "pickup" ? (o.status === "ready" || o.status === "partial_pickup") :
+      o.status === statusFilter;
+    const matchPayment =
+      paymentFilter === "all" ? true :
+      paymentFilter === "outstanding" ? (o.paymentStatus === "unpaid" || o.paymentStatus === "partial") :
+      o.paymentStatus === paymentFilter;
     const matchUrgency = urgencyFilter === "all" || o._urgency.level === urgencyFilter;
     return matchSearch && matchStatus && matchPayment && matchUrgency;
   });
@@ -284,10 +290,18 @@ export default function Orders() {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold">Orders</h1>
+            <h1 className="text-2xl font-bold">
+              {statusFilter === "pickup" ? "Pickups" : paymentFilter === "outstanding" ? "Payments" : "Orders"}
+            </h1>
             <CachedDataBadge show={isViewingCache} />
           </div>
-          {(overdueCount > 0 || urgentCount > 0) && (
+          {statusFilter === "pickup" && (
+            <p className="text-sm text-muted-foreground mt-0.5">Orders ready or awaiting partial pickup</p>
+          )}
+          {paymentFilter === "outstanding" && (
+            <p className="text-sm text-muted-foreground mt-0.5">Orders with unpaid or partial balance</p>
+          )}
+          {statusFilter !== "pickup" && paymentFilter !== "outstanding" && (overdueCount > 0 || urgentCount > 0) && (
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               {overdueCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-500">
@@ -366,15 +380,17 @@ export default function Orders() {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="pickup">Ready / Pickup</SelectItem>
                 <SelectItem value="ready">Ready</SelectItem>
                 <SelectItem value="partial_pickup">Partial Pickup</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
             <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-              <SelectTrigger className="w-36"><SelectValue placeholder="Payment" /></SelectTrigger>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Payment" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="outstanding">Outstanding</SelectItem>
                 <SelectItem value="unpaid">Unpaid</SelectItem>
                 <SelectItem value="partial">Partial</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>

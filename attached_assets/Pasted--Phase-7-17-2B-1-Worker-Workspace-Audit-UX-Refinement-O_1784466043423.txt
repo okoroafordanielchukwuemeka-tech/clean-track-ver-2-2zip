@@ -1,0 +1,347 @@
+# Phase 7.17.2B.1 — Worker Workspace Audit & UX Refinement
+
+## Objective
+
+This phase focuses ONLY on the Worker Workspace.
+
+Do NOT work on:
+
+* Order ID redesign
+* Logo upload
+* Receipt branding
+* Discount workflow
+* Operational Center
+* Platform Health
+* Pricing
+* Billing
+* AI Marketing
+* WhatsApp improvements
+* Navigation redesign outside the worker workspace
+
+Those belong to later phases.
+
+---
+
+## Background
+
+This phase is based on real user testing.
+
+The certification phase proved the architecture now works.
+
+Workers and owners now share the same operational data.
+
+Now the goal is to make the Worker Workspace feel natural, efficient, and production-ready.
+
+Do not change the architecture.
+
+Improve only the worker experience.
+
+---
+
+# 1. Worker Workspace Audit
+
+Audit the complete worker experience from login to completing an order.
+
+Review:
+
+* Worker Dashboard
+* Worker Sidebar
+* Orders
+* Customers
+* Receipts
+* Payments
+* Pickups
+* Batches
+
+Document every unnecessary click.
+
+Document confusing layouts.
+
+Document missing shortcuts.
+
+Document poor spacing.
+
+Document visual inconsistencies.
+
+---
+
+# 2. Daily Laundry Workflow
+
+Simulate a real worker.
+
+Complete this workflow:
+
+Login
+
+View dashboard
+
+Create customer
+
+Create order
+
+Add services
+
+Record payment
+
+Move order:
+
+Pending
+
+Processing
+
+Ready
+
+Partial Pickup
+
+Final Pickup
+
+Issue receipt
+
+Logout
+
+Record every UX issue discovered.
+
+---
+
+# 3. Dashboard Refinement
+
+The worker dashboard should answer:
+
+What should I work on next?
+
+Improve hierarchy.
+
+Reduce clutter.
+
+Highlight:
+
+Orders waiting
+
+Orders processing
+
+Ready for pickup
+
+Outstanding payments
+
+Today's workload
+
+Remove unnecessary information.
+
+---
+
+# 4. Sidebar
+
+Audit the worker sidebar.
+
+Workers should immediately find:
+
+Dashboard
+
+Orders
+
+Customers
+
+Payments
+
+Receipts
+
+Batches
+
+Pickups
+
+Nothing more.
+
+Hide features irrelevant to workers.
+
+Improve grouping.
+
+Improve spacing.
+
+Improve icon consistency.
+
+---
+
+# 5. Orders
+
+Review the worker order page.
+
+Workers should easily:
+
+Create orders
+
+Edit orders
+
+Move stages
+
+Record payments
+
+Print receipts
+
+Search customers
+
+No unnecessary scrolling.
+
+No unnecessary clicks.
+
+---
+
+# 6. Customers
+
+Workers should naturally:
+
+Find customers
+
+Create customers
+
+Edit customer information
+
+View customer history
+
+View outstanding balances
+
+Everything should feel connected to orders.
+
+---
+
+# 7. Payments
+
+Workers should easily:
+
+Record payments
+
+View balances
+
+View payment history
+
+See payment status
+
+Improve clarity.
+
+---
+
+# 8. Receipts
+
+Workers should easily:
+
+Preview
+
+Print
+
+Share
+
+Reprint
+
+Locate receipts quickly.
+
+---
+
+# 9. Pickups
+
+Review Full Pickup and Partial Pickup.
+
+Ensure both actions are immediately visible.
+
+No hidden actions.
+
+Improve wording where necessary.
+
+---
+
+# 10. Branch Behaviour
+
+Verify:
+
+When a worker changes branches,
+
+their entire workspace immediately changes.
+
+Orders
+
+Customers
+
+Receipts
+
+Payments
+
+Batches
+
+Everything should reflect the assigned branch.
+
+No stale information.
+
+No refresh confusion.
+
+---
+
+# 11. Mobile UX
+
+Audit the complete worker workspace on mobile.
+
+Check:
+
+Touch targets
+
+Tables
+
+Forms
+
+Buttons
+
+Scrolling
+
+Dialogs
+
+Spacing
+
+Workers should comfortably operate the application on a phone.
+
+---
+
+# 12. Certification
+
+After completing all improvements:
+
+Run a complete Worker Workspace Certification.
+
+Verify:
+
+Worker productivity
+
+Navigation speed
+
+Workflow completion
+
+Branch isolation
+
+Payment workflow
+
+Receipt workflow
+
+Pickup workflow
+
+No regressions
+
+---
+
+# Deliverables
+
+Provide:
+
+1. Worker Workspace Audit
+2. UX Improvements
+3. Dashboard Improvements
+4. Sidebar Improvements
+5. Order Workflow Improvements
+6. Customer Workflow Improvements
+7. Payment Improvements
+8. Receipt Improvements
+9. Pickup Improvements
+10. Mobile Audit
+11. Remaining Risks
+12. Worker Workspace Certification Report
+
+Do not implement features from later phases.
+
+Focus only on making the Worker Workspace production-ready.
+
+This phase must be completed and certified before proceeding to Phase 7.17.2B.2 — Order Workflow Simplification.
