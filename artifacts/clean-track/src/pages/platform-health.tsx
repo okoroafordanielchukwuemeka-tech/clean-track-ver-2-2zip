@@ -181,7 +181,7 @@ export default function PlatformHealthPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-4 animate-pulse">
+      <div className="space-y-4 animate-pulse">
         <div className="h-8 bg-muted rounded w-48" />
         <div className="h-20 bg-muted rounded" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -193,7 +193,7 @@ export default function PlatformHealthPage() {
 
   if (error || !data) {
     return (
-      <div className="max-w-5xl mx-auto">
+      <div>
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
           <XCircle className="h-10 w-10 text-red-400 mx-auto mb-3" />
           <p className="text-red-400 font-semibold">Failed to load health data</p>
@@ -207,7 +207,7 @@ export default function PlatformHealthPage() {
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "—";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

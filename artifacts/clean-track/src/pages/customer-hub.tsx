@@ -988,10 +988,7 @@ export default function CustomerHubPage() {
       {/* ── Page Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2.5">
-            <Users className="h-6 w-6 text-green-500" />
-            Customer Hub
-          </h1>
+          <h1 className="text-2xl font-bold">Customer Hub</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             WhatsApp, messaging, automations, and customer engagement.
           </p>

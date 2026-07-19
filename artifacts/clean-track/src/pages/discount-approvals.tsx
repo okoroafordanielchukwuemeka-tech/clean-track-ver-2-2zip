@@ -142,7 +142,7 @@ export default function DiscountApprovals() {
   });
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <div>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold">Discount Approvals</h1>

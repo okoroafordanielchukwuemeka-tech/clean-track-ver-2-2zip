@@ -118,12 +118,9 @@ export default function BranchesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <GitBranch className="h-6 w-6 text-primary" />
-            Branches
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage your laundry locations · {branches.length} branch{branches.length !== 1 ? "es" : ""}
+          <h1 className="text-2xl font-bold">Branches</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {branches.length} branch{branches.length !== 1 ? "es" : ""} · Manage your laundry locations
           </p>
         </div>
         <Button onClick={() => handleOpen()}>

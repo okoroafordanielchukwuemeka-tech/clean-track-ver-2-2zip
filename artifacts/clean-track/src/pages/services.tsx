@@ -265,10 +265,13 @@ export default function Services() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-2xl font-bold">Services</h1>
-          <CachedDataBadge show={isViewingCache} />
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Services</h1>
+            <CachedDataBadge show={isViewingCache} />
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your service catalogue, pricing, and categories</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {isOwner && (

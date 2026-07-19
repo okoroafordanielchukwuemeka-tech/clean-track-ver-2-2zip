@@ -191,133 +191,140 @@ export default function MarketingPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-2xl font-bold">AI Marketing</h1>
-          <Badge variant="secondary" className="gap-1">
-            <Sparkles className="h-3 w-3" />
-            Professional+
-          </Badge>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold">AI Marketing</h1>
+            <Badge variant="secondary" className="gap-1">
+              <Sparkles className="h-3 w-3" />
+              Professional+
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Describe what you want to promote and get ready-to-send copy for WhatsApp, SMS, email, Facebook, and Instagram.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Describe what you want to promote and get ready-to-send copy for WhatsApp, SMS, email, Facebook, and Instagram.
-        </p>
       </div>
 
-      {/* Prompt input */}
-      <Card>
-        <CardContent className="pt-5 space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">
-              What do you want to promote?
-            </label>
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Create a mid-week promotion to attract customers Tuesday to Thursday…"
-              rows={3}
-              className="resize-none"
-              maxLength={500}
-            />
-            <div className="flex items-center justify-between mt-1">
-              <p className="text-xs text-muted-foreground">{prompt.length}/500 characters</p>
-              {prompt.length >= 10 && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Ready to generate</p>
-              )}
-            </div>
-          </div>
-
-          <PromptSuggestions onSelect={(p) => setPrompt(p)} />
-
-          <Button
-            onClick={handleGenerate}
-            disabled={generateMutation.isPending || prompt.trim().length < 10}
-            className="w-full gap-2"
-          >
-            {generateMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Generate Marketing Content
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Results */}
-      {result && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold">Generated Content</h2>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                {result.generatedBy === "ai" ? "✨ AI-generated" : "📋 Template-based"}
-              </Badge>
-              <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generateMutation.isPending}>
-                Regenerate
-              </Button>
-            </div>
-          </div>
-
-          <ChannelCard
-            label="WhatsApp Message"
-            icon="💬"
-            color="border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/5"
-            content={result.content.whatsapp}
-          />
-
-          <ChannelCard
-            label="SMS"
-            icon="📱"
-            color="border-blue-200 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-900/5"
-            content={result.content.sms}
-          />
-
-          <ChannelCard
-            label="Email"
-            icon="📧"
-            color="border-purple-200 dark:border-purple-800/40 bg-purple-50/50 dark:bg-purple-900/5"
-            content={`Subject: ${result.content.email.subject}\n\n${result.content.email.body}`}
-            extra={
-              <div className="mb-3 p-2.5 rounded-lg bg-background/60 border">
-                <p className="text-xs text-muted-foreground mb-0.5">Subject line</p>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">{result.content.email.subject}</p>
-                  <CopyButton text={result.content.email.subject} />
+      <div className={cn("grid gap-6", result ? "grid-cols-1 lg:grid-cols-[420px_1fr]" : "max-w-2xl")}>
+        {/* Prompt input */}
+        <div className="space-y-0">
+          <Card>
+            <CardContent className="pt-5 space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  What do you want to promote?
+                </label>
+                <Textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="e.g. Create a mid-week promotion to attract customers Tuesday to Thursday…"
+                  rows={4}
+                  className="resize-none"
+                  maxLength={500}
+                />
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs text-muted-foreground">{prompt.length}/500 characters</p>
+                  {prompt.length >= 10 && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Ready to generate</p>
+                  )}
                 </div>
               </div>
-            }
-          />
 
-          <ChannelCard
-            label="Facebook Post"
-            icon="📘"
-            color="border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/50 dark:bg-indigo-900/5"
-            content={result.content.facebook}
-          />
+              <PromptSuggestions onSelect={(p) => setPrompt(p)} />
 
-          <ChannelCard
-            label="Instagram Caption"
-            icon="📸"
-            color="border-pink-200 dark:border-pink-800/40 bg-pink-50/50 dark:bg-pink-900/5"
-            content={result.content.instagram}
-          />
-
-          <div className="flex items-start gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-            <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Review and personalise all generated content before sending. Add your specific prices,
-              dates, and contact details where applicable.
-            </span>
-          </div>
+              <Button
+                onClick={handleGenerate}
+                disabled={generateMutation.isPending || prompt.trim().length < 10}
+                className="w-full gap-2"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate Marketing Content
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-      )}
+
+        {/* Results */}
+        {result && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">Generated Content</h2>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {result.generatedBy === "ai" ? "✨ AI-generated" : "📋 Template-based"}
+                </Badge>
+                <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generateMutation.isPending}>
+                  Regenerate
+                </Button>
+              </div>
+            </div>
+
+            <ChannelCard
+              label="WhatsApp Message"
+              icon="💬"
+              color="border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/5"
+              content={result.content.whatsapp}
+            />
+
+            <ChannelCard
+              label="SMS"
+              icon="📱"
+              color="border-blue-200 dark:border-blue-800/40 bg-blue-50/50 dark:bg-blue-900/5"
+              content={result.content.sms}
+            />
+
+            <ChannelCard
+              label="Email"
+              icon="📧"
+              color="border-purple-200 dark:border-purple-800/40 bg-purple-50/50 dark:bg-purple-900/5"
+              content={`Subject: ${result.content.email.subject}\n\n${result.content.email.body}`}
+              extra={
+                <div className="mb-3 p-2.5 rounded-lg bg-background/60 border">
+                  <p className="text-xs text-muted-foreground mb-0.5">Subject line</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{result.content.email.subject}</p>
+                    <CopyButton text={result.content.email.subject} />
+                  </div>
+                </div>
+              }
+            />
+
+            <ChannelCard
+              label="Facebook Post"
+              icon="📘"
+              color="border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/50 dark:bg-indigo-900/5"
+              content={result.content.facebook}
+            />
+
+            <ChannelCard
+              label="Instagram Caption"
+              icon="📸"
+              color="border-pink-200 dark:border-pink-800/40 bg-pink-50/50 dark:bg-pink-900/5"
+              content={result.content.instagram}
+            />
+
+            <div className="flex items-start gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+              <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                Review and personalise all generated content before sending. Add your specific prices,
+                dates, and contact details where applicable.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

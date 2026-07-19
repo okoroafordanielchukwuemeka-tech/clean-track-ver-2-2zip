@@ -2170,11 +2170,8 @@ export default function OperationsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Activity className="h-6 w-6 text-primary" />
-          Operations Center
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h1 className="text-2xl font-bold">Operations Center</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
           Audit trail, payments, pickups, sync health, alerts, and backup management.
         </p>
       </div>

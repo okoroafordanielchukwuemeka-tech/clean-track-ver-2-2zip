@@ -611,40 +611,56 @@ export default function OrderDetail() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-0 max-w-4xl">
+    <div className="space-y-0 max-w-5xl">
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 pb-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link to="/orders"><ArrowLeft className="h-4 w-4" /></Link>
-          </Button>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold">Order {order.orderId}</h1>
-            <p className="text-sm text-muted-foreground">
-              Created {new Date(order.createdAt).toLocaleDateString()}
-            </p>
+      <div className="pb-4">
+        {/* Top row: back + title + action buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" asChild className="shrink-0">
+              <Link to="/orders"><ArrowLeft className="h-4 w-4" /></Link>
+            </Button>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold">Order {order.orderId}</h1>
+              <p className="text-sm text-muted-foreground">
+                {new Date(order.createdAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap sm:ml-auto pl-12 sm:pl-0">
+            <OrderStatusBadge status={order.status} />
+            <PaymentStatusBadge status={order.paymentStatus} />
+            {order.isVerified && (
+              <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />Verified</Badge>
+            )}
+            {payments.length > 0 && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setShowReceipt(true)}>
+                  <Eye className="h-4 w-4 mr-1" />
+                  Receipt
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => {
+                  window.open(`/receipts/${encodeURIComponent(payments[payments.length - 1]?.receiptNumber ?? "")}/print`, "_blank");
+                }}>
+                  <Printer className="h-4 w-4 mr-1" />
+                  Print
+                </Button>
+              </>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap sm:ml-auto pl-12 sm:pl-0">
-          <OrderStatusBadge status={order.status} />
-          <PaymentStatusBadge status={order.paymentStatus} />
-          {order.isVerified && (
-            <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />Verified</Badge>
-          )}
-          {payments.length > 0 && (
-            <>
-              <Button size="sm" variant="outline" onClick={() => setShowReceipt(true)}>
-                <Eye className="h-4 w-4 mr-1" />
-                Receipt
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => {
-                window.open(`/receipts/${encodeURIComponent(payments[payments.length - 1]?.receiptNumber ?? "")}/print`, "_blank");
-              }}>
-                <Printer className="h-4 w-4 mr-1" />
-                Print
-              </Button>
-            </>
+        {/* Customer quick-link row */}
+        <div className="flex items-center gap-3 mt-2 pl-12">
+          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Link
+            to={`/customers?phone=${encodeURIComponent(order.phone ?? "")}`}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {order.customerName}
+          </Link>
+          {order.phone && (
+            <span className="text-xs text-muted-foreground font-mono">{order.phone}</span>
           )}
         </div>
       </div>

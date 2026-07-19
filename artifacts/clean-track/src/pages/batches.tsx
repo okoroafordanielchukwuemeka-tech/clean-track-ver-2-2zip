@@ -62,9 +62,12 @@ export default function Batches() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Batches</h1>
-        <Button onClick={() => setShowCreate(true)}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Batches</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Group orders for efficient processing and tracking</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)} className="shrink-0">
           <Plus className="h-4 w-4" /> New Batch
         </Button>
       </div>
