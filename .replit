@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "bash", "web"]
+modules = ["nodejs-20", "bash", "web", "postgresql-16"]
 [nix]
 channel = "stable-25_05"
 
@@ -47,8 +47,8 @@ SMTP_USER = "resend"
 SMTP_FROM = "CleanTrack <onboarding@resend.dev>"
 BACKUP_SECRET = "b2ad0ebce981b4910138537895fb3cbf5a1fe9fc5898befd03e5ed929e3a2e8330156f636bda25ef906298201e50ca65"
 JWT_SECRET = "30d6c734dab65b4f1df99883362a32dbaa224653a2df7e1702d4df433751bea9a4da766ed2813689e0e1ab6455811a3b"
-ALLOWED_ORIGINS = "https://clean-track-ver-2-2-zip-4--westk7111.replit.app,https://4a55ce1d-59df-4944-a3f5-28c45c3c4c14-00-1ovuxs7tlmwgn.kirk.replit.dev,https://e334b522-6d97-49c5-bf22-8fdbe8305dc8-00-sghrj4c1bmh2.riker.replit.dev"
-APP_BASE_URL = "https://e334b522-6d97-49c5-bf22-8fdbe8305dc8-00-sghrj4c1bmh2.riker.replit.dev"
+ALLOWED_ORIGINS = "https://clean-track-ver-2-2-zip-4--westk7111.replit.app,https://4a55ce1d-59df-4944-a3f5-28c45c3c4c14-00-1ovuxs7tlmwgn.kirk.replit.dev,https://e334b522-6d97-49c5-bf22-8fdbe8305dc8-00-sghrj4c1bmh2.riker.replit.dev,https://cea29c87-13b7-40ef-9078-67d3de435148-00-3p6kjqejzczzu.picard.replit.dev"
+APP_BASE_URL = "https://cea29c87-13b7-40ef-9078-67d3de435148-00-3p6kjqejzczzu.picard.replit.dev"
 NODE_ENV = "production"
 
 [deployment]
