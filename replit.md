@@ -26,8 +26,8 @@ Clean Track is a professional laundry operations management SaaS application wit
 ## Configured Services
 | Service | Status | Notes |
 |---------|--------|-------|
-| PostgreSQL | ✅ Active | External database — `DATABASE_URL` set as Replit Secret |
-| JWT / Session | ✅ Active | `JWT_SECRET`, `SESSION_SECRET`, `BACKUP_SECRET` set as Replit Secrets |
+| PostgreSQL | ✅ Active | Replit built-in database — `DATABASE_URL` auto-managed by Replit |
+| JWT / Session | ✅ Active | `JWT_SECRET` + `BACKUP_SECRET` as shared env vars; `SESSION_SECRET` as Replit Secret |
 | SMTP (Resend) | ✅ Active | `SMTP_HOST`/`PORT`/`USER`/`FROM` as shared env vars |
 | Paystack | ⚠️ Not configured | Set `PAYSTACK_SECRET_KEY` + `PAYSTACK_PUBLIC_KEY` as Replit Secrets to enable billing |
 | Cloudinary | ⚠️ Not configured | Set `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`; falls back to local disk |
