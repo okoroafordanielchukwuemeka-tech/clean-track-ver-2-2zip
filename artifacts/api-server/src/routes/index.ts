@@ -32,6 +32,7 @@ import { automationRulesRouter } from "./automation-rules.js";
 import { marketingRouter } from "./marketing.js";
 import { campaignsRouter } from "./campaigns.js";
 import { getPricingList, MANUAL_PAYMENT_INSTRUCTIONS } from "../lib/pricing.js";
+import { searchRouter } from "./search.js";
 
 export const router = Router();
 
@@ -82,6 +83,9 @@ router.use("/subscription", requireOwner, subscriptionRouter);
 router.use("/automation-rules", requireAuth, automationRulesRouter);
 router.use("/marketing", requireOwner, marketingRouter);
 router.use("/campaigns", requireOwner, campaignsRouter);
+
+// Global search — workers see their branch; owners see all
+router.use("/search", requireAuth, searchRouter);
 
 // Platform admin routes (CleanTrack internal — not for laundry owners)
 router.use("/admin", adminRouter);

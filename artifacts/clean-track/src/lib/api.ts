@@ -598,6 +598,14 @@ export const api = {
     getConversationActivity: (convId: number): Promise<WhatsAppActivityResponse> =>
       request<WhatsAppActivityResponse>("GET", `/conversations/${convId}/activity`),
   },
+
+  search: {
+    global: (q: string, branchId?: number | null): Promise<GlobalSearchResult> => {
+      const params = new URLSearchParams({ q });
+      if (branchId != null) params.set("branchId", String(branchId));
+      return request<GlobalSearchResult>("GET", `/search?${params.toString()}`);
+    },
+  },
 };
 
 export interface AuthUser {
@@ -2169,4 +2177,55 @@ export interface CampaignInput {
 export interface AudiencePreview {
   count: number;
   sample: Array<{ id: number; name: string; phone: string }>;
+}
+
+// ── Global Search ─────────────────────────────────────────────────────────────
+
+export interface SearchCustomer {
+  id: number;
+  fullName: string;
+  phone: string;
+  branchId: number | null;
+}
+
+export interface SearchOrder {
+  id: number;
+  orderId: string;
+  customerName: string;
+  status: string;
+}
+
+export interface SearchReceipt {
+  id: number;
+  receiptNumber: string | null;
+  amount: string;
+  orderId: number;
+}
+
+export interface SearchWorker {
+  id: number;
+  name: string;
+  phone: string | null;
+  branchId: number | null;
+}
+
+export interface SearchService {
+  id: number;
+  name: string;
+  category: string;
+}
+
+export interface SearchBranch {
+  id: number;
+  name: string;
+  address: string | null;
+}
+
+export interface GlobalSearchResult {
+  customers: SearchCustomer[];
+  orders: SearchOrder[];
+  receipts: SearchReceipt[];
+  workers: SearchWorker[];
+  services: SearchService[];
+  branches: SearchBranch[];
 }
