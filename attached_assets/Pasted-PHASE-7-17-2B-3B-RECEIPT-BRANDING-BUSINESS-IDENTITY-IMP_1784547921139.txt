@@ -1,0 +1,217 @@
+PHASE 7.17.2B.3B — RECEIPT BRANDING & BUSINESS IDENTITY
+
+IMPORTANT
+
+Complete ONLY this phase.
+
+Do NOT work on:
+
+* AI Marketing
+* WhatsApp
+* Platform Health
+* Operational Center
+* Mobile Audit
+* Subscription
+* Railway
+* Any future phases
+
+Focus ONLY on receipt branding and business identity.
+
+────────────────────────
+
+BACKGROUND
+
+This phase implements feedback from real laundry owners.
+
+A receipt is the most visible part of the system.
+
+It must immediately communicate professionalism and trust.
+
+────────────────────────
+
+OBJECTIVES
+
+1. LOGO
+
+Audit the complete logo upload workflow.
+
+Verify:
+
+* Upload works.
+* Replace works.
+* Delete works.
+* Logo persists after refresh.
+* Logo appears everywhere required.
+
+The receipt logo must:
+
+* be centered correctly
+* scale proportionally
+* never stretch
+* never overflow
+* look good on desktop
+* look good on mobile
+* look good when printed
+* preserve aspect ratio
+
+If no logo exists:
+
+Show a clean business placeholder.
+
+────────────────────────
+
+2. RECEIPT HEADER
+
+Audit the receipt layout.
+
+The top section should contain:
+
+Business Logo
+
+Business Name
+
+Business Address
+
+Business Phone
+
+Business Email
+
+Business Account Number
+
+Business Bank Name (if configured)
+
+Business Website (if configured)
+
+Do NOT hide the bank account because payment is complete.
+
+The bank account should always appear until Paystack becomes the primary payment method.
+
+────────────────────────
+
+3. RECEIPT VISUAL HIERARCHY
+
+Improve spacing.
+
+Use clear typography.
+
+Make sections visually distinct.
+
+Customer Information
+
+Order Summary
+
+Services
+
+Payments
+
+Balance
+
+Pickup Status
+
+Footer
+
+Avoid clutter.
+
+────────────────────────
+
+4. RECEIPT ACTIONS
+
+Verify:
+
+View
+
+Print
+
+PDF
+
+Download
+
+Share
+
+all work correctly.
+
+────────────────────────
+
+5. PRINT OPTIMIZATION
+
+Audit printed receipts.
+
+Verify:
+
+Margins
+
+Page breaks
+
+Logo quality
+
+Typography
+
+No clipping
+
+No cropped sections
+
+────────────────────────
+
+6. MOBILE RECEIPTS
+
+Audit mobile rendering.
+
+Verify:
+
+Responsive layout
+
+Readable typography
+
+Correct spacing
+
+Buttons remain usable
+
+────────────────────────
+
+7. BUSINESS SETTINGS
+
+Verify every business identity field updates receipts immediately.
+
+Changing:
+
+Business Name
+
+Logo
+
+Phone
+
+Address
+
+Account Number
+
+Bank
+
+Email
+
+must instantly reflect on newly generated receipts.
+
+────────────────────────
+
+8. CERTIFICATION
+
+Run complete testing.
+
+Provide:
+
+RECEIPT_BRANDING_CERTIFICATION.md
+
+Include:
+
+Issues found
+
+Issues fixed
+
+Screenshots
+
+Remaining risks
+
+Launch readiness
+
+Stop after this certification.
+
+Do NOT continue into the next phase.
