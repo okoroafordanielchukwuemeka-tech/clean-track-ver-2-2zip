@@ -68,11 +68,18 @@ export function PickupReceiptView({ data }: PickupReceiptViewProps) {
   return (
     <div className="receipt-root">
       <div className="receipt-header">
-        {laundry.logoUrl && <img src={laundry.logoUrl} alt={headerName} className="receipt-logo" />}
+        {laundry.logoUrl ? (
+          <img src={laundry.logoUrl} alt={headerName} className="receipt-logo" />
+        ) : (
+          <div className="receipt-logo-placeholder" aria-hidden="true">
+            {headerName.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("") || "B"}
+          </div>
+        )}
         <h1 className="receipt-business-name">{headerName}</h1>
-        {branch && <p className="receipt-contact" style={{ fontWeight: 600 }}>{branch.name}</p>}
+        {branch && <p className="receipt-contact receipt-branch-name">{branch.name}</p>}
         {laundry.address && <p className="receipt-contact">{laundry.address}</p>}
         {laundry.phone && <p className="receipt-contact">{laundry.phone}</p>}
+        {laundry.email && <p className="receipt-contact">{laundry.email}</p>}
       </div>
 
       <div className="receipt-divider" />
@@ -192,18 +199,12 @@ export function PickupReceiptView({ data }: PickupReceiptViewProps) {
         </div>
       )}
 
-      {pricing.balance > 0 && laundry.paymentDetails?.bankName && (
+      {pricing.balance > 0 && laundry.paymentDetails?.instructions && (
         <>
           <div className="receipt-divider" />
           <div className="receipt-section">
             <p className="receipt-section-title">HOW TO PAY THE BALANCE</p>
-            <div className="receipt-row"><span>Bank</span><span className="receipt-value">{laundry.paymentDetails.bankName}</span></div>
-            {laundry.paymentDetails.accountName && (
-              <div className="receipt-row"><span>Account Name</span><span className="receipt-value">{laundry.paymentDetails.accountName}</span></div>
-            )}
-            {laundry.paymentDetails.accountNumber && (
-              <div className="receipt-row"><span>Account Number</span><span className="receipt-value-mono">{laundry.paymentDetails.accountNumber}</span></div>
-            )}
+            <p className="receipt-contact">{laundry.paymentDetails.instructions}</p>
             <div className="receipt-row"><span>Reference</span><span className="receipt-value-mono">{order.orderId}</span></div>
           </div>
         </>

@@ -16,6 +16,7 @@ export interface ReceiptData {
     phone: string;
     address: string;
     email: string;
+    website?: string;
     logoUrl: string;
     receiptHeaderName: string;
     receiptFooterText: string;
@@ -100,6 +101,20 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="receipt-status-unpaid">UNPAID</span>;
 }
 
+/** Placeholder shown when no logo is configured */
+function LogoPlaceholder({ name }: { name: string }) {
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+  return (
+    <div className="receipt-logo-placeholder" aria-hidden="true">
+      {initials || "B"}
+    </div>
+  );
+}
+
 interface ReceiptViewProps {
   data: ReceiptData;
   showAllPayments?: boolean;
@@ -110,22 +125,71 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
   const isItemBased = items && items.length > 0;
   const headerName = laundry.receiptHeaderName || laundry.businessName;
 
+  const hasPaymentDetails =
+    laundry.paymentDetails &&
+    (laundry.paymentDetails.bankName ||
+      laundry.paymentDetails.accountNumber ||
+      laundry.paymentDetails.accountName ||
+      laundry.paymentDetails.instructions);
+
   return (
     <div className="receipt-root">
+      {/* ── HEADER ── */}
       <div className="receipt-header">
-        {laundry.logoUrl && (
-          <img src={laundry.logoUrl} alt={headerName} className="receipt-logo" />
+        {laundry.logoUrl ? (
+          <img
+            src={laundry.logoUrl}
+            alt={headerName}
+            className="receipt-logo"
+          />
+        ) : (
+          <LogoPlaceholder name={headerName} />
         )}
         <h1 className="receipt-business-name">{headerName}</h1>
-        {branch && <p className="receipt-contact" style={{ fontWeight: 600 }}>{branch.name}</p>}
+        {branch && <p className="receipt-contact receipt-branch-name">{branch.name}</p>}
         {laundry.address && <p className="receipt-contact">{laundry.address}</p>}
-        {branch?.address && branch.address !== laundry.address && <p className="receipt-contact">{branch.address}</p>}
+        {branch?.address && branch.address !== laundry.address && (
+          <p className="receipt-contact">{branch.address}</p>
+        )}
         {laundry.phone && <p className="receipt-contact">{laundry.phone}</p>}
         {laundry.email && <p className="receipt-contact">{laundry.email}</p>}
+        {laundry.website && (
+          <p className="receipt-contact receipt-website">{laundry.website.replace(/^https?:\/\//, "")}</p>
+        )}
       </div>
+
+      {/* ── BANK ACCOUNT (always shown when configured) ── */}
+      {hasPaymentDetails && (
+        <>
+          <div className="receipt-divider" />
+          <div className="receipt-bank-block">
+            {laundry.paymentDetails!.bankName && laundry.paymentDetails!.accountNumber && (
+              <p className="receipt-bank-line">
+                <span className="receipt-bank-label">Bank:</span>{" "}
+                <span className="receipt-bank-value">{laundry.paymentDetails!.bankName}</span>
+                {"  ·  "}
+                <span className="receipt-bank-value receipt-mono">{laundry.paymentDetails!.accountNumber}</span>
+              </p>
+            )}
+            {laundry.paymentDetails!.accountName && (
+              <p className="receipt-bank-line">
+                <span className="receipt-bank-label">Acct Name:</span>{" "}
+                <span className="receipt-bank-value">{laundry.paymentDetails!.accountName}</span>
+              </p>
+            )}
+            {!laundry.paymentDetails!.bankName && laundry.paymentDetails!.accountNumber && (
+              <p className="receipt-bank-line">
+                <span className="receipt-bank-label">Account:</span>{" "}
+                <span className="receipt-bank-value receipt-mono">{laundry.paymentDetails!.accountNumber}</span>
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="receipt-divider" />
 
+      {/* ── RECEIPT META ── */}
       <div className="receipt-meta-row">
         <div>
           <p className="receipt-label">RECEIPT</p>
@@ -133,7 +197,11 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </div>
         <div className="receipt-meta-right">
           <p className="receipt-label">DATE</p>
-          <p className="receipt-value">{receipt ? new Date(receipt.recordedAt).toLocaleString("en-NG") : new Date(order.createdAt).toLocaleString("en-NG")}</p>
+          <p className="receipt-value">
+            {receipt
+              ? new Date(receipt.recordedAt).toLocaleString("en-NG")
+              : new Date(order.createdAt).toLocaleString("en-NG")}
+          </p>
         </div>
       </div>
 
@@ -144,12 +212,15 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </div>
         <div className="receipt-meta-right">
           <p className="receipt-label">SERVICE</p>
-          <p className="receipt-value" style={{ textTransform: "capitalize" }}>{order.serviceType}</p>
+          <p className="receipt-value" style={{ textTransform: "capitalize" }}>
+            {order.serviceType}
+          </p>
         </div>
       </div>
 
       <div className="receipt-divider" />
 
+      {/* ── CUSTOMER ── */}
       <div className="receipt-section">
         <p className="receipt-section-title">CUSTOMER</p>
         <p className="receipt-value">{customer.fullName}</p>
@@ -157,6 +228,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         {customer.address && <p className="receipt-contact">{customer.address}</p>}
       </div>
 
+      {/* ── PAYMENT METHOD ── */}
       {receipt && (
         <div className="receipt-section">
           <p className="receipt-section-title">PAYMENT</p>
@@ -181,6 +253,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
 
       <div className="receipt-divider" />
 
+      {/* ── ORDER ITEMS ── */}
       <div className="receipt-section">
         <p className="receipt-section-title">ORDER ITEMS</p>
         {isItemBased ? (
@@ -232,6 +305,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
 
       <div className="receipt-divider" />
 
+      {/* ── PRICING SUMMARY ── */}
       <div className="receipt-section">
         <div className="receipt-row">
           <span>Subtotal</span>
@@ -241,9 +315,14 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
           <div className="receipt-row">
             <span>
               Extra Charge
-              {priceAdjustments.filter(a => a.type === "extra_charge").map(a => (
-                <span key={a.id} className="receipt-adj-reason"> — {a.reason}</span>
-              ))}
+              {priceAdjustments
+                .filter((a) => a.type === "extra_charge")
+                .map((a) => (
+                  <span key={a.id} className="receipt-adj-reason">
+                    {" "}
+                    — {a.reason}
+                  </span>
+                ))}
             </span>
             <span className="receipt-surcharge">+{fmt(pricing.extraCharge)}</span>
           </div>
@@ -252,9 +331,14 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
           <div className="receipt-row">
             <span>
               Discount
-              {priceAdjustments.filter(a => a.type === "discount").map(a => (
-                <span key={a.id} className="receipt-adj-reason"> — {a.reason}</span>
-              ))}
+              {priceAdjustments
+                .filter((a) => a.type === "discount")
+                .map((a) => (
+                  <span key={a.id} className="receipt-adj-reason">
+                    {" "}
+                    — {a.reason}
+                  </span>
+                ))}
             </span>
             <span className="receipt-discount">−{fmt(pricing.discount)}</span>
           </div>
@@ -276,6 +360,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         )}
       </div>
 
+      {/* ── STATUS BADGE ── */}
       <div className="receipt-status-row">
         {order.status === "cancelled" ? (
           <span className="receipt-status-unpaid">✕ ORDER CANCELLED</span>
@@ -285,10 +370,12 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
       </div>
       {order.status === "cancelled" && (
         <p className="receipt-contact" style={{ textAlign: "center" }}>
-          This order was cancelled. Charges shown above reflect ₦0 due; any amount paid prior to cancellation remains on record.
+          This order was cancelled. Charges shown above reflect ₦0 due; any amount paid prior to
+          cancellation remains on record.
         </p>
       )}
 
+      {/* ── PAYMENT HISTORY ── */}
       {showAllPayments && allPayments.length > 1 && (
         <>
           <div className="receipt-divider" />
@@ -306,7 +393,12 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
               </thead>
               <tbody>
                 {allPayments.map((p) => (
-                  <tr key={p.id} className={p.receiptNumber === receipt?.receiptNumber ? "receipt-row-current" : ""}>
+                  <tr
+                    key={p.id}
+                    className={
+                      p.receiptNumber === receipt?.receiptNumber ? "receipt-row-current" : ""
+                    }
+                  >
                     <td className="receipt-td receipt-mono">{p.receiptNumber ?? "—"}</td>
                     <td className="receipt-td">{new Date(p.recordedAt).toLocaleDateString("en-NG")}</td>
                     <td className="receipt-td">{methodLabel(p.method)}</td>
@@ -320,40 +412,24 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </>
       )}
 
-      {pricing.balance > 0 && laundry.paymentDetails && (laundry.paymentDetails.bankName || laundry.paymentDetails.instructions) && (
+      {/* ── PAYMENT INSTRUCTIONS (only when balance > 0) ── */}
+      {pricing.balance > 0 && laundry.paymentDetails?.instructions && (
         <>
           <div className="receipt-divider" />
           <div className="receipt-section">
             <p className="receipt-section-title">HOW TO PAY THE BALANCE</p>
-            {laundry.paymentDetails.bankName && (
-              <div className="receipt-row">
-                <span>Bank</span>
-                <span className="receipt-value">{laundry.paymentDetails.bankName}</span>
-              </div>
-            )}
-            {laundry.paymentDetails.accountName && (
-              <div className="receipt-row">
-                <span>Account Name</span>
-                <span className="receipt-value">{laundry.paymentDetails.accountName}</span>
-              </div>
-            )}
-            {laundry.paymentDetails.accountNumber && (
-              <div className="receipt-row">
-                <span>Account Number</span>
-                <span className="receipt-value-mono">{laundry.paymentDetails.accountNumber}</span>
-              </div>
-            )}
+            <p className="receipt-contact" style={{ marginTop: 4 }}>
+              {laundry.paymentDetails.instructions}
+            </p>
             <div className="receipt-row">
               <span>Reference</span>
               <span className="receipt-value-mono">{order.orderId}</span>
             </div>
-            {laundry.paymentDetails.instructions && (
-              <p className="receipt-contact" style={{ marginTop: 4 }}>{laundry.paymentDetails.instructions}</p>
-            )}
           </div>
         </>
       )}
 
+      {/* ── NOTES ── */}
       {order.additionalNotes && (
         <>
           <div className="receipt-divider" />
@@ -364,6 +440,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </>
       )}
 
+      {/* ── FOOTER ── */}
       {laundry.receiptFooterText && (
         <>
           <div className="receipt-divider" />
@@ -371,6 +448,7 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </>
       )}
 
+      {/* ── BARCODE ── */}
       {receipt?.receiptNumber && (
         <div className="receipt-barcode">
           <div className="receipt-barcode-bars" aria-hidden="true">
@@ -378,11 +456,15 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
               <span key={i} style={{ height: 14 + ((ch.charCodeAt(0) * (i + 1)) % 20) }} />
             ))}
           </div>
-          <p className="receipt-mono" style={{ textAlign: "center" }}>{receipt.receiptNumber}</p>
+          <p className="receipt-mono" style={{ textAlign: "center" }}>
+            {receipt.receiptNumber}
+          </p>
         </div>
       )}
 
-      <p className="receipt-generated">Generated by CleanTrack · {new Date().toLocaleDateString("en-NG")}</p>
+      <p className="receipt-generated">
+        Generated by CleanTrack · {new Date().toLocaleDateString("en-NG")}
+      </p>
     </div>
   );
 }

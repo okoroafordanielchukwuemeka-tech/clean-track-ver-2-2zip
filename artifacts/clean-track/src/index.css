@@ -96,10 +96,69 @@
 }
 
 .receipt-logo {
-  max-width: 80px;
-  max-height: 60px;
-  margin: 0 auto 8px;
+  max-width: 140px;
+  max-height: 90px;
+  width: auto;
+  height: auto;
+  margin: 0 auto 10px;
   display: block;
+  object-fit: contain;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Placeholder shown when no logo is uploaded */
+.receipt-logo-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #888;
+  letter-spacing: 1px;
+  margin: 0 auto 10px;
+  font-family: system-ui, sans-serif;
+}
+
+/* Bank block — always shown when payment details are configured */
+.receipt-bank-block {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin: 4px 0;
+}
+
+.receipt-bank-line {
+  font-size: 11px;
+  margin: 2px 0;
+  color: #444;
+}
+
+.receipt-bank-label {
+  color: #888;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.receipt-bank-value {
+  font-weight: 600;
+  color: #222;
+}
+
+.receipt-branch-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.receipt-website {
+  color: #555;
 }
 
 .receipt-business-name {
@@ -360,27 +419,75 @@
 
 .receipt-print-actions {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.receipt-print-formats {
+  display: flex;
+  gap: 6px;
+}
+
+.receipt-print-actions-row {
+  display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 20px;
 }
 
 .receipt-print-btn {
-  padding: 8px 20px;
+  padding: 8px 18px;
   border: 1px solid #999;
   border-radius: 6px;
   background: #fff;
   cursor: pointer;
   font-size: 13px;
   font-family: inherit;
+  white-space: nowrap;
 }
 
 .receipt-print-btn:hover {
   background: #f0f0f0;
 }
 
+.receipt-print-btn-primary {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.receipt-print-btn-primary:hover {
+  background: #333;
+}
+
 .receipt-print-btn-secondary {
   color: #888;
+}
+
+/* Mobile: stack actions vertically on small screens */
+@media (max-width: 480px) {
+  .receipt-print-actions-row {
+    flex-direction: column;
+    width: 100%;
+    max-width: 280px;
+  }
+  .receipt-print-btn {
+    text-align: center;
+    width: 100%;
+  }
+  .receipt-root {
+    font-size: 12px;
+    padding: 12px;
+  }
+  .receipt-business-name {
+    font-size: 15px;
+  }
+  .receipt-logo {
+    max-width: 110px;
+    max-height: 70px;
+  }
 }
 
 .receipt-print-loading {
@@ -394,10 +501,10 @@
    clipping. A4 is used for tabular/ledger documents like the Customer
    Statement. Default (no modifier class) targets 80mm, the most common
    thermal width; .print-format-58mm narrows further. */
-@page {
-  size: 80mm auto;
-  margin: 2mm;
-}
+
+/* @page size is injected dynamically in receipt-print.tsx so each
+   format (58mm / 80mm / A4) gets the correct paper size at print time.
+   No global @page rule here — it would override the dynamic one. */
 
 .print-format-58mm {
   max-width: 58mm;
@@ -413,12 +520,6 @@
 
 .print-format-a4 .receipt-root {
   max-width: 100%;
-}
-
-@media print {
-  .print-format-a4 {
-    max-width: none;
-  }
 }
 
 @media print {
@@ -453,16 +554,54 @@
     break-inside: avoid;
   }
 
+  /* A4 format: use full paper size, reset @page to A4 portrait */
   .print-format-a4 {
     max-width: none;
   }
 
-  /* A4 page content area is ~190mm wide after margins — previously this was
-     capped at 480px (a leftover receipt-width value), which meant switching
-     to A4 never actually used the extra page width and rendered as a narrow
-     column with large empty margins. */
   .print-format-a4 .receipt-root {
     max-width: 190mm;
     font-size: 14px;
+  }
+
+  /* 58mm thermal roll */
+  .print-format-58mm .receipt-root {
+    max-width: 54mm;
+    font-size: 11px;
+    padding: 0;
+  }
+
+  .print-format-58mm .receipt-logo {
+    max-width: 50mm;
+    max-height: 30mm;
+  }
+
+  /* Ensure logo colours print correctly */
+  .receipt-logo {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Logo placeholder hidden on print if no logo — saves ink */
+  .receipt-logo-placeholder {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    background: #f0f0f0 !important;
+  }
+
+  /* Bank block background prints correctly */
+  .receipt-bank-block {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    background: #fafafa !important;
+    border: 1px solid #e8e8e8 !important;
+  }
+
+  /* Status badges */
+  .receipt-status-paid,
+  .receipt-status-partial,
+  .receipt-status-unpaid {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }

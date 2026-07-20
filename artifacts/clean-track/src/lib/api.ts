@@ -299,6 +299,12 @@ export const api = {
     getSlaAnalytics: () => request<SlaAnalytics & { slaSettings: SlaSettings }>("GET", "/analytics/sla"),
     getBusinessProfile: () => request<BusinessProfile>("GET", "/settings/business-profile"),
     updateBusinessProfile: (data: Partial<BusinessProfile>) => request<BusinessProfile>("PATCH", "/settings/business-profile", data),
+    uploadLogo: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return requestForm<BusinessProfile>("POST", "/settings/logo", form);
+    },
+    deleteLogo: () => request<{ success: boolean }>("DELETE", "/settings/logo"),
     getBranding: () => request<BrandingSettings>("GET", "/settings/branding"),
     updateBranding: (data: Partial<BrandingSettings>) => request<BrandingSettings>("PATCH", "/settings/branding", data),
     getOperational: () => request<OperationalSettings>("GET", "/settings/operational"),
@@ -1177,6 +1183,7 @@ export interface BusinessProfile {
   whatsapp?: string;
   address?: string;
   email?: string;
+  website?: string;
   logoUrl?: string;
   notes?: string;
   paymentDetails?: PaymentDetails;

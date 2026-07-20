@@ -133,6 +133,106 @@ function ToggleRow({
   );
 }
 
+function LogoUploadSection({
+  logoUrl,
+  onUploaded,
+  onDeleted,
+}: {
+  logoUrl?: string;
+  onUploaded: (url: string) => void;
+  onDeleted: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await api.settings.uploadLogo(file);
+      onUploaded(result.logoUrl ?? "");
+      toast.success("Logo uploaded");
+    } catch (err: any) {
+      toast.error("Upload failed — " + (err.message || "please try again."));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.settings.deleteLogo();
+      onDeleted();
+      toast.success("Logo removed");
+    } catch (err: any) {
+      toast.error("Could not remove logo — " + (err.message || "please try again."));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <Label className="text-sm font-medium">Business Logo</Label>
+      <p className="text-xs text-muted-foreground mb-3 mt-0.5">
+        Shown on all receipts and documents. JPG, PNG, or WEBP. Max 5 MB.
+      </p>
+      <div className="flex items-start gap-4">
+        {/* Preview */}
+        <div className="shrink-0 h-20 w-28 border rounded-lg bg-muted/30 flex items-center justify-center overflow-hidden">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Business logo" className="max-h-full max-w-full object-contain p-1" />
+          ) : (
+            <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+          )}
+        </div>
+        {/* Actions */}
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+            ) : (
+              <><ImageIcon className="h-4 w-4" /> {logoUrl ? "Replace Logo" : "Upload Logo"}</>
+            )}
+          </Button>
+          {logoUrl && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-destructive hover:text-destructive"
+              disabled={deleting}
+              onClick={handleDelete}
+            >
+              {deleting ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Removing…</>
+              ) : (
+                <><Trash2 className="h-4 w-4" /> Remove Logo</>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+    </div>
+  );
+}
+
 function BusinessProfileSection() {
   const qc = useQueryClient();
   const { data, isLoading, isViewingCache } = useCachedQuery({
@@ -194,6 +294,15 @@ function BusinessProfileSection() {
           <Label>Address</Label>
           <Input value={form.address ?? ""} onChange={e => update("address", e.target.value)} placeholder="Shop address" />
         </div>
+        <div className="space-y-1.5">
+          <Label>Website</Label>
+          <Input
+            value={(form as any).website ?? ""}
+            onChange={e => update("website" as any, e.target.value)}
+            placeholder="https://yourbusiness.com"
+            type="url"
+          />
+        </div>
         <div className="sm:col-span-2 space-y-1.5">
           <Label>Business Notes</Label>
           <Textarea
@@ -204,13 +313,13 @@ function BusinessProfileSection() {
           />
         </div>
       </div>
-      <div className="mt-4 border-2 border-dashed border-muted-foreground/20 rounded-xl p-6 text-center flex flex-col items-center gap-2">
-        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-          <ImageIcon className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-muted-foreground">Logo Upload</p>
-        <p className="text-xs text-muted-foreground/70">Coming soon — file hosting will be enabled in a future update</p>
-      </div>
+
+      {/* Logo Upload */}
+      <LogoUploadSection
+        logoUrl={form.logoUrl}
+        onUploaded={(url) => { setForm(prev => ({ ...prev, logoUrl: url })); setIsDirty(false); qc.invalidateQueries({ queryKey: ["settings", "business-profile"] }); }}
+        onDeleted={() => { setForm(prev => ({ ...prev, logoUrl: undefined })); setIsDirty(false); qc.invalidateQueries({ queryKey: ["settings", "business-profile"] }); }}
+      />
 
       <div className="mt-8 border-t pt-6">
         <h3 className="text-base font-semibold">Payment Details</h3>

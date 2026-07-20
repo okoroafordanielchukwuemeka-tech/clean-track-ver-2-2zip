@@ -1,9 +1,22 @@
 import { Router } from "express";
+import multer from "multer";
 import { db } from "@workspace/db";
 import { laundries } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { getStorageDriver, MAX_UPLOAD_BYTES, ALLOWED_MIME_TYPES } from "../lib/storage.js";
+
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype as any)) {
+      return cb(new Error("UNSUPPORTED_TYPE"));
+    }
+    cb(null, true);
+  },
+});
 
 export const settingsRouter = Router();
 
@@ -38,6 +51,7 @@ const businessProfileSchema = z.object({
   whatsapp: z.string().optional(),
   address: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
+  website: z.string().url().optional().or(z.literal("")),
   logoUrl: z.string().optional(),
   notes: z.string().optional(),
   paymentDetails: paymentDetailsSchema.optional(),
@@ -113,6 +127,61 @@ settingsRouter.patch("/sla", requireOwner, async (req: AuthRequest, res) => {
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to update SLA settings" });
+  }
+});
+
+// POST /settings/logo — upload or replace the business logo
+settingsRouter.post("/logo", requireOwner, async (req: AuthRequest, res) => {
+  const multerErr = await new Promise<any>((resolve) =>
+    logoUpload.single("file")(req as any, res as any, (err) => resolve(err ?? null))
+  );
+  if (multerErr) {
+    if (multerErr.code === "LIMIT_FILE_SIZE") return res.status(400).json({ error: "File too large. Maximum size is 5 MB." });
+    if (multerErr.message === "UNSUPPORTED_TYPE") return res.status(400).json({ error: "Unsupported file type. Upload a JPG, PNG, or WEBP image." });
+    return res.status(400).json({ error: "Could not read uploaded file." });
+  }
+  try {
+    const { laundryId } = req.auth!;
+    if (!req.file) return res.status(400).json({ error: "No image file uploaded" });
+    const laundry = await getLaundry(laundryId);
+    if (!laundry) return res.status(404).json({ error: "Laundry not found" });
+
+    const driver = getStorageDriver();
+    const currentProfile = (laundry.businessProfile as any) ?? {};
+    // Delete old logo if it exists
+    if (currentProfile.logoUrl) {
+      await driver.delete(currentProfile.logoUrl).catch(() => {});
+    }
+    const { url } = await driver.upload(req.file.buffer, "logo", req.file.mimetype);
+    const mergedProfile = { ...currentProfile, logoUrl: url };
+    const [updated] = await db.update(laundries)
+      .set({ businessProfile: mergedProfile, updatedAt: new Date() })
+      .where(eq(laundries.id, laundryId))
+      .returning();
+    res.json({ logoUrl: url, businessName: updated.businessName, phone: updated.phone, ...(updated.businessProfile as object ?? {}) });
+  } catch (err) {
+    console.error("[logo-upload]", err);
+    res.status(500).json({ error: "Failed to upload logo" });
+  }
+});
+
+// DELETE /settings/logo — remove the business logo
+settingsRouter.delete("/logo", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const { laundryId } = req.auth!;
+    const laundry = await getLaundry(laundryId);
+    if (!laundry) return res.status(404).json({ error: "Laundry not found" });
+    const currentProfile = (laundry.businessProfile as any) ?? {};
+    if (currentProfile.logoUrl) {
+      const driver = getStorageDriver();
+      await driver.delete(currentProfile.logoUrl).catch(() => {});
+    }
+    const mergedProfile = { ...currentProfile, logoUrl: null };
+    await db.update(laundries).set({ businessProfile: mergedProfile, updatedAt: new Date() }).where(eq(laundries.id, laundryId));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[logo-delete]", err);
+    res.status(500).json({ error: "Failed to delete logo" });
   }
 });
 
