@@ -101,9 +101,9 @@ See `.env.example` for the full list of required and optional variables.
 - Schema synced to external DB on startup; API healthz confirmed healthy (149ms)
 
 ## Replit Setup (updated 2026-07-20, re-imported again)
-- Re-imported project again: node_modules dropped by import — ran `pnpm install` and restarted the workflow
+- Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
 - Secrets, DB, and workflow config already in place; no changes needed
-- Verified: API server on port 3001, frontend login page renders correctly on port 5000; schema sync passed cleanly
+- Verified: API server on port 3001, frontend login page renders correctly on port 5000; schema sync passed cleanly (all tables up to date)
 
 ## Replit Setup (updated 2026-07-17, re-imported)
 - Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
