@@ -26,10 +26,11 @@ Clean Track is a professional laundry operations management SaaS application wit
 ## Configured Services
 | Service | Status | Notes |
 |---------|--------|-------|
-| PostgreSQL | ✅ Active | Managed by Replit (`DATABASE_URL`) |
-| Paystack | ✅ Active | `PAYSTACK_SECRET_KEY` + `PAYSTACK_PUBLIC_KEY` set as Replit Secrets |
-| Cloudinary | ✅ Active | `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET` set |
-| SMTP (Resend) | ✅ Active | `SMTP_HOST`/`PORT`/`USER`/`FROM` as env vars; `SMTP_PASS` as Replit Secret |
+| PostgreSQL | ✅ Active | External database — `DATABASE_URL` set as Replit Secret |
+| JWT / Session | ✅ Active | `JWT_SECRET`, `SESSION_SECRET`, `BACKUP_SECRET` set as Replit Secrets |
+| SMTP (Resend) | ✅ Active | `SMTP_HOST`/`PORT`/`USER`/`FROM` as shared env vars |
+| Paystack | ⚠️ Not configured | Set `PAYSTACK_SECRET_KEY` + `PAYSTACK_PUBLIC_KEY` as Replit Secrets to enable billing |
+| Cloudinary | ⚠️ Not configured | Set `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`; falls back to local disk |
 | WhatsApp | ⚠️ Not configured | Set `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN` |
 | Off-site backups | ⚠️ Not configured | Set `BACKUP_OFFSITE_PROVIDER=r2` + R2 credentials to enable |
 
