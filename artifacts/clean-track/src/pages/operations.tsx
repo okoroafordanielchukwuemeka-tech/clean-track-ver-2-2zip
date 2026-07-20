@@ -818,18 +818,18 @@ function SyncHealthTab() {
 
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <SummaryCard label="Active Devices" value={summary.active} color="text-green-600 dark:text-green-400" note="seen < 5 min" />
-          <SummaryCard label="Stale Devices" value={summary.stale} color="text-amber-600 dark:text-amber-400" note="5–60 min ago" />
-          <SummaryCard label="Very Stale" value={summary.veryStale} color="text-red-600 dark:text-red-400" note="> 1 hour ago" />
-          <SummaryCard label="With Conflicts" value={summary.withConflicts} color="text-rose-600 dark:text-rose-400" note="need manual review" />
+          <SummaryCard label="Online Now" value={summary.active} color="text-green-600 dark:text-green-400" note="active in last 5 min" />
+          <SummaryCard label="Away" value={summary.stale} color="text-amber-600 dark:text-amber-400" note="5–60 min ago" />
+          <SummaryCard label="Not Seen" value={summary.veryStale} color="text-red-600 dark:text-red-400" note="over 1 hour ago" />
+          <SummaryCard label="Need Review" value={summary.withConflicts} color="text-rose-600 dark:text-rose-400" note="data conflicts found" />
         </div>
       )}
 
       {summary && (summary.withPending > 0 || summary.withFailed > 0 || summary.offline > 0) && (
         <div className="grid grid-cols-3 gap-3">
-          <SummaryCard label="Pending Queue" value={summary.withPending} color="text-blue-600 dark:text-blue-400" note="devices with items waiting" />
-          <SummaryCard label="Failed Syncs" value={summary.withFailed} color="text-red-600 dark:text-red-400" note="devices with failed items" />
-          <SummaryCard label="Offline Reported" value={summary.offline} color="text-slate-500 dark:text-slate-400" note="self-reported offline" />
+          <SummaryCard label="Changes Waiting" value={summary.withPending} color="text-blue-600 dark:text-blue-400" note="devices with unsent changes" />
+          <SummaryCard label="Sync Errors" value={summary.withFailed} color="text-red-600 dark:text-red-400" note="devices with failed items" />
+          <SummaryCard label="Offline" value={summary.offline} color="text-slate-500 dark:text-slate-400" note="reported offline" />
         </div>
       )}
 
@@ -838,10 +838,9 @@ function SyncHealthTab() {
       ) : devices.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">
           <Monitor className="h-8 w-8 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No device heartbeats received yet</p>
+          <p className="font-medium">No active devices yet</p>
           <p className="text-xs mt-1 opacity-70 max-w-sm mx-auto">
-            Heartbeats are sent automatically every 30 seconds when workers or owners are logged in.
-            They will appear here once any device has loaded the app.
+            Devices appear here automatically once any worker or owner opens the app.
           </p>
         </div>
       ) : (
@@ -926,9 +925,9 @@ function SyncHealthTab() {
 
       {devices.length > 0 && (
         <p className="text-[10px] text-muted-foreground">
-          <span className="font-semibold text-amber-600">Stale</span> = no heartbeat for 5–60 min ·{" "}
-          <span className="font-semibold text-red-600">Gone</span> = no heartbeat for &gt; 1 hour ·{" "}
-          <span className="font-semibold text-amber-600">Pending↑+Stale</span> = stuck queue (items waiting but device not syncing)
+          <span className="font-semibold text-amber-600">Away</span> = no activity for 5–60 min ·{" "}
+          <span className="font-semibold text-red-600">Not Seen</span> = no activity for over 1 hour ·{" "}
+          <span className="font-semibold text-amber-600">Changes Waiting + Away</span> = device has unsent changes but is not syncing
         </p>
       )}
     </div>
@@ -1082,8 +1081,8 @@ function MigrationLogPanel() {
       <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <History className="h-4 w-4 text-indigo-500" />
-          Migration Log
-          {snapshots && <span className="text-muted-foreground font-normal">({snapshots.length} checkpoints)</span>}
+          System Checkpoints
+          {snapshots && <span className="text-muted-foreground font-normal">({snapshots.length} saved)</span>}
         </CardTitle>
         <Button
           size="sm"
@@ -1104,8 +1103,7 @@ function MigrationLogPanel() {
             <History className="h-8 w-8 text-muted-foreground/40 mx-auto" />
             <p className="text-sm font-medium">No checkpoints recorded</p>
             <p className="text-xs text-muted-foreground">
-              Record a checkpoint <strong>before</strong> running{" "}
-              <code className="bg-muted px-1 rounded text-[10px]">pnpm db:push</code> so you can compare schema changes
+              Save a checkpoint before making major changes so you can restore if needed.
             </p>
             {record.isSuccess && (
               <p className="text-xs text-green-600 font-medium">✓ Checkpoint recorded!</p>
@@ -1126,7 +1124,7 @@ function MigrationLogPanel() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium border", typeColor(s.snapshotType))}>
-                      {s.snapshotType.replace("_", " ")}
+                      {s.snapshotType === "pre_migration" ? "Before Update" : s.snapshotType === "post_migration" ? "After Update" : s.snapshotType === "manual" ? "Manual" : s.snapshotType.replace(/_/g, " ")}
                     </span>
                     <span className="text-muted-foreground truncate">{fmtAge(s.createdAt)} ago</span>
                     {s.triggeredBy && (
@@ -1134,7 +1132,7 @@ function MigrationLogPanel() {
                     )}
                   </div>
                   <div className="text-right text-muted-foreground shrink-0">
-                    {s.tableCount != null && <span>{s.tableCount} tables · {s.indexCount} idx</span>}
+                    {s.tableCount != null && <span>{s.tableCount} tables</span>}
                   </div>
                 </div>
                 {s.notes && <p className="text-muted-foreground mt-0.5 italic">{s.notes}</p>}
@@ -1177,12 +1175,11 @@ const RUNBOOK_SECTIONS = [
     icon: <HardDrive className="h-4 w-4 text-green-500" />,
     title: "Full Database Restore from Backup",
     steps: [
-      "Find the latest verified backup in the Backup Files panel",
-      "SSH into the server or use Replit shell: bash scripts/restore-backup.sh backups/<filename.sql.gz>",
-      "The restore script drops & recreates the database, then runs psql to load the dump",
-      "After restore, run: cd lib/db && pnpm push (re-applies any missing Drizzle migrations)",
-      "Verify data by checking order counts in the dashboard vs expected",
-      "RPO = time since last backup (check 'Last backup age' in DR Readiness panel)",
+      "Find the latest backup file in the Backup Files panel — the most recent one is highlighted",
+      "Contact your technical support to run the restore script with that backup file",
+      "After restore completes, the system will automatically reapply any pending updates",
+      "Verify data is intact by checking order counts in the main dashboard",
+      "Your maximum data loss is the time since your last backup — check 'Last backup' in the Backup Readiness panel",
     ],
   },
   {
@@ -1190,12 +1187,12 @@ const RUNBOOK_SECTIONS = [
     icon: <AlertTriangle className="h-4 w-4 text-orange-500" />,
     title: "Bad Migration Recovery",
     steps: [
-      "STOP: before running pnpm db:push, record a schema checkpoint in Migration Log above",
-      "If migration caused data loss: immediately restore from the pre-migration backup",
-      "If migration was column-renaming / additive: check Migration Log for previous table structure",
-      "Drizzle push is destructive for drops — always take backup first",
-      "To roll back: psql $DATABASE_URL < scripts/schema-rollback.sql (if rollback script exists)",
-      "For Replit managed DB: contact Replit support for PITR (if available on plan)",
+      "Always save a checkpoint in System Checkpoints (above) before any system updates",
+      "If an update caused data loss: immediately restore from the backup taken before the update",
+      "If the update only added or renamed fields: check System Checkpoints for the previous structure",
+      "Always take a backup before any major system change — use 'Backup Now' in the panel above",
+      "To undo: contact your technical support and provide the checkpoint timestamp",
+      "For urgent situations, contact support immediately with your last known good backup date",
     ],
   },
   {
@@ -1203,12 +1200,12 @@ const RUNBOOK_SECTIONS = [
     icon: <Terminal className="h-4 w-4 text-slate-500" />,
     title: "Server Outage / Crash Loop",
     steps: [
-      "Check workflow logs in Replit for crash reason (syntax error, missing env var, port conflict)",
-      "Verify DATABASE_URL and JWT_SECRET are set in Replit Secrets",
-      "Run: pnpm --filter @workspace/api-server build to check for compile errors",
-      "If stuck in crash loop: revert last code change via Replit checkpoint rollback",
-      "Workers in offline mode will queue operations locally — sync resumes automatically on reconnect",
-      "Check sync health panel after recovery to confirm all pending operations synced",
+      "Check if the system shows 'System Online' on the Business Health page",
+      "Verify all required configuration settings are in place (contact your technical support if unsure)",
+      "If recently updated, try reverting to the previous version via Replit checkpoint rollback",
+      "Workers can continue operating in offline mode during an outage — no data will be lost",
+      "All changes made offline will sync automatically once the system comes back online",
+      "Check Worker Devices tab after recovery to confirm all pending changes have synced",
     ],
   },
   {
@@ -1217,11 +1214,11 @@ const RUNBOOK_SECTIONS = [
     title: "Offline Worker Queue Recovery",
     steps: [
       "Worker stations operate in offline mode when server is unreachable",
-      "All operations (status updates, payments, pickups) are queued locally in IndexedDB",
-      "On reconnect, the sync engine replays all queued operations in correct order (5 passes)",
-      "Check Operations → Sync Health for devices with pending queues or conflicts",
-      "Conflicts show a red badge on affected orders — resolve manually if needed",
-      "Use 'Retry All Failed' in the Sync Failed panel to re-queue permanently-failed operations",
+      "All actions (status updates, payments, pickups) are saved locally on the device when offline",
+      "On reconnect, everything syncs automatically in the correct order — no manual steps needed",
+      "Check Operations → Worker Devices for devices with unsent changes or conflicts",
+      "Conflicts show a red badge on affected orders — review and resolve manually if needed",
+      "Use 'Retry All Failed' in the Sync Failed panel to re-attempt permanently failed items",
     ],
   },
 ];
@@ -1288,8 +1285,8 @@ function RunbookTab() {
             {[
               { label: "RPO (target)", value: "≤ 24h", sub: "Recovery Point Objective", color: "text-blue-600" },
               { label: "RTO (target)", value: "≤ 2h", sub: "Recovery Time Objective", color: "text-green-600" },
-              { label: "Backup method", value: "pg_dump", sub: "Full logical backup + SHA256", color: "text-slate-600" },
-              { label: "Offline tolerance", value: "Unlimited", sub: "IndexedDB queue with sync", color: "text-indigo-600" },
+              { label: "Backup method", value: "Encrypted", sub: "Full backup with integrity check", color: "text-slate-600" },
+              { label: "Offline mode", value: "Unlimited", sub: "Workers queue changes offline, auto-syncs on reconnect", color: "text-indigo-600" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/20 px-3 py-2">
                 <p className={cn("text-lg font-bold", m.color)}>{m.value}</p>
@@ -1355,10 +1352,10 @@ function DRReadinessPanel() {
               <div className="text-center">
                 <p className={cn("text-5xl font-black tabular-nums", scoreColor(data.score))}>{data.score}</p>
                 <p className={cn("text-2xl font-bold", scoreColor(data.score))}>{data.grade}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">DR Score</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Backup Score</p>
               </div>
               <div className="space-y-1">
-                <p className="font-semibold text-sm">Recovery Readiness</p>
+                <p className="font-semibold text-sm">Backup Readiness</p>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="flex items-center gap-1 text-green-700">
                     <CheckCircle className="h-3 w-3" />
@@ -1378,7 +1375,7 @@ function DRReadinessPanel() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pt-1">
-                  <span className="flex items-center gap-1"><Database className="h-3 w-3" /> {data.dbStats.tables} tables · {data.dbStats.indexes} indexes · {data.dbStats.sizePretty}</span>
+                  <span className="flex items-center gap-1"><Database className="h-3 w-3" /> {data.dbStats.sizePretty} data stored</span>
                   <span className="flex items-center gap-1"><HardDrive className="h-3 w-3" />
                     {data.lastBackup
                       ? `Last backup ${fmtAge(data.lastBackup.createdAt)} · ${(data.lastBackup.sizeBytes / 1024).toFixed(1)} KB`
@@ -2069,9 +2066,9 @@ function FailedMessagesTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 items-center justify-between">
         <div className="space-y-0.5">
-          <p className="text-sm font-medium">Dead-Letter Queue</p>
+          <p className="text-sm font-medium">Failed Notifications</p>
           <p className="text-xs text-muted-foreground">
-            Messages that failed all {5} delivery attempts. Re-queue to retry immediately.
+            These messages could not be delivered after multiple attempts. You can retry them below.
           </p>
         </div>
         <div className="flex gap-2 items-center">
@@ -2172,12 +2169,15 @@ export default function OperationsPage() {
       <div>
         <h1 className="text-2xl font-bold">Operations Center</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Audit trail, payments, pickups, sync health, alerts, and backup management.
+          Monitor orders, payments, staff activity, alerts, and backup status.
         </p>
       </div>
 
-      <Tabs defaultValue="audit-log">
+      <Tabs defaultValue="business-overview">
         <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="business-overview" className="text-xs gap-1.5">
+            <Heart className="h-3.5 w-3.5" /> Business Overview
+          </TabsTrigger>
           <TabsTrigger value="audit-log" className="text-xs gap-1.5">
             <Clock className="h-3.5 w-3.5" /> Audit Log
           </TabsTrigger>
@@ -2190,11 +2190,11 @@ export default function OperationsPage() {
           <TabsTrigger value="worker-activity" className="text-xs gap-1.5">
             <Users className="h-3.5 w-3.5" /> Worker Activity
           </TabsTrigger>
-          <TabsTrigger value="sync-health" className="text-xs gap-1.5">
-            <Wifi className="h-3.5 w-3.5" /> Sync Health
+          <TabsTrigger value="worker-devices" className="text-xs gap-1.5">
+            <Wifi className="h-3.5 w-3.5" /> Worker Devices
           </TabsTrigger>
-          <TabsTrigger value="failed-messages" className="text-xs gap-1.5">
-            <MessageSquareX className="h-3.5 w-3.5" /> Failed Messages
+          <TabsTrigger value="failed-notifications" className="text-xs gap-1.5">
+            <MessageSquareX className="h-3.5 w-3.5" /> Failed Notifications
           </TabsTrigger>
           <TabsTrigger value="recovery" className="text-xs gap-1.5">
             <RotateCcw className="h-3.5 w-3.5" /> Backup & Recovery
@@ -2204,12 +2204,13 @@ export default function OperationsPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="business-overview" className="mt-4"><HealthTab /></TabsContent>
         <TabsContent value="audit-log" className="mt-4"><AuditLogTab /></TabsContent>
         <TabsContent value="payments" className="mt-4"><PaymentsTab /></TabsContent>
         <TabsContent value="pickups" className="mt-4"><PickupsTab /></TabsContent>
         <TabsContent value="worker-activity" className="mt-4"><WorkerActivityTab /></TabsContent>
-        <TabsContent value="sync-health" className="mt-4"><SyncHealthTab /></TabsContent>
-        <TabsContent value="failed-messages" className="mt-4"><FailedMessagesTab /></TabsContent>
+        <TabsContent value="worker-devices" className="mt-4"><SyncHealthTab /></TabsContent>
+        <TabsContent value="failed-notifications" className="mt-4"><FailedMessagesTab /></TabsContent>
         <TabsContent value="recovery" className="mt-4"><RecoveryTab /></TabsContent>
         <TabsContent value="alerts" className="mt-4"><AlertCenterTab /></TabsContent>
       </Tabs>
