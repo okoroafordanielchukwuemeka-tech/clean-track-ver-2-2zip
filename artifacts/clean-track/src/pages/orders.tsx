@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { useCachedQuery } from "@/hooks/use-cached-query";
 import { CachedDataBadge } from "@/components/cached-data-badge";
@@ -183,6 +183,7 @@ export default function Orders() {
   const [showCreate, setShowCreate] = useState(() => searchParams.get("create") === "1");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const navigate = useNavigate();
   const { activeBranchId } = useBranch();
   const queryClient = useQueryClient();
 
@@ -517,9 +518,15 @@ export default function Orders() {
                       <TableRow
                         key={order.id}
                         className={cn(
+                          "cursor-pointer",
                           isActive ? urg.rowClass : "",
                           isSelected && "bg-primary/5 dark:bg-primary/10"
                         )}
+                        onClick={(e) => {
+                          const t = e.target as HTMLElement;
+                          if (t.closest('[role="checkbox"]') || t.closest("button") || t.closest("a")) return;
+                          navigate(`/orders/${order.id}`);
+                        }}
                       >
                         <TableCell className="pl-4">
                           {isSelectable && (
@@ -561,8 +568,14 @@ export default function Orders() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="sm" className="h-9 w-9 p-0" asChild>
-                            <Link to={`/orders/${order.id}`}><Eye className="h-4 w-4" /></Link>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                            title="Open order"
+                            onClick={() => navigate(`/orders/${order.id}`)}
+                          >
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </TableCell>
                       </TableRow>

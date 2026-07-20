@@ -1,0 +1,249 @@
+PHASE 7.17.2B.2 — ORDER WORKFLOW SIMPLIFICATION
+
+IMPORTANT
+
+This phase focuses ONLY on simplifying the complete order workflow.
+
+DO NOT modify pricing.
+
+DO NOT modify subscriptions.
+
+DO NOT modify branding.
+
+DO NOT modify AI Marketing.
+
+DO NOT modify Operational Center.
+
+DO NOT modify Platform Health.
+
+Focus entirely on the order lifecycle.
+
+────────────────────────
+STEP 1 — AUDIT
+────────────────────────
+
+Perform a complete UX audit of the order workflow.
+
+Review:
+
+• Order List
+• Create Order
+• Order Detail
+• Processing
+• Payment
+• Pickup
+• Receipts
+
+Identify:
+
+1. unnecessary clicks
+2. duplicated actions
+3. hidden actions
+4. confusing layouts
+5. slow workflows
+6. poor mobile experience
+7. inconsistent buttons
+8. missing shortcuts
+
+Do NOT implement until the audit is complete.
+
+────────────────────────
+STEP 2 — CREATE ORDER
+────────────────────────
+
+Creating an order must be extremely fast.
+
+Target:
+
+under 30 seconds.
+
+Improve:
+
+• searchable customer
+• searchable services
+• better quantity controls
+• instant price updates
+• keyboard navigation
+• mobile usability
+
+Workers should almost never need to scroll.
+
+────────────────────────
+STEP 3 — ORDER DETAIL
+────────────────────────
+
+The Order Detail page becomes the operational workspace.
+
+It should contain clearly separated sections.
+
+Example:
+
+Customer
+
+Order Summary
+
+Payment
+
+Processing
+
+Pickup
+
+Receipts
+
+History
+
+Every section should be visually obvious.
+
+────────────────────────
+STEP 4 — ORDER STATUS
+────────────────────────
+
+Current workflow:
+
+Pending
+
+Processing
+
+Ready
+
+Picked Up
+
+Improve visibility.
+
+Current status should always be obvious.
+
+Next available action should always be obvious.
+
+Never make workers wonder what to do next.
+
+────────────────────────
+STEP 5 — PAYMENT UX
+────────────────────────
+
+Payment should require the minimum number of clicks.
+
+Workers should immediately see:
+
+Outstanding Balance
+
+Total Paid
+
+Payment History
+
+Quick actions:
+
+Record Full Payment
+
+Record Partial Payment
+
+Print Receipt
+
+No unnecessary navigation.
+
+────────────────────────
+STEP 6 — PICKUP UX
+────────────────────────
+
+Partial Pickup and Full Pickup should always be visible.
+
+Never hidden.
+
+Display:
+
+Pickup Actions
+
+[ Full Pickup ]
+
+[ Partial Pickup ]
+
+Helper text:
+
+Use Partial Pickup when only some garments are collected.
+
+Workers should instantly understand the difference.
+
+────────────────────────
+STEP 7 — RECEIPTS
+────────────────────────
+
+Receipt actions should be grouped.
+
+Print
+
+Download PDF
+
+View Receipt
+
+Share Receipt
+
+No scattered buttons.
+
+────────────────────────
+STEP 8 — HISTORY
+────────────────────────
+
+Every order should clearly show:
+
+Created
+
+Payment Recorded
+
+Status Changed
+
+Partial Pickup
+
+Final Pickup
+
+Discount
+
+Worker
+
+Timestamp
+
+History must be easy to read.
+
+────────────────────────
+STEP 9 — MOBILE
+────────────────────────
+
+Audit every screen.
+
+No overflowing cards.
+
+Buttons must remain reachable.
+
+Tables must degrade gracefully.
+
+Spacing must remain clean.
+
+────────────────────────
+STEP 10 — PERFORMANCE
+────────────────────────
+
+Reduce unnecessary renders.
+
+Avoid duplicate API requests.
+
+Keep navigation instant.
+
+────────────────────────
+DELIVERABLES
+────────────────────────
+
+Provide:
+
+1. UX audit findings
+
+2. Root causes
+
+3. Improvements implemented
+
+4. Before / After screenshots
+
+5. Mobile screenshots
+
+6. Workflow timing comparison
+
+7. Remaining usability concerns
+
+Do NOT begin the next roadmap phase until this phase passes certification.

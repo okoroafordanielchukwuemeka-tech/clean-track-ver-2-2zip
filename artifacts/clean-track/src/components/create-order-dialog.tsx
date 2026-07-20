@@ -25,7 +25,7 @@ interface CreateOrderDialogProps {
   onSuccess?: () => void;
 }
 
-const STEPS = ["Customer", "Service", "Items", "Adjustments", "Review"];
+const STEPS = ["Customer", "Items", "Adjustments", "Review"];
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(v);
@@ -151,7 +151,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     const t = setTimeout(() => {
       if (step === 0) {
         if (!selectedCustomer) searchRef.current?.focus();
-      } else if (step === 2) {
+      } else if (step === 1) {
         serviceSearchRef.current?.focus();
       }
     }, 80);
@@ -372,15 +372,16 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   }
 
   // ── Validation / step advance ──────────────────────────────────────────────
+  // Steps: 0=Customer, 1=Items, 2=Adjustments, 3=Review
   function validateAndNext() {
     if (step === 0) {
       if (!effectiveName.trim()) { toast.error("Customer name is required"); return; }
       if (!effectivePhone.trim()) { toast.error("Phone number is required"); return; }
     }
-    if (step === 2 && itemCount === 0) {
+    if (step === 1 && itemCount === 0) {
       toast.error("Select at least one item"); return;
     }
-    if (step === 3) {
+    if (step === 2) {
       if (effectiveDiscount > 0 && !discountReason.trim()) { toast.error("Discount reason is required"); return; }
       if (extraCharge > 0 && !extraChargeReason.trim()) { toast.error("Extra charge reason is required"); return; }
     }
@@ -600,61 +601,38 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
             </div>
           )}
 
-          {/* ══════════════ STEP 1 — Service tier ══════════════════════════ */}
+          {/* ══════════════ STEP 1 — Items + Service tier ══════════════════ */}
           {step === 1 && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Choose the service tier for this order.</p>
-              {(["standard", "express", "premium"] as const).map(type => {
-                const hours = sla
-                  ? (type === "express" ? sla.expressTurnaroundHours
-                    : type === "premium" ? sla.premiumTurnaroundHours
-                    : sla.standardTurnaroundHours)
-                  : null;
-                const dueDate = hours ? new Date(Date.now() + hours * 3600000) : null;
-                const isSelected = serviceType === type;
-                return (
-                  <button
-                    key={type}
-                    onClick={() => setServiceType(type)}
-                    className={cn(
-                      "w-full text-left p-4 rounded-xl border-2 transition-all",
-                      isSelected ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40 bg-background"
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
-                          isSelected ? "border-primary" : "border-muted-foreground/30"
-                        )}>
-                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold capitalize">{type}</p>
-                          {hours && dueDate && (
-                            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {hours}h · Ready by {dueDate.toLocaleDateString("en-NG", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <Badge
-                        variant={type === "express" ? "warning" : type === "premium" ? "info" : "outline"}
-                        className="capitalize shrink-0"
-                      >
-                        {type}
-                      </Badge>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ══════════════ STEP 2 — Items ═════════════════════════════════ */}
-          {step === 2 && (
             <div className="space-y-4">
+              {/* Service tier — inline compact selector */}
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Service Tier</p>
+                <div className="flex gap-2">
+                  {(["standard", "express", "premium"] as const).map(type => {
+                    const hours = sla
+                      ? (type === "express" ? sla.expressTurnaroundHours
+                        : type === "premium" ? sla.premiumTurnaroundHours
+                        : sla.standardTurnaroundHours)
+                      : null;
+                    const isSelected = serviceType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setServiceType(type)}
+                        className={cn(
+                          "flex-1 text-center p-2.5 rounded-lg border-2 transition-all text-sm",
+                          isSelected ? "border-primary bg-primary/5 font-semibold" : "border-border hover:border-muted-foreground/40"
+                        )}
+                      >
+                        <span className="capitalize block">{type}</span>
+                        {hours && <span className="text-xs text-muted-foreground block mt-0.5">{hours}h</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Select items and quantities.</p>
                 {itemCount > 0 && (
@@ -805,8 +783,8 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
             </div>
           )}
 
-          {/* ══════════════ STEP 3 — Adjustments ══════════════════════════ */}
-          {step === 3 && (
+          {/* ══════════════ STEP 2 — Adjustments ══════════════════════════ */}
+          {step === 2 && (
             <div className="space-y-5">
               {/* Helper note */}
               {effectiveDiscount === 0 && extraCharge === 0 && (
@@ -914,8 +892,8 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
             </div>
           )}
 
-          {/* ══════════════ STEP 4 — Review ════════════════════════════════ */}
-          {step === 4 && (
+          {/* ══════════════ STEP 3 — Review ════════════════════════════════ */}
+          {step === 3 && (
             <div className="space-y-4">
               {/* Customer */}
               <div className="rounded-xl border overflow-hidden">
