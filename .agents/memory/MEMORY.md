@@ -51,3 +51,4 @@
 - [Cloudinary Image System Certification](cloudinary-certification.md) — multer-bypass bug + broken-image fallback + lazy-load fixed; duplicate shares URL (by design); 0 orphans post-audit
 - [RC1 Certification & Launch Gate](rc1-certification.md) — Phase 7.16 GO verdict; 3 TS build errors fixed; prod build passes; 5 pre-launch secrets required; score 89/100; report at docs/RC1_CERTIFICATION_REPORT.md
 - [Global Search](global-search.md) — GET /api/search; receipts on paymentRecords not orders; auth.type not auth.role; branch isolation inlined; workers never see workers/services/branches
+- [Billing Certification](billing-certification.md) — Phase 7.18.0B; correct plan values; DB-driven limits via plans table; trial→past_due transition fix; seed-plans.ts upsert

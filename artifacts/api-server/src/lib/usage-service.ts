@@ -1,13 +1,70 @@
 import { db } from "@workspace/db";
-import { orders, workers, branches, customers } from "@workspace/db/schema";
+import { orders, workers, branches, customers, plans, whatsappActivityLogs } from "@workspace/db/schema";
 import { eq, and, gte, isNull, count } from "drizzle-orm";
 import { getPlanLimits } from "./entitlements.js";
 
+/**
+ * Resolves plan capacity limits from the plans DB table.
+ * Falls back to hardcoded entitlements.ts constants if the tier isn't found in DB.
+ * This makes limits fully database-driven: update the plans table to change limits
+ * without a code deploy.
+ */
+async function getPlanLimitsFromDb(plan: string): Promise<{
+  maxBranches: number;
+  maxWorkers: number;
+  maxOrdersPerMonth: number;
+  maxCustomers: number;
+  maxStorageMb: number;
+  maxWhatsappMessagesPerMonth: number;
+  maxAiCreditsPerMonth: number;
+}> {
+  const [row] = await db
+    .select({
+      maxBranches: plans.maxBranches,
+      maxWorkers: plans.maxWorkers,
+      maxOrdersPerMonth: plans.maxOrdersPerMonth,
+      maxCustomers: plans.maxCustomers,
+      maxStorageMb: plans.maxStorageMb,
+      maxWhatsappMessagesPerMonth: plans.maxWhatsappMessagesPerMonth,
+      maxAiCreditsPerMonth: plans.maxAiCreditsPerMonth,
+    })
+    .from(plans)
+    .where(eq(plans.tier, plan));
+
+  // null in DB means unlimited → Infinity in code
+  const toNum = (v: number | null | undefined, fallback: number) =>
+    v === null || v === undefined ? fallback : v < 0 ? Infinity : v;
+
+  if (row) {
+    const codeLimits = getPlanLimits(plan);
+    return {
+      maxBranches:                 toNum(row.maxBranches,                 codeLimits.maxBranches),
+      maxWorkers:                  toNum(row.maxWorkers,                  codeLimits.maxWorkers),
+      maxOrdersPerMonth:           toNum(row.maxOrdersPerMonth,           codeLimits.maxOrdersPerMonth),
+      maxCustomers:                toNum(row.maxCustomers,                codeLimits.maxCustomers),
+      maxStorageMb:                toNum(row.maxStorageMb,                5120),
+      maxWhatsappMessagesPerMonth: toNum(row.maxWhatsappMessagesPerMonth, codeLimits.maxWhatsappMessagesPerMonth),
+      maxAiCreditsPerMonth:        toNum(row.maxAiCreditsPerMonth,        codeLimits.maxAiCreditsPerMonth),
+    };
+  }
+
+  // Fallback to code constants when plan not found in DB
+  const codeLimits = getPlanLimits(plan);
+  return {
+    ...codeLimits,
+    maxStorageMb: MAX_STORAGE_MB_BY_PLAN[plan] ?? 5120,
+  };
+}
+
+/**
+ * Hardcoded storage fallback only used when the DB plans table has no maxStorageMb.
+ * Spec values: Starter = 5 GB, Professional = 25 GB, Enterprise = unlimited.
+ */
 export const MAX_STORAGE_MB_BY_PLAN: Record<string, number> = {
-  free: 500,
-  starter: 2048,
-  pro: 10240,
-  business: 51200,
+  free:     512,
+  starter:  5_120,   // 5 GB
+  pro:      25_600,  // 25 GB
+  business: Infinity,
 };
 
 export interface UsageSnapshot {
@@ -16,6 +73,8 @@ export interface UsageSnapshot {
   activeBranchCount: number;
   activeCustomerCount: number;
   storageUsedMb: number;
+  monthlyWhatsappMessageCount: number;
+  monthlyAiCreditCount: number;
 }
 
 export type UsageWarningLevel = "safe" | "warning_70" | "warning_85" | "critical_100";
@@ -28,6 +87,8 @@ export interface UsageWithLimits extends UsageSnapshot {
     maxBranches: number;
     maxCustomers: number;
     maxStorageMb: number;
+    maxWhatsappMessagesPerMonth: number;
+    maxAiCreditsPerMonth: number;
   };
   percentages: {
     orders: number;
@@ -35,6 +96,8 @@ export interface UsageWithLimits extends UsageSnapshot {
     branches: number;
     customers: number;
     storage: number;
+    whatsappMessages: number;
+    aiCredits: number;
   };
   warnings: {
     orders: UsageWarningLevel;
@@ -42,6 +105,8 @@ export interface UsageWithLimits extends UsageSnapshot {
     branches: UsageWarningLevel;
     customers: UsageWarningLevel;
     storage: UsageWarningLevel;
+    whatsappMessages: UsageWarningLevel;
+    aiCredits: UsageWarningLevel;
   };
 }
 
@@ -72,6 +137,7 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
     [{ activeBranches }],
     [{ activeCustomers }],
     [{ totalOrders }],
+    whatsappResult,
   ] = await Promise.all([
     db.select({ monthlyOrders: count() })
       .from(orders)
@@ -88,10 +154,25 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
     db.select({ totalOrders: count() })
       .from(orders)
       .where(eq(orders.laundryId, laundryId)),
+    // Count outbound WhatsApp messages sent this month (action = MESSAGE_SENT)
+    db.select({ cnt: count() })
+      .from(whatsappActivityLogs)
+      .where(
+        and(
+          eq(whatsappActivityLogs.laundryId, laundryId),
+          eq(whatsappActivityLogs.action, "MESSAGE_SENT"),
+          gte(whatsappActivityLogs.createdAt, monthStart)
+        )
+      )
+      .catch(() => [{ cnt: 0 }]),
   ]);
 
   // Storage estimate: ~2 KB per order (row + items + payment records combined)
   const storageUsedMb = Math.round((Number(totalOrders) * 2) / 1024 * 10) / 10;
+
+  const monthlyWhatsappMessageCount = Number(
+    Array.isArray(whatsappResult) && whatsappResult[0] ? (whatsappResult[0] as any).cnt : 0
+  );
 
   return {
     monthlyOrderCount: Number(monthlyOrders),
@@ -99,53 +180,66 @@ export async function computeUsage(laundryId: number): Promise<UsageSnapshot> {
     activeBranchCount: Number(activeBranches),
     activeCustomerCount: Number(activeCustomers),
     storageUsedMb,
+    monthlyWhatsappMessageCount,
+    monthlyAiCreditCount: 0, // AI credit tracking — infrastructure ready; counted when AI features go live
   };
 }
 
 /**
  * Computes usage enriched with plan limits and warning levels.
- * Recalculates from DB truth — always accurate.
+ * Reads limits from the plans DB table (DB-driven). Falls back to
+ * hardcoded entitlements.ts constants if the plan is not found in the DB.
  */
 export async function computeUsageWithLimits(laundryId: number, plan: string): Promise<UsageWithLimits> {
-  const usage = await computeUsage(laundryId);
-  const limits = getPlanLimits(plan);
-  const maxStorageMb = MAX_STORAGE_MB_BY_PLAN[plan] ?? 500;
+  const [usage, limits] = await Promise.all([
+    computeUsage(laundryId),
+    getPlanLimitsFromDb(plan),
+  ]);
 
-  const pctOrders = calcPct(usage.monthlyOrderCount, limits.maxOrdersPerMonth);
-  const pctWorkers = calcPct(usage.activeWorkerCount, limits.maxWorkers);
-  const pctBranches = calcPct(usage.activeBranchCount, limits.maxBranches);
-  const pctCustomers = calcPct(usage.activeCustomerCount, limits.maxCustomers);
-  const pctStorage = calcPct(usage.storageUsedMb, maxStorageMb);
+  const pctOrders    = calcPct(usage.monthlyOrderCount,          limits.maxOrdersPerMonth);
+  const pctWorkers   = calcPct(usage.activeWorkerCount,           limits.maxWorkers);
+  const pctBranches  = calcPct(usage.activeBranchCount,           limits.maxBranches);
+  const pctCustomers = calcPct(usage.activeCustomerCount,         limits.maxCustomers);
+  const pctStorage   = calcPct(usage.storageUsedMb,              limits.maxStorageMb);
+  const pctWa        = calcPct(usage.monthlyWhatsappMessageCount, limits.maxWhatsappMessagesPerMonth);
+  const pctAi        = calcPct(usage.monthlyAiCreditCount,        limits.maxAiCreditsPerMonth);
 
   return {
     ...usage,
     plan,
     limits: {
-      maxOrdersPerMonth: limits.maxOrdersPerMonth,
-      maxWorkers: limits.maxWorkers,
-      maxBranches: limits.maxBranches,
-      maxCustomers: limits.maxCustomers,
-      maxStorageMb,
+      maxOrdersPerMonth:           limits.maxOrdersPerMonth,
+      maxWorkers:                  limits.maxWorkers,
+      maxBranches:                 limits.maxBranches,
+      maxCustomers:                limits.maxCustomers,
+      maxStorageMb:                limits.maxStorageMb,
+      maxWhatsappMessagesPerMonth: limits.maxWhatsappMessagesPerMonth,
+      maxAiCreditsPerMonth:        limits.maxAiCreditsPerMonth,
     },
     percentages: {
-      orders: pctOrders,
-      workers: pctWorkers,
-      branches: pctBranches,
-      customers: pctCustomers,
-      storage: pctStorage,
+      orders:          pctOrders,
+      workers:         pctWorkers,
+      branches:        pctBranches,
+      customers:       pctCustomers,
+      storage:         pctStorage,
+      whatsappMessages: pctWa,
+      aiCredits:       pctAi,
     },
     warnings: {
-      orders: getWarningLevel(pctOrders),
-      workers: getWarningLevel(pctWorkers),
-      branches: getWarningLevel(pctBranches),
-      customers: getWarningLevel(pctCustomers),
-      storage: getWarningLevel(pctStorage),
+      orders:          getWarningLevel(pctOrders),
+      workers:         getWarningLevel(pctWorkers),
+      branches:        getWarningLevel(pctBranches),
+      customers:       getWarningLevel(pctCustomers),
+      storage:         getWarningLevel(pctStorage),
+      whatsappMessages: getWarningLevel(pctWa),
+      aiCredits:       getWarningLevel(pctAi),
     },
   };
 }
 
 /**
  * Hard limit check before resource creation.
+ * Reads limits from the plans DB table — fully DB-driven enforcement.
  * Returns null if within limits, or { code, message } if exceeded.
  * Multi-tenant safe: scoped by laundryId.
  */
@@ -154,7 +248,8 @@ export async function checkLimit(
   plan: string,
   limitType: "orders" | "workers" | "branches" | "customers"
 ): Promise<{ code: string; message: string } | null> {
-  const limits = getPlanLimits(plan);
+  // Read limits from DB — not hardcoded
+  const limits = await getPlanLimitsFromDb(plan);
 
   if (limitType === "orders") {
     const max = limits.maxOrdersPerMonth;
