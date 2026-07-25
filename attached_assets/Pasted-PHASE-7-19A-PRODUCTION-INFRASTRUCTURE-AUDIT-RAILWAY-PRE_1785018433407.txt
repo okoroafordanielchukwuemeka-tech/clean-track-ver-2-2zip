@@ -1,0 +1,367 @@
+PHASE 7.19A — PRODUCTION INFRASTRUCTURE AUDIT & RAILWAY PREPARATION
+
+OBJECTIVE
+
+This phase prepares CleanTrack for its first production deployment.
+
+DO NOT deploy to Railway yet.
+
+DO NOT connect the custom domain yet.
+
+DO NOT configure Meta WhatsApp.
+
+DO NOT switch Paystack to Live.
+
+DO NOT build new business features.
+
+This phase exists only to ensure the application is production-ready before deployment.
+
+If any issue is discovered:
+
+1. Identify the root cause.
+2. Fix it.
+3. Re-test.
+4. Continue until the system is production-ready.
+
+No shortcuts.
+
+────────────────────────────
+
+STEP 1 — Production Readiness Audit
+
+Audit the complete project.
+
+Verify:
+
+• Frontend
+• Backend
+• Database
+• Storage
+• Authentication
+• Billing
+• Multi-Branch
+• Worker Permissions
+• Upload System
+• Receipt Printing
+• Search
+• Notifications
+• Background Tasks
+
+Identify anything that could fail in production.
+
+────────────────────────────
+
+STEP 2 — Environment Variables Audit
+
+Verify every required environment variable.
+
+Examples include:
+
+• DATABASE_URL
+• EXTERNAL_DATABASE_URL
+• JWT_SECRET
+• SESSION_SECRET
+• STORAGE_PROVIDER
+• PAYSTACK_PUBLIC_KEY
+• PAYSTACK_SECRET_KEY
+• WHATSAPP placeholders
+• Email configuration
+• Upload configuration
+
+Confirm:
+
+No secrets are hardcoded.
+
+Every missing variable is documented.
+
+Application fails gracefully when variables are missing.
+
+────────────────────────────
+
+STEP 3 — Railway Compatibility Audit
+
+Verify the project is fully compatible with Railway.
+
+Audit:
+
+• package.json
+• start command
+• build command
+• tsx usage
+• production scripts
+• health endpoint
+• static assets
+• uploads
+• environment loading
+• migrations
+
+Identify anything that would prevent Railway deployment.
+
+Fix all issues.
+
+────────────────────────────
+
+STEP 4 — Database Audit
+
+Verify:
+
+• Production migrations
+• Schema consistency
+• Foreign keys
+• Constraints
+• Indexes
+• Seed independence
+
+Confirm:
+
+Application starts correctly on an empty production database.
+
+Database migrations are idempotent.
+
+No duplicate migrations.
+
+────────────────────────────
+
+STEP 5 — File Storage Audit
+
+Verify:
+
+Logo uploads
+
+Future receipt assets
+
+Images
+
+Storage paths
+
+Persistence
+
+Confirm:
+
+Uploads survive application restarts.
+
+No temporary development paths remain.
+
+Storage abstraction is production-ready.
+
+────────────────────────────
+
+STEP 6 — Error Handling Audit
+
+Audit every API.
+
+Verify:
+
+Proper HTTP codes
+
+Validation
+
+Unexpected errors
+
+Database failures
+
+Timeouts
+
+Graceful degradation
+
+No stack traces exposed to users.
+
+────────────────────────────
+
+STEP 7 — Logging & Monitoring
+
+Verify:
+
+Structured logging
+
+Error logging
+
+Startup logs
+
+Critical failures
+
+Health endpoint
+
+Request tracing where appropriate
+
+Application startup status
+
+Add production-safe logging where necessary.
+
+────────────────────────────
+
+STEP 8 — Security Audit
+
+Verify:
+
+JWT security
+
+Authentication
+
+Authorization
+
+CORS
+
+Rate limiting
+
+Helmet
+
+Input validation
+
+File upload validation
+
+SQL injection protection
+
+XSS protection
+
+CSRF considerations where applicable
+
+No sensitive information exposed in logs or API responses.
+
+────────────────────────────
+
+STEP 9 — Performance Audit
+
+Verify:
+
+Database query efficiency
+
+Duplicate queries
+
+N+1 queries
+
+Large payloads
+
+Pagination
+
+Search performance
+
+Image loading
+
+Receipt rendering
+
+Bundle size
+
+Lazy loading opportunities
+
+────────────────────────────
+
+STEP 10 — Production Configuration
+
+Verify:
+
+Compression
+
+Caching
+
+Static assets
+
+Environment detection
+
+Production mode
+
+Development-only tools removed from production paths
+
+No debug UI exposed.
+
+────────────────────────────
+
+STEP 11 — Disaster Recovery
+
+Verify:
+
+Backup strategy
+
+Database recovery process
+
+Migration rollback strategy
+
+Application restart procedure
+
+Recovery documentation
+
+────────────────────────────
+
+STEP 12 — Deployment Checklist
+
+Generate a complete deployment checklist.
+
+Include:
+
+GitHub
+
+Railway
+
+Neon
+
+Environment Variables
+
+Storage
+
+SSL
+
+Domain
+
+Paystack
+
+Meta
+
+Email
+
+Health Checks
+
+Monitoring
+
+Backups
+
+This checklist will be used during Phase 7.19B.
+
+────────────────────────────
+
+DELIVERABLES
+
+Provide:
+
+1. Production Readiness Audit
+
+2. Railway Compatibility Report
+
+3. Environment Variables Report
+
+4. Database Audit
+
+5. Storage Audit
+
+6. Security Audit
+
+7. Performance Audit
+
+8. Logging & Monitoring Audit
+
+9. Disaster Recovery Report
+
+10. Failed Checks
+
+11. Issues Fixed
+
+12. Remaining Risks
+
+13. Railway Deployment Readiness Score
+
+IMPORTANT
+
+DO NOT deploy anything during this phase.
+
+DO NOT connect Railway.
+
+DO NOT configure the domain.
+
+DO NOT enable live payments.
+
+DO NOT configure Meta.
+
+The only goal of this phase is to ensure CleanTrack is fully prepared for production deployment.
+
+Once every check passes successfully, we will proceed to:
+
+**Phase 7.19B — Railway Deployment & Production Infrastructure**
