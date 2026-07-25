@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/context/theme-context";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
@@ -7,41 +8,45 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { BranchProvider } from "@/context/branch-context";
 import { AdminProvider, useAdmin } from "@/context/admin-context";
-import AdminLogin from "@/pages/admin-login";
-import AdminCommandCenter from "@/pages/admin-command-center";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Layout } from "@/components/layout";
-import Dashboard from "@/pages/dashboard";
-import Orders from "@/pages/orders";
-import OrderDetail from "@/pages/order-detail";
-import Batches from "@/pages/batches";
-import BatchDetail from "@/pages/batch-detail";
-import Services from "@/pages/services";
-import Workers from "@/pages/workers";
-import Customers from "@/pages/customers";
-import Expenditures from "@/pages/expenditures";
-import SettingsPage from "@/pages/settings";
-import WorkerStation from "@/pages/worker";
+
+// ── Eagerly-loaded pages (small, on every session's critical path) ─────────
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
-import ForgotPassword from "@/pages/forgot-password";
-import ResetPassword from "@/pages/reset-password";
 import WorkerLogin from "@/pages/worker-login";
+import WorkerStation from "@/pages/worker";
 import NotFound from "@/pages/not-found";
-import DiscountApprovals from "@/pages/discount-approvals";
-import Receipts from "@/pages/receipts";
-import BillingCallback from "@/pages/billing-callback";
-import ReceiptPrint from "@/pages/receipt-print";
-import PickupReceiptPrint from "@/pages/pickup-receipt-print";
-import BranchesPage from "@/pages/branches";
-import DemoLogin from "@/pages/demo-login";
-import OperationsPage from "@/pages/operations";
-import CustomerHubPage from "@/pages/customer-hub";
-import PlatformHealthPage from "@/pages/platform-health";
-import MarketingPage from "@/pages/marketing";
-import Welcome from "@/pages/welcome";
-import Pricing from "@/pages/pricing";
+
+// ── Lazily-loaded pages (larger bundles, not needed on first paint) ────────
+const Dashboard        = lazy(() => import("@/pages/dashboard"));
+const Orders           = lazy(() => import("@/pages/orders"));
+const OrderDetail      = lazy(() => import("@/pages/order-detail"));
+const Batches          = lazy(() => import("@/pages/batches"));
+const BatchDetail      = lazy(() => import("@/pages/batch-detail"));
+const Services         = lazy(() => import("@/pages/services"));
+const Workers          = lazy(() => import("@/pages/workers"));
+const Customers        = lazy(() => import("@/pages/customers"));
+const Expenditures     = lazy(() => import("@/pages/expenditures"));
+const SettingsPage     = lazy(() => import("@/pages/settings"));
+const DiscountApprovals = lazy(() => import("@/pages/discount-approvals"));
+const Receipts         = lazy(() => import("@/pages/receipts"));
+const BranchesPage     = lazy(() => import("@/pages/branches"));
+const OperationsPage   = lazy(() => import("@/pages/operations"));
+const CustomerHubPage  = lazy(() => import("@/pages/customer-hub"));
+const PlatformHealthPage = lazy(() => import("@/pages/platform-health"));
+const MarketingPage    = lazy(() => import("@/pages/marketing"));
+const AdminLogin       = lazy(() => import("@/pages/admin-login"));
+const AdminCommandCenter = lazy(() => import("@/pages/admin-command-center"));
+const ForgotPassword   = lazy(() => import("@/pages/forgot-password"));
+const ResetPassword    = lazy(() => import("@/pages/reset-password"));
+const DemoLogin        = lazy(() => import("@/pages/demo-login"));
+const BillingCallback  = lazy(() => import("@/pages/billing-callback"));
+const ReceiptPrint     = lazy(() => import("@/pages/receipt-print"));
+const PickupReceiptPrint = lazy(() => import("@/pages/pickup-receipt-print"));
+const Welcome          = lazy(() => import("@/pages/welcome"));
+const Pricing          = lazy(() => import("@/pages/pricing"));
 
 const STALE_TIME = 5 * 60 * 1000;       // 5 minutes
 const GC_TIME   = 24 * 60 * 60 * 1000;  // 24 hours
@@ -92,6 +97,7 @@ export default function App() {
         <BranchProvider>
           <AdminProvider>
           <BrowserRouter>
+            <Suspense fallback={null}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
@@ -139,6 +145,7 @@ export default function App() {
               <Route path="/receipts/:receiptNumber/print" element={<ReceiptPrint />} />
               <Route path="/orders/:orderId/pickups/:pickupId/print" element={<PickupReceiptPrint />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
           <Toaster richColors />
           </AdminProvider>
