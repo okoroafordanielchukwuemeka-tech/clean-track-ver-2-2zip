@@ -1,3 +1,5 @@
+import type { NextFunction, Request, Response } from "express";
+
 /**
  * Phase D — Structured Logger
  *
@@ -56,9 +58,9 @@ export function logError(message: string, error?: unknown, context?: LogContext)
 
 export function makeRequestLogger() {
   return function requestLogger(
-    req: { method: string; path: string; requestId?: string; auth?: { laundryId?: number; type?: string; ownerId?: number; workerId?: number } },
-    res: { statusCode: number; on: (event: string, cb: () => void) => void },
-    next: () => void
+    req: Request & { requestId?: string; auth?: { laundryId?: number; type?: string; ownerId?: number; workerId?: number } },
+    res: Response,
+    next: NextFunction
   ) {
     const start = Date.now();
     res.on("finish", () => {

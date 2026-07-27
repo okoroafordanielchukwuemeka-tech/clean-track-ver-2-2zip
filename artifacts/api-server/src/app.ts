@@ -18,7 +18,7 @@ import {
   passwordResetLimiter,
 } from "./lib/rate-limiter.js";
 import { trackError } from "./lib/error-tracker.js";
-import { logError } from "./lib/logger.js";
+import { logError, makeRequestLogger } from "./lib/logger.js";
 import type { AuthRequest } from "./middleware/auth.js";
 import { getStorageRoot, STORAGE_PUBLIC_PREFIX } from "./lib/storage.js";
 
@@ -38,8 +38,10 @@ app.use(compression());
 // Attach a unique request ID to every request for log correlation.
 app.use((req: AuthRequest & { requestId?: string }, _res: Response, next: NextFunction) => {
   req.requestId = crypto.randomUUID();
+  _res.setHeader("X-Request-ID", req.requestId);
   next();
 });
+app.use(makeRequestLogger());
 
 // ── Security headers (Phase A) ────────────────────────────────────────────
 // helmet sets: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection,

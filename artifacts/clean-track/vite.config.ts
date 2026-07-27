@@ -72,6 +72,21 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Recharts is used only by the dashboard. Keep it out of the shared
+    // application shell while leaving the rest of Rollup's dependency graph
+    // intact to avoid circular vendor chunks.
+    // The resulting chart chunk is intentionally larger than Vite's default
+    // warning threshold, but it is fetched only after entering the dashboard.
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-charts": ["recharts"],
+        },
+      },
+    },
+  },
   server: {
     host: "0.0.0.0",
     port: 5000,

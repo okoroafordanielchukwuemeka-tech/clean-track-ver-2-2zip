@@ -10,16 +10,15 @@ import { BranchProvider } from "@/context/branch-context";
 import { AdminProvider, useAdmin } from "@/context/admin-context";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { Layout } from "@/components/layout";
 
-// ── Eagerly-loaded pages (small, on every session's critical path) ─────────
-import Login from "@/pages/login";
-import Signup from "@/pages/signup";
-import WorkerLogin from "@/pages/worker-login";
-import WorkerStation from "@/pages/worker";
-import NotFound from "@/pages/not-found";
-
-// ── Lazily-loaded pages (larger bundles, not needed on first paint) ────────
+// ── Lazily-loaded pages ────────────────────────────────────────────────────
+// Every route is loaded on demand so the initial login shell does not pull in
+// the authenticated workspace, charts, admin console, or print views.
+const Login           = lazy(() => import("@/pages/login"));
+const Signup          = lazy(() => import("@/pages/signup"));
+const WorkerLogin     = lazy(() => import("@/pages/worker-login"));
+const WorkerStation   = lazy(() => import("@/pages/worker"));
+const NotFound         = lazy(() => import("@/pages/not-found"));
 const Dashboard        = lazy(() => import("@/pages/dashboard"));
 const Orders           = lazy(() => import("@/pages/orders"));
 const OrderDetail      = lazy(() => import("@/pages/order-detail"));
@@ -47,6 +46,7 @@ const ReceiptPrint     = lazy(() => import("@/pages/receipt-print"));
 const PickupReceiptPrint = lazy(() => import("@/pages/pickup-receipt-print"));
 const Welcome          = lazy(() => import("@/pages/welcome"));
 const Pricing          = lazy(() => import("@/pages/pricing"));
+const AppLayout        = lazy(() => import("@/components/layout").then(({ Layout }) => ({ default: Layout })));
 
 const STALE_TIME = 5 * 60 * 1000;       // 5 minutes
 const GC_TIME   = 24 * 60 * 60 * 1000;  // 24 hours
@@ -88,6 +88,16 @@ function RootRedirect() {
   return <Navigate to={isOwner ? "/dashboard" : "/worker-station"} replace />;
 }
 
+function RouteLoading() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
+        Loading CleanTrack…
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -97,7 +107,7 @@ export default function App() {
         <BranchProvider>
           <AdminProvider>
           <BrowserRouter>
-            <Suspense fallback={null}>
+            <Suspense fallback={<RouteLoading />}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
@@ -116,7 +126,7 @@ export default function App() {
                 path="/"
                 element={
                   <ProtectedRoute>
-                    <Layout />
+                    <AppLayout />
                   </ProtectedRoute>
                 }
               >

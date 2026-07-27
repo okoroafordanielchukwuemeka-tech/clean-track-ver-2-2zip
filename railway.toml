@@ -7,11 +7,8 @@
 #             on port 3000 (or $PORT provided by Railway).
 #
 # Database migration strategy:
-#   First deploy → db:push (drizzle-kit push) creates all tables on a new empty
-#   Neon database. This is safe because there is no existing data to lose.
-#   Future deploys → generate migrations with `pnpm db:migrate:generate` and
-#   switch startCommand to `pnpm --filter @workspace/db migrate && ...` once
-#   migration files exist in lib/db/src/migrations/.
+#   Checked-in Drizzle migrations are applied at startup. This keeps schema
+#   changes reviewable and avoids running an untracked schema diff in production.
 #
 # Required environment variables (set in Railway dashboard):
 #   DATABASE_URL         — Neon PostgreSQL connection string
@@ -37,9 +34,9 @@ builder = "nixpacks"
 buildCommand = "pnpm install && pnpm build"
 
 [deploy]
-# Run DB migrations then start the compiled API server.
+# Apply checked-in DB migrations then start the compiled API server.
 # The API server serves the built React frontend on the same port in production.
-startCommand = "pnpm --filter @workspace/db push && node artifacts/api-server/dist/index.js"
+startCommand = "pnpm --filter @workspace/db migrate && node artifacts/api-server/dist/index.js"
 healthcheckPath = "/api/healthz"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

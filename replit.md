@@ -99,6 +99,7 @@ See `.env.example` for the full list of required and optional variables.
 - Switched to external PostgreSQL via `EXTERNAL_DATABASE_URL` Replit Secret
 - `lib/db/src/index.ts` and `lib/db/drizzle.config.ts` now prefer `EXTERNAL_DATABASE_URL` over Replit's managed `DATABASE_URL`
 - Schema synced to external DB on startup; API healthz confirmed healthy (149ms)
+- Checked-in Drizzle migrations are available under `lib/db/drizzle/`; production startup uses `pnpm db:migrate`
 
 ## Replit Setup (updated 2026-07-20, re-imported again)
 - Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
