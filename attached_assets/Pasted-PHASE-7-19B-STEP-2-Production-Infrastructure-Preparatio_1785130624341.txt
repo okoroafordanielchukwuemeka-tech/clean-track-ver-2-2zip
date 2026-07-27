@@ -1,0 +1,133 @@
+PHASE 7.19B — STEP 2: Production Infrastructure Preparation
+
+Do NOT deploy the application yet.
+
+Do NOT create a Railway project.
+
+Do NOT connect a production domain.
+
+Do NOT point the application to a production database.
+
+Your task is to prepare the production infrastructure so deployment can occur safely.
+
+Using the Phase 7.19B Step 1 readiness report as the source of truth:
+
+1. Create a Production Prerequisites Checklist.
+
+For every required production dependency, provide:
+
+* Purpose
+* Required value
+* Where it will be obtained
+* Whether it already exists
+* Whether it blocks deployment
+
+Include at minimum:
+
+• Railway Project
+• Neon Production Database
+• Production DATABASE_URL
+• JWT_SECRET
+• SESSION_SECRET
+• BACKUP_SECRET
+• Cloudinary
+
+* CLOUDINARY_CLOUD_NAME
+* CLOUDINARY_API_KEY
+* CLOUDINARY_API_SECRET
+  • Resend
+* SMTP_PASS
+* SMTP_FROM
+  • Production Domain
+  • ALLOWED_ORIGINS
+  • Paystack Live Keys
+  • Meta WhatsApp Credentials
+  • Backup Provider (R2/S3/B2)
+
+For each prerequisite assign one of:
+
+READY
+
+MISSING
+
+OPTIONAL
+
+BLOCKING
+
+2. Generate secure values where appropriate.
+
+Generate production-strength secrets for:
+
+JWT_SECRET
+
+SESSION_SECRET
+
+BACKUP_SECRET
+
+Webhook verification token
+
+Use cryptographically secure values.
+
+Do NOT reuse development secrets.
+
+3. Produce a complete Railway Environment Variable Table.
+
+Include:
+
+Variable Name
+
+Description
+
+Required
+
+Default
+
+Production Value Source
+
+Blocking?
+
+Do not invent credentials.
+
+Leave unknown values clearly marked as:
+
+<<TO_BE_PROVIDED>>
+
+4. Review the deployment order again.
+
+Confirm that the order is safe and that no irreversible action occurs before credentials are configured.
+
+5. Produce a final Infrastructure Preparation Report.
+
+The report must include:
+
+Infrastructure Prepared %
+
+Credentials Ready %
+
+Blocking Items
+
+Non-blocking Items
+
+Estimated Time Remaining Before Deployment
+
+Deployment Recommendation
+
+At the end clearly state one of:
+
+READY TO START STEP 3
+
+or
+
+NOT READY FOR DEPLOYMENT
+
+Do NOT deploy anything.
+
+Do NOT create any production resources.
+
+Do NOT modify Railway.
+
+Do NOT modify Neon.
+
+Do NOT modify DNS.
+
+Preparation only.
