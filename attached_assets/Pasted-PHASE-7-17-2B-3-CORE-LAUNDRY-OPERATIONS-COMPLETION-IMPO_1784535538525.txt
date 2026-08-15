@@ -1,0 +1,359 @@
+PHASE 7.17.2B.3 — CORE LAUNDRY OPERATIONS COMPLETION
+
+IMPORTANT
+
+This phase completes the remaining operational UX issues discovered during real-world testing.
+
+Do NOT begin WhatsApp integration.
+
+Do NOT begin AI Marketing improvements.
+
+Do NOT begin PDF Statements.
+
+Do NOT begin Customer Statements.
+
+Do NOT modify business logic outside this phase.
+
+Focus ONLY on the operational improvements below.
+
+────────────────────────
+
+1. SHORT ORDER IDs
+
+Audit the current Order ID generation.
+
+Replace long technical IDs with short human-friendly IDs.
+
+Requirements:
+
+* Sequential per day
+* Easy to read
+* Easy to communicate verbally
+* Unique
+* Preserve internal references where necessary
+
+Example:
+
+ORD-250717-001
+
+ORD-250717-002
+
+Update every location where Order IDs appear.
+
+────────────────────────
+
+2. BUSINESS LOGO
+
+Audit why Logo Upload currently fails.
+
+Implement:
+
+Upload
+
+Preview
+
+Replace Logo
+
+Delete Logo
+
+Persistent save after refresh
+
+Automatically resize uploaded logos.
+
+The owner should never need to resize images manually.
+
+Use the logo consistently across:
+
+Dashboard
+
+Receipts
+
+PDF Receipts
+
+Customer Portal
+
+Future WhatsApp branding
+
+────────────────────────
+
+3. RECEIPT BRANDING
+
+Redesign the receipt layout.
+
+The receipt must feel premium.
+
+Layout:
+
+Laundry Logo
+
+Business Name
+
+Address
+
+Phone
+
+Email
+
+Receipt Number
+
+Order ID
+
+Customer Details
+
+Service Breakdown
+
+Totals
+
+Payment Summary
+
+Laundry Bank Details
+
+Footer
+
+The logo must automatically fit properly without stretching or overflowing.
+
+No manual sizing.
+
+Receipt should print beautifully on desktop and mobile.
+
+────────────────────────
+
+4. RECEIPT BANK ACCOUNT
+
+Use Business Profile information.
+
+Automatically display:
+
+Bank Name
+
+Account Name
+
+Account Number
+
+on every receipt.
+
+No hardcoded values.
+
+Future Paystack integration should replace this with online payment while still allowing bank transfer.
+
+────────────────────────
+
+5. DISCOUNT RULES
+
+Audit why Discount Rules fail to save.
+
+Verify:
+
+Auto Approval Threshold
+
+Maximum Discount Amount
+
+Maximum Discount Percentage
+
+Save
+
+Refresh
+
+Persistence
+
+Owner changes must remain after refresh.
+
+────────────────────────
+
+6. OPERATIONAL CENTER CLEANUP
+
+Hide developer-only information.
+
+Move technical diagnostics to the developer/admin interface.
+
+Owners should NOT see:
+
+API internals
+
+Database diagnostics
+
+Node information
+
+Raw latency
+
+Owners SHOULD see:
+
+Subscription
+
+Orders Today
+
+Storage Usage
+
+Backup Status
+
+WhatsApp Status
+
+Sync Status
+
+Active Workers
+
+────────────────────────
+
+7. PLATFORM HEALTH CLEANUP
+
+Replace technical wording with business-friendly language.
+
+Examples:
+
+System Running Normally
+
+Backup Successful
+
+Synchronization Healthy
+
+WhatsApp Connected
+
+No developer terminology.
+
+────────────────────────
+
+8. GLOBAL SEARCH REFINEMENT
+
+Upgrade Global Search.
+
+Searching should locate:
+
+Customers
+
+Orders
+
+Workers
+
+Receipts
+
+Pages
+
+Settings
+
+Services
+
+Branches
+
+Search must be:
+
+Instant
+
+Keyboard friendly
+
+Mobile friendly
+
+Fast
+
+────────────────────────
+
+9. MOBILE UX AUDIT
+
+Audit every operational page.
+
+Improve:
+
+Touch targets
+
+Spacing
+
+Cards
+
+Tables
+
+Forms
+
+Modals
+
+Keyboard interactions
+
+Overflow
+
+────────────────────────
+
+10. DESKTOP UX AUDIT
+
+Improve:
+
+Alignment
+
+Whitespace
+
+Card consistency
+
+Visual hierarchy
+
+Sidebar spacing
+
+Header consistency
+
+Typography
+
+────────────────────────
+
+11. COMPLETE OPERATIONAL WORKFLOW AUDIT
+
+Walk through:
+
+Customer
+
+↓
+
+Create Order
+
+↓
+
+Record Payment
+
+↓
+
+Processing
+
+↓
+
+Batch
+
+↓
+
+Ready
+
+↓
+
+Pickup
+
+↓
+
+Receipt
+
+Confirm:
+
+No unnecessary clicks
+
+No hidden actions
+
+No duplicated workflows
+
+No confusing layouts
+
+────────────────────────
+
+DELIVERABLES
+
+Provide:
+
+1. Root cause of every issue.
+
+2. Improvements implemented.
+
+3. Before / After screenshots.
+
+4. Receipt screenshots.
+
+5. Mobile screenshots.
+
+6. Remaining operational concerns.
+
+7. Operational Launch Readiness Score.
+
+Do NOT build future roadmap features.
+
+Complete ONLY Phase 7.17.2B.3.

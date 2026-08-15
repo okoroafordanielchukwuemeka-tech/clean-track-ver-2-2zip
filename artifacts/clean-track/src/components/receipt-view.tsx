@@ -320,11 +320,13 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
         </>
       )}
 
-      {pricing.balance > 0 && laundry.paymentDetails && (laundry.paymentDetails.bankName || laundry.paymentDetails.instructions) && (
+      {laundry.paymentDetails && (laundry.paymentDetails.bankName || laundry.paymentDetails.accountNumber || laundry.paymentDetails.instructions) && (
         <>
           <div className="receipt-divider" />
           <div className="receipt-section">
-            <p className="receipt-section-title">HOW TO PAY THE BALANCE</p>
+            <p className="receipt-section-title">
+              {pricing.balance > 0 ? "HOW TO PAY THE BALANCE" : "BANK DETAILS"}
+            </p>
             {laundry.paymentDetails.bankName && (
               <div className="receipt-row">
                 <span>Bank</span>
@@ -343,10 +345,12 @@ export function ReceiptView({ data, showAllPayments = true }: ReceiptViewProps) 
                 <span className="receipt-value-mono">{laundry.paymentDetails.accountNumber}</span>
               </div>
             )}
-            <div className="receipt-row">
-              <span>Reference</span>
-              <span className="receipt-value-mono">{order.orderId}</span>
-            </div>
+            {pricing.balance > 0 && (
+              <div className="receipt-row">
+                <span>Reference</span>
+                <span className="receipt-value-mono">{order.orderId}</span>
+              </div>
+            )}
             {laundry.paymentDetails.instructions && (
               <p className="receipt-contact" style={{ marginTop: 4 }}>{laundry.paymentDetails.instructions}</p>
             )}

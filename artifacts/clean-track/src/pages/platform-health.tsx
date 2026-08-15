@@ -238,7 +238,7 @@ export default function PlatformHealthPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Server className="h-4 w-4" /> Service Status
+              <Server className="h-4 w-4" /> System Status
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -247,12 +247,8 @@ export default function PlatformHealthPage() {
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between">
-                <span>Uptime</span>
+                <span>Running for</span>
                 <span className="text-foreground font-medium">{formatUptime(data.api.uptimeMs)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Response time</span>
-                <span className="text-foreground font-medium">{data.api.latencyMs}ms</span>
               </div>
             </div>
           </CardContent>
@@ -300,15 +296,15 @@ export default function PlatformHealthPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>HMAC signed</span>
+                    <span>Integrity</span>
                     <span className={data.backup.lastBackup.hmacSigned ? "text-emerald-400 font-medium" : "text-red-400 font-medium"}>
-                      {data.backup.lastBackup.hmacSigned ? "Yes" : "No"}
+                      {data.backup.lastBackup.hmacSigned ? "Verified ✓" : "Not verified"}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Scheduled run</span>
+                    <span>Type</span>
                     <span className={data.backup.lastBackup.scheduledRun ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>
-                      {data.backup.lastBackup.scheduledRun ? "Yes" : "Manual"}
+                      {data.backup.lastBackup.scheduledRun ? "Automatic" : "Manual"}
                     </span>
                   </div>
                 </>
@@ -389,20 +385,20 @@ export default function PlatformHealthPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <RefreshCw className="h-4 w-4" /> Sync Queue
+              <RefreshCw className="h-4 w-4" /> Synchronisation
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <StatusBadge status={data.sync.status} />
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between">
-                <span>Pending jobs</span>
+                <span>Waiting to sync</span>
                 <span className="text-foreground font-medium">{data.sync.pendingJobs}</span>
               </div>
               <div className="flex justify-between">
-                <span>Failed jobs</span>
+                <span>Sync errors</span>
                 <span className={data.sync.failedJobs > 0 ? "text-red-400 font-medium" : "text-emerald-400 font-medium"}>
-                  {data.sync.failedJobs}
+                  {data.sync.failedJobs === 0 ? "None" : data.sync.failedJobs}
                 </span>
               </div>
             </div>
@@ -473,7 +469,7 @@ export default function PlatformHealthPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Monitor className="h-4 w-4" /> Device Activity (Last 24h)
+              <Monitor className="h-4 w-4" /> Active Workers (Last 24h)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -490,12 +486,12 @@ export default function PlatformHealthPage() {
                     <div className="text-right text-xs text-muted-foreground">
                       {device.failedCount > 0 && (
                         <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs mr-1">
-                          {device.failedCount} failed
+                          {device.failedCount} sync error{device.failedCount > 1 ? "s" : ""}
                         </Badge>
                       )}
                       {device.pendingCount > 0 && (
                         <Badge variant="outline" className="text-xs mr-1">
-                          {device.pendingCount} pending
+                          {device.pendingCount} queued
                         </Badge>
                       )}
                       <Clock className="h-3 w-3 inline mr-1" />

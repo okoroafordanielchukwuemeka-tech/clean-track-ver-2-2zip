@@ -81,45 +81,49 @@
    Receipt / Print Styles
    ========================================= */
 .receipt-root {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 13px;
-  color: #111;
+  color: #1a1a1a;
   max-width: 420px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px 18px;
   background: #fff;
 }
 
 .receipt-header {
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
 }
 
 .receipt-logo {
-  max-width: 80px;
-  max-height: 60px;
-  margin: 0 auto 8px;
+  max-width: 120px;
+  max-height: 72px;
+  margin: 0 auto 10px;
   display: block;
+  object-fit: contain;
 }
 
 .receipt-business-name {
-  font-size: 18px;
-  font-weight: bold;
-  letter-spacing: 1px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   margin: 0 0 4px;
+  color: #111;
 }
 
 .receipt-contact {
   font-size: 11px;
-  color: #555;
-  margin: 1px 0;
+  color: #666;
+  margin: 2px 0;
+  line-height: 1.5;
 }
 
 .receipt-divider {
   border: none;
-  border-top: 1px dashed #999;
-  margin: 10px 0;
+  border-top: 1px solid #e0e0e0;
+  margin: 12px 0;
 }
 
 .receipt-divider-thin {
@@ -140,27 +144,31 @@
 
 .receipt-label {
   font-size: 9px;
-  color: #888;
-  letter-spacing: 1px;
+  color: #999;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   margin: 0;
+  font-weight: 500;
 }
 
 .receipt-value {
   font-size: 13px;
   font-weight: 600;
   margin: 0;
+  color: #111;
 }
 
 .receipt-value-mono {
   font-size: 13px;
   font-weight: 600;
-  font-family: 'Courier New', monospace;
+  font-family: 'SFMono-Regular', 'Cascadia Mono', 'Courier New', monospace;
   margin: 0;
+  color: #111;
+  letter-spacing: 0.3px;
 }
 
 .receipt-mono {
-  font-family: 'Courier New', monospace;
+  font-family: 'SFMono-Regular', 'Cascadia Mono', 'Courier New', monospace;
   font-size: 11px;
 }
 
@@ -170,25 +178,30 @@
 
 .receipt-section-title {
   font-size: 9px;
-  color: #888;
+  color: #999;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+  font-weight: 600;
 }
 
 .receipt-row {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  padding: 2px 0;
-  color: #333;
+  padding: 3px 0;
+  color: #444;
+  line-height: 1.5;
 }
 
 .receipt-total-row {
   font-size: 14px;
-  font-weight: bold;
+  font-weight: 700;
   color: #111;
-  padding: 4px 0;
+  padding: 5px 0;
+  border-top: 2px solid #1a1a1a;
+  border-bottom: 2px solid #1a1a1a;
+  margin: 4px 0;
 }
 
 .receipt-balance-row {

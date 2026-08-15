@@ -1,9 +1,20 @@
 import { Router } from "express";
+import multer from "multer";
 import { db } from "@workspace/db";
 import { laundries } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { getStorageDriver, MAX_UPLOAD_BYTES, ALLOWED_MIME_TYPES } from "../lib/storage.js";
+
+const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) return cb(new Error("UNSUPPORTED_TYPE"));
+    cb(null, true);
+  },
+});
 
 export const settingsRouter = Router();
 
@@ -271,6 +282,67 @@ settingsRouter.patch("/dashboard-preferences", requireOwner, async (req: AuthReq
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to update dashboard preferences" });
+  }
+});
+
+// POST /settings/logo — upload business logo (multipart, field "file")
+settingsRouter.post("/logo", requireOwner, async (req: AuthRequest, res) => {
+  const multerErr = await new Promise<any>((resolve) =>
+    uploadLogo.single("file")(req as any, res as any, (err) => resolve(err ?? null))
+  );
+  if (multerErr) {
+    if (multerErr.code === "LIMIT_FILE_SIZE") return res.status(400).json({ error: "Image is too large. Maximum size is 5MB." });
+    if (multerErr.message === "UNSUPPORTED_TYPE") return res.status(400).json({ error: "Unsupported file type. Upload a JPG, PNG, or WEBP image." });
+    return res.status(400).json({ error: "Could not read uploaded file." });
+  }
+  try {
+    const { laundryId } = req.auth!;
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const laundry = await getLaundry(laundryId);
+    if (!laundry) return res.status(404).json({ error: "Laundry not found" });
+
+    const driver = getStorageDriver();
+    const currentProfile = (laundry.businessProfile as Record<string, unknown>) ?? {};
+    // Delete old logo if stored in our storage
+    if (currentProfile.logoUrl && typeof currentProfile.logoUrl === "string") {
+      await driver.delete(currentProfile.logoUrl).catch(() => {});
+    }
+
+    let uploaded;
+    try {
+      uploaded = await driver.upload(req.file.buffer, `logo-${laundryId}`, req.file.mimetype);
+    } catch {
+      return res.status(400).json({ error: "Could not process image. Try a different JPG, PNG, or WEBP file." });
+    }
+
+    const [updated] = await db.update(laundries)
+      .set({ businessProfile: { ...currentProfile, logoUrl: uploaded.url }, updatedAt: new Date() })
+      .where(eq(laundries.id, laundryId))
+      .returning();
+
+    res.json({ logoUrl: (updated.businessProfile as any)?.logoUrl ?? null });
+  } catch (err) {
+    console.error("[logo-upload]", err);
+    res.status(500).json({ error: "Failed to upload logo" });
+  }
+});
+
+// DELETE /settings/logo — remove the business logo
+settingsRouter.delete("/logo", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const { laundryId } = req.auth!;
+    const laundry = await getLaundry(laundryId);
+    if (!laundry) return res.status(404).json({ error: "Laundry not found" });
+    const currentProfile = (laundry.businessProfile as Record<string, unknown>) ?? {};
+    if (currentProfile.logoUrl && typeof currentProfile.logoUrl === "string") {
+      await getStorageDriver().delete(currentProfile.logoUrl).catch(() => {});
+    }
+    await db.update(laundries)
+      .set({ businessProfile: { ...currentProfile, logoUrl: null }, updatedAt: new Date() })
+      .where(eq(laundries.id, laundryId));
+    res.json({ logoUrl: null });
+  } catch {
+    res.status(500).json({ error: "Failed to delete logo" });
   }
 });
 

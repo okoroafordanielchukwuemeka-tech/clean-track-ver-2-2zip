@@ -142,6 +142,9 @@ function BusinessProfileSection() {
 
   const [form, setForm] = useState<BusinessProfile>({});
   const [isDirty, setIsDirty] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoDeleting, setLogoDeleting] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (data) { setForm(data); setIsDirty(false); }
@@ -161,6 +164,37 @@ function BusinessProfileSection() {
     },
     onError: (e: Error) => toast.error("Could not save business profile — " + (e.message || "please try again.")),
   });
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const result = await api.settings.uploadLogo(file);
+      setForm(prev => ({ ...prev, logoUrl: result.logoUrl }));
+      qc.setQueryData(["settings", "business-profile"], (old: any) => ({ ...old, logoUrl: result.logoUrl }));
+      toast.success("Logo uploaded successfully");
+    } catch (err: any) {
+      toast.error("Failed to upload logo — " + (err.message || "please try again."));
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    setLogoDeleting(true);
+    try {
+      await api.settings.deleteLogo();
+      setForm(prev => ({ ...prev, logoUrl: undefined }));
+      qc.setQueryData(["settings", "business-profile"], (old: any) => ({ ...old, logoUrl: null }));
+      toast.success("Logo removed");
+    } catch {
+      toast.error("Failed to remove logo");
+    } finally {
+      setLogoDeleting(false);
+    }
+  };
 
   if (isLoading && !isViewingCache) return <SkeletonRows rows={6} />;
 
@@ -204,12 +238,75 @@ function BusinessProfileSection() {
           />
         </div>
       </div>
-      <div className="mt-4 border-2 border-dashed border-muted-foreground/20 rounded-xl p-6 text-center flex flex-col items-center gap-2">
-        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-          <ImageIcon className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-muted-foreground">Logo Upload</p>
-        <p className="text-xs text-muted-foreground/70">Coming soon — file hosting will be enabled in a future update</p>
+      <div className="mt-4 space-y-2">
+        <Label className="text-sm font-medium">Business Logo</Label>
+        <p className="text-xs text-muted-foreground">
+          Shown on receipts, customer portal, and your workspace. Automatically resized — no manual sizing needed.
+        </p>
+        {form.logoUrl ? (
+          <div className="flex items-start gap-4 p-3 border rounded-lg bg-muted/10">
+            <div className="border rounded-lg p-2 bg-white flex-shrink-0">
+              <img
+                src={form.logoUrl}
+                alt="Business logo"
+                className="h-20 w-auto max-w-[160px] object-contain rounded"
+              />
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={logoUploading || logoDeleting}
+                onClick={() => logoInputRef.current?.click()}
+                className="gap-2 w-fit"
+              >
+                {logoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                Replace Logo
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={logoDeleting || logoUploading}
+                onClick={handleDeleteLogo}
+                className="gap-2 w-fit text-destructive hover:text-destructive"
+              >
+                {logoDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Remove Logo
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-6 text-center flex flex-col items-center gap-3 cursor-pointer hover:border-primary/40 hover:bg-muted/20 transition-colors"
+            onClick={() => !logoUploading && logoInputRef.current?.click()}
+          >
+            {logoUploading ? (
+              <>
+                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+                <p className="text-sm text-muted-foreground">Uploading and processing...</p>
+              </>
+            ) : (
+              <>
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                  <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Click to upload your logo</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">JPG, PNG or WEBP · Max 5MB · Auto-resized</p>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleLogoUpload}
+        />
       </div>
 
       <div className="mt-8 border-t pt-6">

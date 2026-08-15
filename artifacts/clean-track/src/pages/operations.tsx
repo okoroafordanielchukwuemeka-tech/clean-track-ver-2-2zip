@@ -2176,8 +2176,11 @@ export default function OperationsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="audit-log">
+      <Tabs defaultValue="overview">
         <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="overview" className="text-xs gap-1.5">
+            <Activity className="h-3.5 w-3.5" /> Overview
+          </TabsTrigger>
           <TabsTrigger value="audit-log" className="text-xs gap-1.5">
             <Clock className="h-3.5 w-3.5" /> Audit Log
           </TabsTrigger>
@@ -2204,6 +2207,7 @@ export default function OperationsPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="overview" className="mt-4"><HealthTab /></TabsContent>
         <TabsContent value="audit-log" className="mt-4"><AuditLogTab /></TabsContent>
         <TabsContent value="payments" className="mt-4"><PaymentsTab /></TabsContent>
         <TabsContent value="pickups" className="mt-4"><PickupsTab /></TabsContent>

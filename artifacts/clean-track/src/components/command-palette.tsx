@@ -1,15 +1,17 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import { useCommandPalette } from "@/context/command-palette-context";
 import {
   LayoutDashboard, ShoppingCart, Package, Wrench, Users, UserCircle,
   FileText, Receipt, Percent, GitBranch, WashingMachine, Settings,
   Activity, MessageSquare, ShieldCheck, Megaphone, Plus, Search,
-  ArrowRight,
+  ArrowRight, Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useAuth } from "@/context/auth-context";
+import { api } from "@/lib/api";
 
 interface PaletteItem {
   id: string;
@@ -54,6 +56,30 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const { isOwner } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [debouncedQ, setDebouncedQ] = useState("");
+
+  // Debounce the live search query by 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(query.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data: liveData, isFetching: liveLoading } = useQuery({
+    queryKey: ["palette-search", debouncedQ],
+    queryFn: async () => {
+      if (debouncedQ.length < 2) return null;
+      const [customers, orders] = await Promise.allSettled([
+        api.customers.list({ search: debouncedQ, limit: 4 } as any),
+        api.orders.list({ search: debouncedQ, limit: 4 } as any),
+      ]);
+      return {
+        customers: customers.status === "fulfilled" ? (Array.isArray(customers.value) ? customers.value : (customers.value as any)?.data ?? []) : [],
+        orders: orders.status === "fulfilled" ? (Array.isArray(orders.value) ? orders.value : (orders.value as any)?.data ?? []) : [],
+      };
+    },
+    enabled: debouncedQ.length >= 2,
+    staleTime: 15_000,
+  });
 
   const go = useCallback(
     (path: string, id: string) => {
@@ -222,6 +248,59 @@ export function CommandPalette() {
                 ))}
               </Command.Group>
             ))}
+
+            {/* Live data search results */}
+            {q && debouncedQ.length >= 2 && (
+              <>
+                {liveLoading && (
+                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Searching...
+                  </div>
+                )}
+                {!liveLoading && liveData && liveData.customers.length > 0 && (
+                  <Command.Group heading="Customers">
+                    {liveData.customers.map((c: any) => (
+                      <Command.Item
+                        key={`customer-${c.id}`}
+                        value={`customer-${c.id}`}
+                        onSelect={() => go(`/customers?id=${c.id}`, `customer-${c.id}`)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground transition-colors"
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md border bg-background shrink-0">
+                          <UserCircle className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{highlight(c.fullName || c.name || "Customer", q)}</p>
+                          {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
+                {!liveLoading && liveData && liveData.orders.length > 0 && (
+                  <Command.Group heading="Orders">
+                    {liveData.orders.map((o: any) => (
+                      <Command.Item
+                        key={`order-${o.id}`}
+                        value={`order-${o.id}`}
+                        onSelect={() => go(`/orders?id=${o.id}`, `order-${o.id}`)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground transition-colors"
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md border bg-background shrink-0">
+                          <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium font-mono text-xs">{highlight(o.orderId || String(o.id), q)}</p>
+                          {o.customerName && <p className="text-xs text-muted-foreground truncate">{o.customerName}</p>}
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
+              </>
+            )}
           </Command.List>
 
           <div className="border-t px-3 py-2 flex items-center gap-3 text-xs text-muted-foreground">

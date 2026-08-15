@@ -307,8 +307,14 @@ export const api = {
     updateAutomation: (data: Partial<AutomationSettings>) => request<AutomationSettings>("PATCH", "/settings/automation", data),
     getDashboardPreferences: () => request<DashboardPreferences>("GET", "/settings/dashboard-preferences"),
     updateDashboardPreferences: (data: Partial<DashboardPreferences>) => request<DashboardPreferences>("PATCH", "/settings/dashboard-preferences", data),
-    getDiscountSettings: () => request<DiscountSettings>("GET", "/settings/discount-settings"),
-    updateDiscountSettings: (data: Partial<DiscountSettings>) => request<DiscountSettings>("PATCH", "/settings/discount-settings", data),
+    getDiscountSettings: () => request<DiscountSettings>("GET", "/settings/discount-rules"),
+    updateDiscountSettings: (data: Partial<DiscountSettings>) => request<DiscountSettings>("PATCH", "/settings/discount-rules", data),
+    uploadLogo: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return requestForm<{ logoUrl: string }>("POST", "/settings/logo", form);
+    },
+    deleteLogo: () => request<{ logoUrl: null }>("DELETE", "/settings/logo"),
   },
   workerPermissions: {
     get: (workerId: number) => request<WorkerPermission>("GET", `/workers/${workerId}/permissions`),

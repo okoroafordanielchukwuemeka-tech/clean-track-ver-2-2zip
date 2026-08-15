@@ -66,27 +66,38 @@ async function generateReceiptNumber(tx: typeof db): Promise<string> {
 }
 
 /**
- * Formats a production-safe orderId from a database serial `id`.
+ * Generates a human-friendly order ID using an atomic daily counter.
  *
- * Format: YYYYMMDD + id padded to 6 digits  →  e.g. "20260603000042"
+ * Format: ORD-YYMMDD-NNN  (e.g. ORD-260720-001)
  *
- * Why the serial id?  The orders.id column is a PostgreSQL SERIAL (sequence),
- * globally unique and monotonically increasing.  Using it as the suffix makes
- * orderId collision-free under any load, across any number of laundries,
- * branches, Node processes, or concurrent workers — no coordination required.
+ * Uses the same INSERT … ON CONFLICT DO UPDATE pattern as receipt numbers:
+ * PostgreSQL serialises all writers on the counter row, so every call gets a
+ * strictly unique, monotonically increasing suffix — no retry needed, even
+ * across multiple Node processes or concurrent workers.
  *
- * Date prefix: keeps IDs human-readable and chronologically sortable.
- * Padding to 6 digits supports up to 999 999 total orders per calendar day
- * across the whole system before recycling (effectively infinite at any
- * realistic production scale).
+ * The counter resets at midnight (calendar day change). If a day ever exceeds
+ * 999 orders the suffix naturally grows to 4+ digits without breaking anything
+ * (the unique constraint is on the text value, length is unlimited).
  *
- * Backward compatibility: existing records generated with the old 3-digit
- * random scheme remain valid — the uniqueness constraint is on the text value
- * regardless of format.
+ * Backward compatibility: existing records with the old 14-digit numeric
+ * format remain valid — uniqueness is on the text value regardless of format.
  */
-function formatOrderId(serialId: number): string {
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `${datePart}${String(serialId).padStart(6, "0")}`;
+async function generateOrderId(tx: typeof db): Promise<string> {
+  const today = new Date();
+  const yr = String(today.getFullYear()).slice(2);
+  const mo = String(today.getMonth() + 1).padStart(2, "0");
+  const dy = String(today.getDate()).padStart(2, "0");
+  const datePart = `${yr}${mo}${dy}`;
+
+  const result = await tx.execute(
+    sql`INSERT INTO order_number_counters (date_part, counter)
+        VALUES (${datePart}, 1)
+        ON CONFLICT (date_part) DO UPDATE
+        SET counter = order_number_counters.counter + 1
+        RETURNING counter`
+  );
+  const counter = (result as any).rows?.[0]?.counter ?? 1;
+  return `ORD-${datePart}-${String(counter).padStart(3, "0")}`;
 }
 
 async function getLaundrySla(laundryId: number) {
@@ -358,7 +369,7 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
         processingDueAt,
       }).returning();
 
-      const finalOrderId = formatOrderId(inserted.id);
+      const finalOrderId = await generateOrderId(tx);
       await tx.update(orders)
         .set({ orderId: finalOrderId })
         .where(eq(orders.id, inserted.id));
