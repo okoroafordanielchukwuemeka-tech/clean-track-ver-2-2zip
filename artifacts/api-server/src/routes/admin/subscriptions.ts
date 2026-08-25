@@ -9,12 +9,17 @@ import { getPlanFeatures, getPlanLimits, PLAN_DISPLAY_NAMES, getEntitlementRepor
 
 export const adminSubscriptionsRouter = Router();
 
+/**
+ * Normal automated state-machine transitions.
+ * Admin override endpoint bypasses these (any → any) but the state-transitions
+ * endpoint (for manual step-by-step changes) still enforces them.
+ */
 const VALID_TRANSITIONS: Record<SubscriptionStatus, SubscriptionStatus[]> = {
-  trial: ["active", "cancelled"],
-  active: ["past_due", "cancelled"],
+  trial:    ["active", "past_due", "cancelled"],
+  active:   ["past_due", "cancelled"],
   past_due: ["active", "suspended", "cancelled"],
-  suspended: ["active", "cancelled"],
-  cancelled: ["active"],
+  suspended:["active", "cancelled"],
+  cancelled:["active"],
 };
 
 const updateSchema = z.object({

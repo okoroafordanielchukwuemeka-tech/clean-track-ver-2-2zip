@@ -101,6 +101,11 @@ const ENV_WARNINGS: EnvRequirement[] = [
     description: "Paystack public key exposed to the billing checkout UI. Payment flows disabled if unset.",
     required: false,
   },
+  {
+    key: "LOCAL_UPLOAD_PATH",
+    description: "Absolute path for local image uploads. Defaults to <cwd>/storage/service-images. Ignored when Cloudinary is configured. NOT persistent on Railway — use Cloudinary in production.",
+    required: false,
+  },
 ];
 
 // Off-site provider credential requirements (checked only when provider is set)

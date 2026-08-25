@@ -1,0 +1,486 @@
+PHASE 7.18.0B — SUBSCRIPTION & BILLING CERTIFICATION
+
+OBJECTIVE
+
+This phase is a CERTIFICATION PHASE ONLY.
+
+DO NOT build unrelated features.
+
+DO NOT redesign the UI.
+
+DO NOT begin Railway deployment.
+
+DO NOT begin WhatsApp integration.
+
+DO NOT begin AI Marketing.
+
+Only verify that Phase 7.18.0 works correctly from both the owner's perspective and the system's perspective.
+
+If a test fails:
+
+1. Identify the root cause.
+2. Fix the issue.
+3. Re-run the failed test.
+4. Continue until every test passes.
+
+No shortcuts.
+
+────────────────────────────
+
+STEP 1 — Architecture Audit
+
+Verify that the implemented billing architecture matches the specification.
+
+Confirm:
+
+• Plans are database-driven.
+
+• Capacity values are NOT hardcoded.
+
+• Feature locking has been completely removed.
+
+• Capacity enforcement is used instead.
+
+Verify database tables:
+
+• Plans
+
+• Plan Limits
+
+• Laundry Subscription
+
+• Payment History
+
+• Usage Tracking
+
+Report any mismatch.
+
+────────────────────────────
+
+STEP 2 — Pricing Verification
+
+Verify:
+
+STARTER
+
+₦10,000/month
+
+Capacity
+
+• 1 Branch
+
+• 3 Workers
+
+• 500 Orders/month
+
+• 5 GB Storage
+
+• 500 WhatsApp Messages/month
+
+• 20 AI Credits/month
+
+PROFESSIONAL
+
+₦20,000/month
+
+Capacity
+
+• 3 Branches
+
+• 6 Workers
+
+• 5,000 Orders/month
+
+• 25 GB Storage
+
+• 5,000 WhatsApp Messages/month
+
+• 200 AI Credits/month
+
+ENTERPRISE
+
+Contact Sales
+
+Unlimited Capacity
+
+Confirm these values appear correctly:
+
+• Public pricing page
+
+• Billing dashboard
+
+• Checkout
+
+• API responses
+
+• Database
+
+────────────────────────────
+
+STEP 3 — Capacity Enforcement
+
+Run live tests.
+
+STARTER PLAN
+
+Attempt:
+
+Create Branch #2
+
+Expected:
+
+Blocked.
+
+Friendly upgrade message.
+
+Attempt:
+
+Create Worker #4
+
+Expected:
+
+Blocked.
+
+Friendly upgrade message.
+
+Attempt:
+
+Create Order #501
+
+Expected:
+
+Blocked.
+
+Professional upgrade suggested.
+
+PROFESSIONAL PLAN
+
+Create:
+
+3 branches
+
+Expected:
+
+Allowed.
+
+Attempt:
+
+Branch #4
+
+Expected:
+
+Blocked.
+
+Create:
+
+6 workers
+
+Expected:
+
+Allowed.
+
+Attempt:
+
+Worker #7
+
+Expected:
+
+Blocked.
+
+────────────────────────────
+
+STEP 4 — Upgrade Workflow
+
+Create a Starter laundry.
+
+Upgrade to Professional.
+
+Verify:
+
+Workers
+
+3
+
+↓
+
+6
+
+Branches
+
+1
+
+↓
+
+3
+
+Limits update immediately.
+
+No data loss.
+
+No duplicate subscriptions.
+
+No duplicate invoices.
+
+────────────────────────────
+
+STEP 5 — Downgrade Workflow
+
+Professional
+
+↓
+
+Starter
+
+Test:
+
+Laundry currently has:
+
+• 3 branches
+
+• 6 workers
+
+Downgrade.
+
+Expected:
+
+Nothing is deleted.
+
+System reports:
+
+"You are above your current plan limits."
+
+Owner can continue operating but cannot create additional workers or branches until back within limits or upgraded again.
+
+────────────────────────────
+
+STEP 6 — Trial Verification
+
+Create a new laundry.
+
+Verify:
+
+Trial starts correctly.
+
+Billing page displays:
+
+• Trial Status
+
+• Days Remaining
+
+• Expiration Date
+
+Expire the trial.
+
+Verify:
+
+Upgrade prompt appears.
+
+Restricted actions behave correctly.
+
+No unexpected lockouts.
+
+────────────────────────────
+
+STEP 7 — Paystack Verification
+
+Use Sandbox.
+
+Verify:
+
+Successful payment
+
+↓
+
+Subscription activates
+
+↓
+
+Payment history created
+
+↓
+
+Invoice created
+
+↓
+
+Usage limits updated
+
+Failed payment
+
+↓
+
+Subscription remains unchanged
+
+↓
+
+Retry available
+
+Verify webhook processing.
+
+Verify signature validation.
+
+────────────────────────────
+
+STEP 8 — Billing Dashboard
+
+Verify:
+
+Current Plan
+
+Renewal Date
+
+Usage Bars
+
+Workers
+
+Branches
+
+Orders
+
+Storage
+
+WhatsApp
+
+AI Credits
+
+Auto Renew Toggle
+
+Payment History
+
+Invoices
+
+Receipts
+
+Download actions
+
+All values update correctly after plan changes.
+
+────────────────────────────
+
+STEP 9 — Database Integrity
+
+Verify:
+
+No duplicate:
+
+Subscriptions
+
+Invoices
+
+Payments
+
+Usage rows
+
+Customers
+
+Workers
+
+Branches
+
+Verify all foreign keys.
+
+Verify orphan records do not exist.
+
+────────────────────────────
+
+STEP 10 — Security
+
+Worker:
+
+Cannot change plans.
+
+Cannot access billing.
+
+Cannot access payment history.
+
+Owner:
+
+Can perform all billing operations.
+
+API:
+
+Verify unauthorized billing endpoints return:
+
+401
+
+403
+
+or
+
+404
+
+No sensitive payment data leakage.
+
+────────────────────────────
+
+STEP 11 — Stress Testing
+
+Generate:
+
+5 laundries
+
+Different plans
+
+Trials
+
+Expired trials
+
+Renewals
+
+Cancelled subscriptions
+
+Failed payments
+
+Successful payments
+
+Run billing operations again.
+
+Verify:
+
+No billing corruption.
+
+No subscription corruption.
+
+No duplicate records.
+
+────────────────────────────
+
+DELIVERABLES
+
+Provide:
+
+1. Billing Architecture Audit
+
+2. Pricing Verification Report
+
+3. Capacity Enforcement Results
+
+4. Upgrade Results
+
+5. Downgrade Results
+
+6. Trial Results
+
+7. Paystack Results
+
+8. Billing Dashboard Verification
+
+9. Database Integrity Report
+
+10. Security Audit
+
+11. Failed Tests
+
+12. Issues Fixed
+
+13. Remaining Risks
+
+14. Launch Readiness Score
+
+IMPORTANT
+
+DO NOT begin Railway deployment until every certification test passes successfully.
+
+If any issue is found, fix it before proceeding.
+
+The goal of this phase is to certify that the subscription and billing system is production-ready.

@@ -77,11 +77,13 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, {
   maxWorkers: number;
   maxOrdersPerMonth: number;
   maxCustomers: number;
+  maxWhatsappMessagesPerMonth: number;
+  maxAiCreditsPerMonth: number;
 }> = {
-  free:     { maxBranches: 1,        maxWorkers: 2,        maxOrdersPerMonth: 100,      maxCustomers: 100 },
-  starter:  { maxBranches: 1,        maxWorkers: 2,        maxOrdersPerMonth: 500,      maxCustomers: 500 },
-  pro:      { maxBranches: 5,        maxWorkers: Infinity, maxOrdersPerMonth: Infinity, maxCustomers: Infinity },
-  business: { maxBranches: Infinity, maxWorkers: Infinity, maxOrdersPerMonth: Infinity, maxCustomers: Infinity },
+  free:     { maxBranches: 1,        maxWorkers: 1,        maxOrdersPerMonth: 100,      maxCustomers: 100,      maxWhatsappMessagesPerMonth: 0,        maxAiCreditsPerMonth: 0 },
+  starter:  { maxBranches: 1,        maxWorkers: 3,        maxOrdersPerMonth: 500,      maxCustomers: 500,      maxWhatsappMessagesPerMonth: 500,      maxAiCreditsPerMonth: 20 },
+  pro:      { maxBranches: 3,        maxWorkers: 6,        maxOrdersPerMonth: 5_000,    maxCustomers: 5_000,    maxWhatsappMessagesPerMonth: 5_000,    maxAiCreditsPerMonth: 200 },
+  business: { maxBranches: Infinity, maxWorkers: Infinity, maxOrdersPerMonth: Infinity, maxCustomers: Infinity, maxWhatsappMessagesPerMonth: Infinity, maxAiCreditsPerMonth: Infinity },
 };
 
 export const DEFAULT_TRIAL_DAYS = 14;

@@ -173,6 +173,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
         phone: laundry?.phone ?? "",
         address: businessProfile.address ?? "",
         email: businessProfile.email ?? "",
+        website: (businessProfile as any).website ?? "",
         logoUrl: businessProfile.logoUrl ?? "",
         receiptHeaderName: brandingSettings.receiptHeaderName ?? laundry?.businessName ?? "",
         receiptFooterText: brandingSettings.receiptFooterText ?? "",

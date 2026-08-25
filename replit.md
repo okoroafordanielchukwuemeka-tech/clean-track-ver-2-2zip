@@ -26,8 +26,8 @@ Clean Track is a professional laundry operations management SaaS application wit
 ## Configured Services
 | Service | Status | Notes |
 |---------|--------|-------|
-| PostgreSQL | ✅ Active | External database — `DATABASE_URL` set as Replit Secret |
-| JWT / Session | ✅ Active | `JWT_SECRET`, `SESSION_SECRET`, `BACKUP_SECRET` set as Replit Secrets |
+| PostgreSQL | ✅ Active | Replit built-in database — `DATABASE_URL` auto-managed by Replit |
+| JWT / Session | ✅ Active | `JWT_SECRET` + `BACKUP_SECRET` as shared env vars; `SESSION_SECRET` as Replit Secret |
 | SMTP (Resend) | ✅ Active | `SMTP_HOST`/`PORT`/`USER`/`FROM` as shared env vars |
 | Paystack | ⚠️ Not configured | Set `PAYSTACK_SECRET_KEY` + `PAYSTACK_PUBLIC_KEY` as Replit Secrets to enable billing |
 | Cloudinary | ⚠️ Not configured | Set `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`; falls back to local disk |
@@ -99,11 +99,17 @@ See `.env.example` for the full list of required and optional variables.
 - Switched to external PostgreSQL via `EXTERNAL_DATABASE_URL` Replit Secret
 - `lib/db/src/index.ts` and `lib/db/drizzle.config.ts` now prefer `EXTERNAL_DATABASE_URL` over Replit's managed `DATABASE_URL`
 - Schema synced to external DB on startup; API healthz confirmed healthy (149ms)
+- Checked-in Drizzle migrations are available under `lib/db/drizzle/`; production startup uses `pnpm db:migrate`
 
-## Replit Setup (updated 2026-07-20, re-imported)
+## Replit Setup (updated 2026-07-20, re-imported again)
 - Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
 - Secrets, DB, and workflow config already in place; no changes needed
-- Verified: API server on port 3001, frontend login page renders correctly on port 5000
+- Verified: API server on port 3001, frontend login page renders correctly on port 5000; schema sync passed cleanly (all tables up to date)
+
+## Replit Setup (updated 2026-07-20, latest re-import)
+- Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow
+- Secrets, DB, and workflow config already in place; no changes needed
+- Verified: API server on port 3001 (env validation passed), frontend login page renders correctly on port 5000; schema sync passed cleanly
 
 ## Replit Setup (updated 2026-07-17, re-imported)
 - Re-imported project again: node_modules dropped by import — ran `pnpm install` (679 packages) and restarted the workflow

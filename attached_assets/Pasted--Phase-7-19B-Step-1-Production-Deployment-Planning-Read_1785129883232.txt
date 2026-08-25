@@ -1,0 +1,243 @@
+# Phase 7.19B — Step 1: Production Deployment Planning & Readiness Audit
+
+## Objective
+
+Prepare CleanTrack for its first production deployment.
+
+This phase is **planning and certification only**.
+
+**Do NOT deploy the application.**
+
+**Do NOT modify Railway, Neon, DNS, or any production infrastructure.**
+
+**Do NOT implement new product features.**
+
+Your goal is to determine whether CleanTrack is truly ready for production and produce a complete deployment plan.
+
+---
+
+## Context
+
+Phase **7.19A (Production Hardening)** has already been completed and certified.
+
+Treat the latest Production Readiness score as the baseline.
+
+Do **not** repeat previous audits unless you discover a new issue that affects production deployment.
+
+Focus only on deployment readiness.
+
+---
+
+# Required Audit
+
+Perform a complete production deployment audit covering the following areas.
+
+## 1. Railway Architecture
+
+Verify and document:
+
+* Railway project structure
+* Services required
+* Build command
+* Start command
+* Health check endpoint
+* Restart behavior
+* Production startup flow
+* Production logging
+* Graceful shutdown
+
+Confirm that Railway configuration is production-ready.
+
+---
+
+## 2. Production Database
+
+Audit the production database strategy.
+
+Verify:
+
+* Separate Production Neon database
+* Migration strategy
+* Rollback strategy
+* Backup strategy
+* Restore procedure
+* Connection security (SSL)
+* Deployment order
+
+Confirm production data cannot accidentally overwrite development data.
+
+---
+
+## 3. Environment Variables
+
+Produce a complete inventory grouped by category.
+
+Examples:
+
+* Database
+* Authentication
+* Security
+* Cloudinary
+* Paystack
+* Meta
+* OpenAI
+* Resend
+* Storage
+* Backup
+* Monitoring
+
+For every variable specify:
+
+* Required?
+* Optional?
+* Secret?
+* Present?
+* Missing?
+* Default allowed?
+* Production ready?
+
+Highlight every missing value.
+
+---
+
+## 4. File Storage
+
+Verify production storage.
+
+Confirm:
+
+* Images survive Railway redeployments
+* Cloudinary configuration
+* Local storage fallback behavior
+* Failure handling
+
+---
+
+## 5. Domain & SSL
+
+Audit readiness for:
+
+* Production domain
+* HTTPS
+* SSL certificates
+* CORS
+* Cookie behavior
+* API routing
+* SPA routing
+
+Do not connect the domain yet.
+
+---
+
+## 6. Deployment Strategy
+
+Produce the exact deployment sequence.
+
+Include:
+
+1. Neon setup
+2. Railway setup
+3. Environment variables
+4. Database migration
+5. Backend deployment
+6. Frontend deployment
+7. Health verification
+8. Smoke testing
+9. Launch approval
+
+Include rollback checkpoints after every major stage.
+
+---
+
+## 7. Smoke Test Plan
+
+Produce a production verification checklist covering:
+
+* Authentication
+* Customer management
+* Order workflow
+* Payment recording
+* Receipt generation
+* Worker permissions
+* Branch isolation
+* Subscription system
+* Billing
+* Search
+* Dashboards
+* Logo upload
+* File storage
+
+Every critical business workflow must be included.
+
+---
+
+## 8. Risk Assessment
+
+Identify:
+
+* Remaining blockers
+* Deployment risks
+* Security risks
+* Data-loss risks
+* Performance risks
+* Recovery risks
+
+For every risk provide:
+
+* Severity
+* Impact
+* Recommendation
+
+---
+
+## 9. Deployment Prerequisites
+
+Create a checklist of everything that must exist before Step 2 begins.
+
+Examples:
+
+* Railway account
+* Production Neon database
+* Cloudinary production credentials
+* Paystack Live keys
+* Meta production credentials
+* Domain ownership
+* SSL readiness
+
+Mark each item as:
+
+* Ready
+* Missing
+* Requires Action
+
+---
+
+# Constraints
+
+* Do NOT deploy.
+* Do NOT change infrastructure.
+* Do NOT modify production databases.
+* Do NOT introduce new product features.
+* Do NOT skip any verification step.
+* If a blocker is found, stop and clearly document it before recommending deployment.
+
+---
+
+# Deliverables
+
+Produce a **Production Deployment Readiness Report** containing:
+
+1. Executive Summary
+2. Railway Readiness
+3. Database Readiness
+4. Environment Variable Inventory
+5. Storage Readiness
+6. Domain & SSL Readiness
+7. Deployment Sequence
+8. Smoke Test Plan
+9. Risks & Blockers
+10. Deployment Prerequisites Checklist
+11. Production Readiness Score (0–100)
+12. Final Recommendation
+
+Only recommend proceeding to **Phase 7.19B — Step 2 (Railway Production Deployment)** if there are **no critical deployment blockers**.

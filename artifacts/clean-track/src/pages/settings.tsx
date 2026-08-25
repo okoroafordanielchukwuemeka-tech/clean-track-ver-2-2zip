@@ -133,6 +133,106 @@ function ToggleRow({
   );
 }
 
+function LogoUploadSection({
+  logoUrl,
+  onUploaded,
+  onDeleted,
+}: {
+  logoUrl?: string;
+  onUploaded: (url: string) => void;
+  onDeleted: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await api.settings.uploadLogo(file);
+      onUploaded(result.logoUrl ?? "");
+      toast.success("Logo uploaded");
+    } catch (err: any) {
+      toast.error("Upload failed — " + (err.message || "please try again."));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.settings.deleteLogo();
+      onDeleted();
+      toast.success("Logo removed");
+    } catch (err: any) {
+      toast.error("Could not remove logo — " + (err.message || "please try again."));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <Label className="text-sm font-medium">Business Logo</Label>
+      <p className="text-xs text-muted-foreground mb-3 mt-0.5">
+        Shown on all receipts and documents. JPG, PNG, or WEBP. Max 5 MB.
+      </p>
+      <div className="flex items-start gap-4">
+        {/* Preview */}
+        <div className="shrink-0 h-20 w-28 border rounded-lg bg-muted/30 flex items-center justify-center overflow-hidden">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Business logo" className="max-h-full max-w-full object-contain p-1" />
+          ) : (
+            <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+          )}
+        </div>
+        {/* Actions */}
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+            ) : (
+              <><ImageIcon className="h-4 w-4" /> {logoUrl ? "Replace Logo" : "Upload Logo"}</>
+            )}
+          </Button>
+          {logoUrl && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-destructive hover:text-destructive"
+              disabled={deleting}
+              onClick={handleDelete}
+            >
+              {deleting ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Removing…</>
+              ) : (
+                <><Trash2 className="h-4 w-4" /> Remove Logo</>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+    </div>
+  );
+}
+
 function BusinessProfileSection() {
   const qc = useQueryClient();
   const { data, isLoading, isViewingCache } = useCachedQuery({
@@ -142,9 +242,6 @@ function BusinessProfileSection() {
 
   const [form, setForm] = useState<BusinessProfile>({});
   const [isDirty, setIsDirty] = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [logoDeleting, setLogoDeleting] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (data) { setForm(data); setIsDirty(false); }
@@ -164,37 +261,6 @@ function BusinessProfileSection() {
     },
     onError: (e: Error) => toast.error("Could not save business profile — " + (e.message || "please try again.")),
   });
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoUploading(true);
-    try {
-      const result = await api.settings.uploadLogo(file);
-      setForm(prev => ({ ...prev, logoUrl: result.logoUrl }));
-      qc.setQueryData(["settings", "business-profile"], (old: any) => ({ ...old, logoUrl: result.logoUrl }));
-      toast.success("Logo uploaded successfully");
-    } catch (err: any) {
-      toast.error("Failed to upload logo — " + (err.message || "please try again."));
-    } finally {
-      setLogoUploading(false);
-      if (logoInputRef.current) logoInputRef.current.value = "";
-    }
-  };
-
-  const handleDeleteLogo = async () => {
-    setLogoDeleting(true);
-    try {
-      await api.settings.deleteLogo();
-      setForm(prev => ({ ...prev, logoUrl: undefined }));
-      qc.setQueryData(["settings", "business-profile"], (old: any) => ({ ...old, logoUrl: null }));
-      toast.success("Logo removed");
-    } catch {
-      toast.error("Failed to remove logo");
-    } finally {
-      setLogoDeleting(false);
-    }
-  };
 
   if (isLoading && !isViewingCache) return <SkeletonRows rows={6} />;
 
@@ -228,6 +294,15 @@ function BusinessProfileSection() {
           <Label>Address</Label>
           <Input value={form.address ?? ""} onChange={e => update("address", e.target.value)} placeholder="Shop address" />
         </div>
+        <div className="space-y-1.5">
+          <Label>Website</Label>
+          <Input
+            value={(form as any).website ?? ""}
+            onChange={e => update("website" as any, e.target.value)}
+            placeholder="https://yourbusiness.com"
+            type="url"
+          />
+        </div>
         <div className="sm:col-span-2 space-y-1.5">
           <Label>Business Notes</Label>
           <Textarea
@@ -238,76 +313,13 @@ function BusinessProfileSection() {
           />
         </div>
       </div>
-      <div className="mt-4 space-y-2">
-        <Label className="text-sm font-medium">Business Logo</Label>
-        <p className="text-xs text-muted-foreground">
-          Shown on receipts, customer portal, and your workspace. Automatically resized — no manual sizing needed.
-        </p>
-        {form.logoUrl ? (
-          <div className="flex items-start gap-4 p-3 border rounded-lg bg-muted/10">
-            <div className="border rounded-lg p-2 bg-white flex-shrink-0">
-              <img
-                src={form.logoUrl}
-                alt="Business logo"
-                className="h-20 w-auto max-w-[160px] object-contain rounded"
-              />
-            </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={logoUploading || logoDeleting}
-                onClick={() => logoInputRef.current?.click()}
-                className="gap-2 w-fit"
-              >
-                {logoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                Replace Logo
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={logoDeleting || logoUploading}
-                onClick={handleDeleteLogo}
-                className="gap-2 w-fit text-destructive hover:text-destructive"
-              >
-                {logoDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Remove Logo
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-6 text-center flex flex-col items-center gap-3 cursor-pointer hover:border-primary/40 hover:bg-muted/20 transition-colors"
-            onClick={() => !logoUploading && logoInputRef.current?.click()}
-          >
-            {logoUploading ? (
-              <>
-                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
-                <p className="text-sm text-muted-foreground">Uploading and processing...</p>
-              </>
-            ) : (
-              <>
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                  <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Click to upload your logo</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">JPG, PNG or WEBP · Max 5MB · Auto-resized</p>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        <input
-          ref={logoInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={handleLogoUpload}
-        />
-      </div>
+
+      {/* Logo Upload */}
+      <LogoUploadSection
+        logoUrl={form.logoUrl}
+        onUploaded={(url) => { setForm(prev => ({ ...prev, logoUrl: url })); setIsDirty(false); qc.invalidateQueries({ queryKey: ["settings", "business-profile"] }); }}
+        onDeleted={() => { setForm(prev => ({ ...prev, logoUrl: undefined })); setIsDirty(false); qc.invalidateQueries({ queryKey: ["settings", "business-profile"] }); }}
+      />
 
       <div className="mt-8 border-t pt-6">
         <h3 className="text-base font-semibold">Payment Details</h3>

@@ -1,0 +1,463 @@
+PHASE 7.18.0 — SUBSCRIPTION & BILLING FOUNDATION
+
+OBJECTIVE
+
+Build the complete subscription and billing system for CleanTrack.
+
+This phase establishes how laundries subscribe, pay, renew, upgrade, downgrade, and how subscription capacity is enforced.
+
+DO NOT begin Railway deployment.
+
+DO NOT begin WhatsApp integration.
+
+DO NOT begin AI Marketing.
+
+Focus ONLY on subscription and billing.
+
+────────────────────────────
+
+CORE PHILOSOPHY
+
+CleanTrack does NOT sell features.
+
+Every paying customer receives the COMPLETE CleanTrack experience.
+
+No operational feature should ever be disabled because of the selected plan.
+
+Plans differ ONLY by business capacity.
+
+Examples:
+
+• Number of branches
+
+• Number of workers
+
+• Monthly order volume
+
+• Storage
+
+• WhatsApp usage
+
+• Future AI credits
+
+Never implement feature locking.
+
+Implement capacity limits only.
+
+The goal is:
+
+A small laundry using the Starter plan should enjoy the exact same software experience as a large laundry using Professional or Enterprise.
+
+────────────────────────────
+
+STEP 1 — Audit Existing Billing Architecture
+
+Audit the current application.
+
+Determine:
+
+• Existing subscription tables
+
+• Existing billing logic
+
+• Existing Paystack implementation
+
+• Existing middleware
+
+• Existing billing UI
+
+• Existing plan enforcement
+
+Produce an audit report before implementing changes.
+
+────────────────────────────
+
+STEP 2 — Database Design
+
+Create or improve the following models.
+
+Subscription Plans
+
+* id
+
+* name
+
+* monthlyPrice
+
+* yearlyPrice
+
+* status
+
+* trialDays
+
+Plan Capacity
+
+Store capacity values in the database.
+
+DO NOT hardcode these values.
+
+Capacity fields should include:
+
+* maxBranches
+
+* maxWorkers
+
+* maxMonthlyOrders
+
+* storageLimitGB
+
+* whatsappMonthlyLimit
+
+* aiCreditsMonthly
+
+The owner should be able to change these values in the future without changing source code.
+
+Laundry Subscription
+
+* laundryId
+
+* planId
+
+* status
+
+* startedAt
+
+* expiresAt
+
+* renewalDate
+
+* autoRenew
+
+* cancelledAt
+
+* paystackCustomerCode
+
+* paystackSubscriptionCode
+
+Payment History
+
+* paymentId
+
+* laundryId
+
+* amount
+
+* currency
+
+* reference
+
+* paymentChannel
+
+* paymentStatus
+
+* paidAt
+
+* purchasedPlan
+
+────────────────────────────
+
+STEP 3 — Default Plans
+
+Implement these default plans.
+
+STARTER
+
+Price
+
+₦10,000/month
+
+Capacity
+
+• 1 Branch
+
+• 3 Workers
+
+• 500 Orders/month
+
+• 5 GB Storage
+
+• 500 WhatsApp Messages/month
+
+• 20 AI Credits/month (Future)
+
+Features
+
+Everything included.
+
+No feature restrictions.
+
+────────────────────────────
+
+PROFESSIONAL
+
+Price
+
+₦20,000/month
+
+Capacity
+
+• 3 Branches
+
+• 6 Workers
+
+• 5,000 Orders/month
+
+• 25 GB Storage
+
+• 5,000 WhatsApp Messages/month
+
+• 200 AI Credits/month (Future)
+
+Features
+
+Everything included.
+
+────────────────────────────
+
+ENTERPRISE
+
+Capacity
+
+• Unlimited Branches
+
+• Unlimited Workers
+
+• Unlimited Orders
+
+• Unlimited Storage
+
+• Unlimited WhatsApp
+
+• Unlimited AI Credits
+
+Pricing
+
+Contact Sales / Custom Pricing
+
+Features
+
+Everything included.
+
+────────────────────────────
+
+STEP 4 — Free Trial
+
+Implement a trial system.
+
+Show:
+
+• Current Plan
+
+• Trial Status
+
+• Days Remaining
+
+• Expiration Date
+
+• Upgrade Button
+
+────────────────────────────
+
+STEP 5 — Billing Dashboard
+
+Create a professional Billing page.
+
+Include:
+
+• Current Plan
+
+• Capacity Usage
+
+• Renewal Date
+
+• Trial Countdown
+
+• Upgrade Plan
+
+• Downgrade Plan
+
+• Cancel Subscription
+
+• Auto Renew Toggle
+
+• Payment History
+
+• Invoice History
+
+• Download Invoice
+
+• Download Receipt
+
+────────────────────────────
+
+STEP 6 — Capacity Enforcement
+
+Create middleware that only enforces capacity.
+
+Examples
+
+Worker Limit
+
+When exceeded:
+
+Display:
+
+"You have reached your worker limit for the Starter plan."
+
+Offer:
+
+Upgrade Plan
+
+Branch Limit
+
+Prevent creating another branch.
+
+Order Limit
+
+Prevent creating additional orders once the monthly allocation has been reached.
+
+Always explain WHY.
+
+Never hide functionality.
+
+────────────────────────────
+
+STEP 7 — Paystack Integration
+
+Prepare complete Paystack billing.
+
+Implement:
+
+• Create Customer
+
+• Initialize Payment
+
+• Verify Payment
+
+• Subscription Creation
+
+• Subscription Renewal
+
+• Payment Retry
+
+• Webhook Verification
+
+• Signature Validation
+
+Use Sandbox unless Live Keys are intentionally configured.
+
+────────────────────────────
+
+STEP 8 — Payment Records
+
+Owners should always see:
+
+• Amount
+
+• Status
+
+• Reference
+
+• Date
+
+• Payment Method
+
+• Invoice
+
+• Receipt
+
+• Download Actions
+
+────────────────────────────
+
+STEP 9 — Capacity Dashboard
+
+Show real-time usage.
+
+Example
+
+Branches
+
+1 / 1
+
+Workers
+
+2 / 3
+
+Orders
+
+147 / 500
+
+Storage
+
+2.4 GB / 5 GB
+
+WhatsApp
+
+120 / 500
+
+AI Credits
+
+4 / 20
+
+Use progress indicators and warning states as limits are approached.
+
+────────────────────────────
+
+STEP 10 — Testing
+
+Test:
+
+✓ Trial creation
+
+✓ Trial expiry
+
+✓ Upgrade
+
+✓ Downgrade
+
+✓ Cancellation
+
+✓ Renewal
+
+✓ Failed payment
+
+✓ Successful payment
+
+✓ Capacity enforcement
+
+✓ Middleware
+
+✓ Payment history
+
+✓ Webhooks
+
+────────────────────────────
+
+DELIVERABLES
+
+Provide:
+
+1. Billing Architecture Summary
+
+2. Database Changes
+
+3. Billing Dashboard Summary
+
+4. Capacity Enforcement Summary
+
+5. API Endpoints
+
+6. Paystack Integration Status
+
+7. Test Results
+
+8. Remaining Risks
+
+9. Launch Readiness Score
+
+IMPORTANT
+
+DO NOT begin Railway deployment until this phase is fully implemented, tested, and certified.
+
+DO NOT begin WhatsApp integration until Railway deployment provides a stable production URL for Meta webhooks.

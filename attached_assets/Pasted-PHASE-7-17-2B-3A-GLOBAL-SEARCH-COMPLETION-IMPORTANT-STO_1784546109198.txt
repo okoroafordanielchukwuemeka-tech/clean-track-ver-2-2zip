@@ -1,0 +1,161 @@
+PHASE 7.17.2B.3A — GLOBAL SEARCH COMPLETION
+
+IMPORTANT
+
+STOP.
+
+Do NOT continue implementing any other unfinished features.
+
+Do NOT work on:
+
+* Logo Upload
+* Receipt Branding
+* Platform Health
+* Operational Center
+* AI Marketing
+* WhatsApp
+* Subscription
+* Mobile Audit
+
+Your ONLY objective is to complete the Global Search implementation.
+
+────────────────────────
+
+You previously discovered several architectural issues:
+
+* getEffectiveBranchId export
+* Drizzle and() undefined conditions
+* customers.name vs customers.fullName
+* services.archived column mismatch
+* orders.receiptNumber does not exist
+* receipt numbers belong to payments
+
+Do NOT work around these.
+
+Fix them correctly.
+
+Preserve the existing database architecture.
+
+Receipt numbers should continue to belong to Payments.
+
+Do NOT duplicate receipt numbers onto Orders.
+
+────────────────────────
+
+OBJECTIVES
+
+1. Finish the backend search endpoint.
+
+Search must support:
+
+* Customer name
+* Customer phone
+* Order ID
+* Receipt Number
+* Worker name
+* Service name
+* Branch name
+
+Search must return HTTP 200.
+
+No runtime crashes.
+
+No Drizzle errors.
+
+No undefined conditions.
+
+────────────────────────
+
+2. Frontend
+
+Connect the global search bar to the backend.
+
+Typing should instantly return grouped results.
+
+Example
+
+Customers
+
+Daniel Okoro
+
+Orders
+
+ORD-250720-004
+
+Receipts
+
+RCT-20260720-0015
+
+Workers
+
+James
+
+Services
+
+Dry Cleaning
+
+Branches
+
+Branch A
+
+────────────────────────
+
+3. Navigation
+
+Selecting a result should navigate directly to:
+
+Customer profile
+
+Order
+
+Receipt
+
+Worker
+
+Branch
+
+Service
+
+────────────────────────
+
+4. Verification
+
+Test every search category individually.
+
+Verify:
+
+HTTP 200
+
+No crashes
+
+Correct navigation
+
+Correct branch isolation
+
+Workers must NEVER receive results outside their branch.
+
+Owners must see everything.
+
+────────────────────────
+
+5. Certification
+
+Produce:
+
+GLOBAL_SEARCH_CERTIFICATION.md
+
+Include:
+
+Architecture decisions
+
+Issues fixed
+
+Remaining issues
+
+Performance observations
+
+Launch readiness
+
+Do NOT continue with any other Phase 7.17.2B.3 tasks.
+
+Stop after Global Search is fully certified.

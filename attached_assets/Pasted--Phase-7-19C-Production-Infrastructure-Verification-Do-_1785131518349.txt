@@ -1,0 +1,205 @@
+# Phase 7.19C — Production Infrastructure Verification
+
+Do NOT deploy the application.
+
+Do NOT generate production secrets.
+
+Do NOT modify Railway, Neon, Cloudinary, Resend, Meta, Paystack, DNS, or any production infrastructure.
+
+Your task is to verify that every production dependency required by CleanTrack is fully prepared before deployment.
+
+Perform a comprehensive infrastructure verification covering:
+
+## 1. Railway
+
+Verify:
+
+* Railway project exists
+* Repository connected
+* Correct deployment branch
+* Build configuration
+* Start command
+* Health check
+* Region
+* Service configuration
+
+Report any missing configuration.
+
+---
+
+## 2. Neon Production Database
+
+Verify:
+
+* Production database exists
+* Separate from development
+* SSL enabled
+* Connection string format correct
+* Connection test successful
+* Database empty and ready for first deployment
+* Migration strategy confirmed
+
+Do NOT execute migrations.
+
+---
+
+## 3. Cloudinary
+
+Verify:
+
+* Account configured
+* Credentials available
+* Upload API ready
+* Delete API ready
+* Image persistence strategy
+
+Do NOT upload production assets.
+
+---
+
+## 4. Resend
+
+Verify:
+
+* Sending domain verified
+* Sender address verified
+* API key available
+* SMTP configuration complete
+
+Do not send emails.
+
+---
+
+## 5. Paystack
+
+Verify:
+
+* Live API keys configured
+* Webhook endpoint planned
+* Signature verification strategy
+* Callback URLs
+
+Do not create transactions.
+
+---
+
+## 6. Meta WhatsApp
+
+Verify:
+
+* Meta App
+* Embedded Signup
+* Configuration ID
+* Webhook configuration
+* Verify token
+* App Secret
+
+Do not connect live phone numbers.
+
+---
+
+## 7. Domain & DNS
+
+Verify:
+
+* Domain ownership
+* DNS readiness
+* SSL readiness
+* HTTPS configuration
+* Required CORS origins
+
+---
+
+## 8. Backup Infrastructure
+
+Verify:
+
+* Backup destination
+* Encryption strategy
+* Retention policy
+* Restore process
+
+Do not execute backups.
+
+---
+
+## 9. Monitoring
+
+Verify planned monitoring for:
+
+* Health endpoint
+* Server uptime
+* Database availability
+* Scheduler failures
+* Deployment failures
+
+---
+
+## 10. Logging
+
+Verify:
+
+* Structured logging
+* Request IDs
+* Error logging
+* Log retention
+
+---
+
+## 11. Production Secrets
+
+Do NOT generate or reveal secrets.
+
+Verify only that the following are available or planned:
+
+* JWT_SECRET
+* SESSION_SECRET
+* BACKUP_SECRET
+* DATABASE_URL
+* CLOUDINARY credentials
+* SMTP credentials
+* Paystack credentials
+* Meta credentials
+
+Report only whether each secret is:
+
+* Present
+* Missing
+* Needs rotation
+
+Never print secret values.
+
+---
+
+## 12. Deployment Gate Review
+
+Identify every blocker preventing deployment.
+
+Categorize them as:
+
+* Critical
+* High
+* Medium
+* Low
+
+Deployment must be blocked if any Critical blocker exists.
+
+---
+
+Produce a final report containing:
+
+1. Infrastructure Verification Summary
+2. External Service Status
+3. Configuration Status
+4. Missing Requirements
+5. Critical Blockers
+6. Deployment Risks
+7. Recommended Fixes
+8. Overall Infrastructure Readiness Score
+9. Final Recommendation:
+
+* READY FOR DEPLOYMENT
+  or
+* NOT READY FOR DEPLOYMENT
+
+Do not begin Railway deployment until every Critical blocker has been resolved.

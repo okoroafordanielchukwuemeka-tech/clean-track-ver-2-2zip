@@ -299,6 +299,12 @@ export const api = {
     getSlaAnalytics: () => request<SlaAnalytics & { slaSettings: SlaSettings }>("GET", "/analytics/sla"),
     getBusinessProfile: () => request<BusinessProfile>("GET", "/settings/business-profile"),
     updateBusinessProfile: (data: Partial<BusinessProfile>) => request<BusinessProfile>("PATCH", "/settings/business-profile", data),
+    uploadLogo: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return requestForm<BusinessProfile>("POST", "/settings/logo", form);
+    },
+    deleteLogo: () => request<{ success: boolean }>("DELETE", "/settings/logo"),
     getBranding: () => request<BrandingSettings>("GET", "/settings/branding"),
     updateBranding: (data: Partial<BrandingSettings>) => request<BrandingSettings>("PATCH", "/settings/branding", data),
     getOperational: () => request<OperationalSettings>("GET", "/settings/operational"),
@@ -309,12 +315,6 @@ export const api = {
     updateDashboardPreferences: (data: Partial<DashboardPreferences>) => request<DashboardPreferences>("PATCH", "/settings/dashboard-preferences", data),
     getDiscountSettings: () => request<DiscountSettings>("GET", "/settings/discount-rules"),
     updateDiscountSettings: (data: Partial<DiscountSettings>) => request<DiscountSettings>("PATCH", "/settings/discount-rules", data),
-    uploadLogo: (file: File) => {
-      const form = new FormData();
-      form.append("file", file);
-      return requestForm<{ logoUrl: string }>("POST", "/settings/logo", form);
-    },
-    deleteLogo: () => request<{ logoUrl: null }>("DELETE", "/settings/logo"),
   },
   workerPermissions: {
     get: (workerId: number) => request<WorkerPermission>("GET", `/workers/${workerId}/permissions`),
@@ -603,6 +603,14 @@ export const api = {
 
     getConversationActivity: (convId: number): Promise<WhatsAppActivityResponse> =>
       request<WhatsAppActivityResponse>("GET", `/conversations/${convId}/activity`),
+  },
+
+  search: {
+    global: (q: string, branchId?: number | null): Promise<GlobalSearchResult> => {
+      const params = new URLSearchParams({ q });
+      if (branchId != null) params.set("branchId", String(branchId));
+      return request<GlobalSearchResult>("GET", `/search?${params.toString()}`);
+    },
   },
 };
 
@@ -1175,6 +1183,7 @@ export interface BusinessProfile {
   whatsapp?: string;
   address?: string;
   email?: string;
+  website?: string;
   logoUrl?: string;
   notes?: string;
   paymentDetails?: PaymentDetails;
@@ -2175,4 +2184,55 @@ export interface CampaignInput {
 export interface AudiencePreview {
   count: number;
   sample: Array<{ id: number; name: string; phone: string }>;
+}
+
+// ── Global Search ─────────────────────────────────────────────────────────────
+
+export interface SearchCustomer {
+  id: number;
+  fullName: string;
+  phone: string;
+  branchId: number | null;
+}
+
+export interface SearchOrder {
+  id: number;
+  orderId: string;
+  customerName: string;
+  status: string;
+}
+
+export interface SearchReceipt {
+  id: number;
+  receiptNumber: string | null;
+  amount: string;
+  orderId: number;
+}
+
+export interface SearchWorker {
+  id: number;
+  name: string;
+  phone: string | null;
+  branchId: number | null;
+}
+
+export interface SearchService {
+  id: number;
+  name: string;
+  category: string;
+}
+
+export interface SearchBranch {
+  id: number;
+  name: string;
+  address: string | null;
+}
+
+export interface GlobalSearchResult {
+  customers: SearchCustomer[];
+  orders: SearchOrder[];
+  receipts: SearchReceipt[];
+  workers: SearchWorker[];
+  services: SearchService[];
+  branches: SearchBranch[];
 }

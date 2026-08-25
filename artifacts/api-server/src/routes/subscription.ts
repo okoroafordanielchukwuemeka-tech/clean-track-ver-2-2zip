@@ -41,10 +41,12 @@ subscriptionRouter.get("/status", requireOwner, async (req: AuthRequest, res) =>
     // JSON.stringify(Infinity) → "null", which is indistinguishable from missing data.
     // Normalize: Infinity → null (meaning "unlimited") so clients can reliably detect unlimited plans.
     const limits = {
-      maxBranches:       isFinite(rawLimits.maxBranches)       ? rawLimits.maxBranches       : null,
-      maxWorkers:        isFinite(rawLimits.maxWorkers)        ? rawLimits.maxWorkers        : null,
-      maxOrdersPerMonth: isFinite(rawLimits.maxOrdersPerMonth) ? rawLimits.maxOrdersPerMonth : null,
-      maxCustomers:      isFinite(rawLimits.maxCustomers)      ? rawLimits.maxCustomers      : null,
+      maxBranches:                 isFinite(rawLimits.maxBranches)                 ? rawLimits.maxBranches                 : null,
+      maxWorkers:                  isFinite(rawLimits.maxWorkers)                  ? rawLimits.maxWorkers                  : null,
+      maxOrdersPerMonth:           isFinite(rawLimits.maxOrdersPerMonth)           ? rawLimits.maxOrdersPerMonth           : null,
+      maxCustomers:                isFinite(rawLimits.maxCustomers)                ? rawLimits.maxCustomers                : null,
+      maxWhatsappMessagesPerMonth: isFinite(rawLimits.maxWhatsappMessagesPerMonth) ? rawLimits.maxWhatsappMessagesPerMonth : null,
+      maxAiCreditsPerMonth:        isFinite(rawLimits.maxAiCreditsPerMonth)        ? rawLimits.maxAiCreditsPerMonth        : null,
     };
 
     let trialDaysRemaining: number | null = null;

@@ -45,7 +45,23 @@ const JPEG_QUALITY = 82;
 
 // ─── Local disk driver ───────────────────────────────────────────────────────
 
-const STORAGE_ROOT = path.resolve(process.cwd(), "..", "..", "storage", "service-images");
+/**
+ * Local disk upload path.
+ *
+ * Override with the LOCAL_UPLOAD_PATH environment variable for Railway or any
+ * deployment where the working directory differs from the repo root.
+ *
+ * ⚠️  Local disk storage is NOT persistent on Railway (ephemeral filesystem).
+ *     Set CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET
+ *     to use Cloudinary CDN storage instead — this is required in production.
+ *
+ * Default (no env var): <cwd>/storage/service-images
+ *   • Dev (cwd = artifacts/api-server/): artifacts/api-server/storage/service-images
+ *   • Railway (cwd = repo root):         <repo-root>/storage/service-images
+ */
+const STORAGE_ROOT = process.env.LOCAL_UPLOAD_PATH
+  ? path.resolve(process.env.LOCAL_UPLOAD_PATH)
+  : path.resolve(process.cwd(), "storage", "service-images");
 const PUBLIC_PREFIX = "/uploads/service-images";
 
 class LocalDiskStorageDriver implements StorageDriver {

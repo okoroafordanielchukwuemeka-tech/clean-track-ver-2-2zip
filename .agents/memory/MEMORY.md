@@ -50,3 +50,6 @@
 - [pnpm workspace package installs](pnpm-workspace-installs.md) — installLanguagePackages targeted repo root instead of the workspace member and corrupted node_modules; use `pnpm --filter <pkg> add` directly in this monorepo
 - [Cloudinary Image System Certification](cloudinary-certification.md) — multer-bypass bug + broken-image fallback + lazy-load fixed; duplicate shares URL (by design); 0 orphans post-audit
 - [RC1 Certification & Launch Gate](rc1-certification.md) — Phase 7.16 GO verdict; 3 TS build errors fixed; prod build passes; 5 pre-launch secrets required; score 89/100; report at docs/RC1_CERTIFICATION_REPORT.md
+- [Global Search](global-search.md) — GET /api/search; receipts on paymentRecords not orders; auth.type not auth.role; branch isolation inlined; workers never see workers/services/branches
+- [Billing Certification](billing-certification.md) — Phase 7.18.0B; correct plan values; DB-driven limits via plans table; trial→past_due transition fix; seed-plans.ts upsert
+- [Railway Deployment](railway-deployment.md) — Phase 7.19A; build.mjs + railway.toml created; no migration files yet (uses db:push); Cloudinary required; ALLOWED_ORIGINS required in prod; score 91/100

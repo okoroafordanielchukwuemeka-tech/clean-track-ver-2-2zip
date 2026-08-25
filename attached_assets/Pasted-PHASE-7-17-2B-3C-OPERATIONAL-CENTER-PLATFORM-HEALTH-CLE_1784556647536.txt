@@ -1,0 +1,212 @@
+PHASE 7.17.2B.3C — OPERATIONAL CENTER & PLATFORM HEALTH CLEANUP
+
+IMPORTANT
+
+Complete ONLY this phase.
+
+Do NOT modify:
+
+* AI Marketing
+* WhatsApp features
+* Railway deployment
+* Subscription system
+* Billing
+* Mobile audit
+* Desktop audit
+* Future roadmap items
+
+This phase is a UX cleanup only.
+
+────────────────────────
+
+OBJECTIVE
+
+Transform the Operational Center and Platform Health into business-focused dashboards for laundry owners.
+
+The owner should immediately understand:
+
+• Is my business operating normally?
+
+• Is anything requiring attention?
+
+Avoid exposing developer terminology.
+
+────────────────────────
+
+1. OPERATIONAL CENTER AUDIT
+
+Audit every widget.
+
+Classify each widget as:
+
+KEEP
+
+SIMPLIFY
+
+REMOVE
+
+Developer-focused widgets should NOT appear to laundry owners.
+
+Examples include:
+
+• API diagnostics
+
+• Migration logs
+
+• Runtime versions
+
+• Internal server metrics
+
+• Database engine details
+
+• Technical status codes
+
+If still needed, move them to an internal Developer/Admin Diagnostics area that is hidden from normal owners.
+
+────────────────────────
+
+2. PLATFORM HEALTH AUDIT
+
+Replace technical language with business language.
+
+Examples:
+
+Instead of:
+
+API Healthy
+
+Use:
+
+System Online
+
+Instead of:
+
+Latency
+
+Use:
+
+Response Speed
+
+Instead of:
+
+Database Connected
+
+Use:
+
+Business Data Available
+
+Instead of:
+
+Storage Driver
+
+Use:
+
+File Storage
+
+Use language a non-technical business owner immediately understands.
+
+────────────────────────
+
+3. BUSINESS HEALTH DASHBOARD
+
+Prioritize operational information such as:
+
+Orders waiting
+
+Orders overdue
+
+Ready for pickup
+
+Outstanding payments
+
+Unread WhatsApp messages
+
+Failed backups
+
+Storage usage
+
+Workers currently active
+
+Recent operational alerts
+
+These should be the first things an owner sees.
+
+────────────────────────
+
+4. ALERTS
+
+Group alerts by severity.
+
+Examples:
+
+Critical
+
+Warning
+
+Information
+
+Each alert should clearly explain:
+
+What happened
+
+Why it matters
+
+Suggested action
+
+Avoid technical jargon.
+
+────────────────────────
+
+5. VISUAL CLEANUP
+
+Improve:
+
+Spacing
+
+Card consistency
+
+Typography
+
+Icon consistency
+
+Section hierarchy
+
+Reduce visual clutter.
+
+────────────────────────
+
+6. MOBILE REVIEW
+
+Verify the Operational Center remains usable on mobile devices.
+
+Cards should stack cleanly.
+
+No horizontal scrolling.
+
+Buttons remain touch-friendly.
+
+────────────────────────
+
+7. CERTIFICATION
+
+Run a complete audit.
+
+Produce:
+
+OPERATIONAL_CENTER_CERTIFICATION.md
+
+Include:
+
+Issues found
+
+Issues fixed
+
+Screenshots
+
+Remaining risks
+
+Launch readiness
+
+STOP after this certification.
+
+Do NOT begin the next roadmap phase.

@@ -31,6 +31,12 @@ export const plans = pgTable("plans", {
   maxOrdersPerMonth: integer("max_orders_per_month"),
   /** null means unlimited */
   maxCustomers: integer("max_customers"),
+  /** null means unlimited; storage cap in MB */
+  maxStorageMb: integer("max_storage_mb"),
+  /** null means unlimited; per-month WhatsApp outbound messages */
+  maxWhatsappMessagesPerMonth: integer("max_whatsapp_messages_per_month"),
+  /** null means unlimited; per-month AI credit budget */
+  maxAiCreditsPerMonth: integer("max_ai_credits_per_month"),
 
   /** Feature flag map: { HAS_WHATSAPP: true, HAS_AI_MARKETING: false, ... } */
   features: jsonb("features").$type<Record<string, boolean>>().default({}),

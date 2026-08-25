@@ -1,0 +1,43 @@
+# Railway deployment configuration for CleanTrack
+#
+# Architecture (single service):
+#   1. Build: install deps + compile TypeScript + build React frontend
+#   2. Start: run DB migrations then start the API server, which in
+#             production mode also serves the built React static files
+#             on port 3000 (or $PORT provided by Railway).
+#
+# Database migration strategy:
+#   Checked-in Drizzle migrations are applied at startup. This keeps schema
+#   changes reviewable and avoids running an untracked schema diff in production.
+#
+# Required environment variables (set in Railway dashboard):
+#   DATABASE_URL         — Neon PostgreSQL connection string
+#   JWT_SECRET           — ≥32-char random string
+#   BACKUP_SECRET        — ≥32-char random string
+#   ALLOWED_ORIGINS      — comma-separated list of your production domains
+#                          e.g. https://cleantrack.ng,https://www.cleantrack.ng
+#   NODE_ENV             — production
+#
+# Optional environment variables (enable specific features):
+#   CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+#     → image uploads stored on Cloudinary CDN instead of ephemeral local disk
+#     → REQUIRED for production (local uploads do not persist on Railway)
+#   PAYSTACK_SECRET_KEY, PAYSTACK_PUBLIC_KEY  → billing & subscriptions
+#   META_APP_ID, META_APP_SECRET, META_CONFIG_ID → WhatsApp Business
+#   WHATSAPP_WEBHOOK_VERIFY_TOKEN, WHATSAPP_APP_SECRET → webhook security
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM → transactional email
+#   BACKUP_OFFSITE_PROVIDER=r2, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+#     R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME → off-site DB backups
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install && pnpm build"
+
+[deploy]
+# Apply checked-in DB migrations then start the compiled API server.
+# The API server serves the built React frontend on the same port in production.
+startCommand = "pnpm --filter @workspace/db migrate && node artifacts/api-server/dist/index.js"
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
