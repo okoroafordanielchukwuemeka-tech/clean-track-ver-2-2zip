@@ -36,8 +36,11 @@ Clean Track is a professional laundry operations management SaaS application wit
 
 ## Running the Project
 ```bash
-pnpm dev         # starts both API server (port 3001) and frontend (port 5000)
+pnpm install --frozen-lockfile  # first-time dependency setup
+pnpm dev                       # starts API server (port 3001) and frontend (port 5000)
 ```
+
+On Replit, use the configured **Start application** workflow; it runs `pnpm dev` and exposes the frontend preview on port `5000`. The startup script applies development schema changes before starting either server.
 
 ## Database Workflow
 
