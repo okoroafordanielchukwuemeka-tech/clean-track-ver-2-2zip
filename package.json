@@ -1,6 +1,7 @@
 {
   "name": "clean-track-workspace",
   "private": true,
+  "packageManager": "pnpm@10.26.1",
   "scripts": {
     "dev": "bash start.sh",
     "build": "pnpm --filter @workspace/api-server build && pnpm --filter @workspace/clean-track build",
