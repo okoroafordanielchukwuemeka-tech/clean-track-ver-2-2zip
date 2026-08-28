@@ -126,7 +126,7 @@ export default function Login() {
                   Worker? Sign in with phone & PIN →
                 </Link>
                 <Link
-                  to="/demo-access"
+                  to="/demo-login"
                   className="flex items-center justify-center gap-2 text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
                 >
                   <FlaskConical className="h-3.5 w-3.5" />

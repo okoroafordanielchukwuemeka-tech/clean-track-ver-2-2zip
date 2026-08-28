@@ -106,6 +106,7 @@ app.use(versionMiddleware);
 
 // Demo login: generous limit — must be registered BEFORE authLimiter
 app.use("/api/auth/demo-login", demoLimiter);
+app.use("/api/auth/demo-worker-login", demoLimiter);
 
 // Auth endpoints: strict brute-force protection (skips /demo-login path internally)
 app.use("/api/auth", authLimiter);

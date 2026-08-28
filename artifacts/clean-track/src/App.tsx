@@ -117,6 +117,7 @@ export default function App() {
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/worker-login" element={<WorkerLogin />} />
               <Route path="/demo-access" element={<DemoLogin />} />
+              <Route path="/demo-login" element={<DemoLogin />} />
 
               {/* CleanTrack Admin Portal — internal only */}
               <Route path="/admin/login" element={<AdminLogin />} />

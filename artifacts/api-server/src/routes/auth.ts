@@ -15,7 +15,7 @@ import {
   ADMIN_DEFAULT_PERMISSIONS,
   WORKER_DEFAULT_PERMISSIONS,
 } from "@workspace/db/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, asc } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -220,6 +220,12 @@ authRouter.post("/signup", async (req, res) => {
 // Uses hardcoded demo credentials so the auth limiter never blocks public demos.
 
 const DEMO_EMAIL = "demo@cleantrack.ng";
+const DEMO_WORKER_PINS = [
+  "1234", "5678", "2222", "3333", "4444",
+  "5555", "6666", "7777", "8888", "9999",
+  "1111", "2468", "1357", "9876", "5432",
+  "1122", "3344", "5566", "7788", "9900",
+];
 
 authRouter.post("/demo-login", async (req, res) => {
   try {
@@ -258,6 +264,107 @@ authRouter.post("/demo-login", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Demo login failed" });
+  }
+});
+
+// ── POST /auth/demo-worker-login ──────────────────────────────────────────
+// Dedicated public demo shortcut. Demo workers are intentionally seeded with
+// random phone numbers, so the client must not hardcode a phone number. The
+// seed script assigns the known PINs in insertion order; select by id to
+// reproduce that order without exposing worker records publicly.
+
+authRouter.post("/demo-worker-login", async (_req, res) => {
+  try {
+    const [laundry] = await db
+      .select()
+      .from(laundries)
+      .where(eq(laundries.ownerEmail, DEMO_EMAIL));
+
+    if (!laundry || !laundry.isActive) {
+      return res.status(503).json({ error: "Demo account not available" });
+    }
+
+    const demoWorkers = await db
+      .select()
+      .from(workers)
+      .where(and(eq(workers.laundryId, laundry.id), eq(workers.isActive, true)))
+      .orderBy(asc(workers.id))
+      .limit(DEMO_WORKER_PINS.length);
+
+    let matchedWorker: (typeof demoWorkers)[number] | undefined;
+    for (let index = 0; index < demoWorkers.length; index++) {
+      const candidate = demoWorkers[index];
+      if (candidate.pin && await bcrypt.compare(DEMO_WORKER_PINS[index], candidate.pin)) {
+        matchedWorker = candidate;
+        break;
+      }
+    }
+
+    if (!matchedWorker) {
+      return res.status(503).json({ error: "Demo worker is not configured" });
+    }
+
+    const now = new Date();
+    if (matchedWorker.pinLockedUntil && matchedWorker.pinLockedUntil > now) {
+      return res.status(503).json({ error: "Demo worker is temporarily unavailable" });
+    }
+
+    let [permsRow] = await db
+      .select()
+      .from(workerPermissions)
+      .where(eq(workerPermissions.workerId, matchedWorker.id));
+
+    if (!permsRow) {
+      const defaults =
+        matchedWorker.role === "admin" ? ADMIN_DEFAULT_PERMISSIONS : WORKER_DEFAULT_PERMISSIONS;
+      [permsRow] = await db
+        .insert(workerPermissions)
+        .values({ workerId: matchedWorker.id, laundryId: matchedWorker.laundryId!, ...defaults })
+        .returning();
+    }
+
+    const permissions = {
+      canViewOrders: permsRow.canViewOrders,
+      canProcessOrders: permsRow.canProcessOrders,
+      canRecordPayments: permsRow.canRecordPayments,
+      canRecordPickups: permsRow.canRecordPickups,
+      canViewCustomers: permsRow.canViewCustomers,
+      canCreateCustomers: permsRow.canCreateCustomers,
+      canViewCustomerBalances: permsRow.canViewCustomerBalances,
+      canAssignOrders: permsRow.canAssignOrders,
+    };
+
+    const token = signToken(
+      {
+        laundryId: matchedWorker.laundryId!,
+        type: "worker",
+        workerId: matchedWorker.id,
+        workerRole: matchedWorker.role as "admin" | "worker",
+        branchId: matchedWorker.branchId ?? undefined,
+        name: matchedWorker.name,
+        permissions,
+        pinChangedAt: matchedWorker.pinChangedAt?.toISOString(),
+      },
+      "12h"
+    );
+
+    const { pin: _pin, ...safeWorker } = matchedWorker;
+    res.json({
+      token,
+      worker: safeWorker,
+      user: {
+        type: "worker",
+        id: matchedWorker.id,
+        name: matchedWorker.name,
+        phone: matchedWorker.phone,
+        role: matchedWorker.role,
+        laundryId: matchedWorker.laundryId,
+        permissions,
+      },
+    });
+  } catch (err) {
+    warn("[auth] Demo worker login failed", { error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "Demo worker login failed" });
   }
 });
 

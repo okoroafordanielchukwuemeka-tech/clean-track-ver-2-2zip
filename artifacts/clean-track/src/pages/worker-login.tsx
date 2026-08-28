@@ -10,9 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { WashingMachine, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 
-const DEMO_WORKER_PHONE = "08034191399";
-const DEMO_WORKER_PIN = "1234";
-
 export default function WorkerLogin() {
   usePageTitle("Worker Sign In");
   const navigate = useNavigate();
@@ -40,7 +37,7 @@ export default function WorkerLogin() {
   const handleDemoLogin = async () => {
     setLoading(true);
     try {
-      const res = await api.auth.workerLogin({ phone: DEMO_WORKER_PHONE, pin: DEMO_WORKER_PIN });
+      const res = await api.auth.demoWorkerLogin();
       login(res.token, res.user);
       toast.success(`Welcome, ${res.user.name}!`);
       navigate("/worker-station", { replace: true });
@@ -69,9 +66,7 @@ export default function WorkerLogin() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-teal-300">Demo Worker</p>
               <p className="text-xs text-teal-400/80 mt-0.5">
-                <span className="font-mono">{DEMO_WORKER_PHONE}</span>
-                <span className="mx-1.5 opacity-50">·</span>
-                PIN: <span className="font-mono">{DEMO_WORKER_PIN}</span>
+                Use the seeded demo worker account
               </p>
             </div>
             <Button

@@ -23,7 +23,10 @@ export const authLimiter = rateLimit({
   standardHeaders: RATE_LIMIT_HEADERS,
   legacyHeaders: false,
   skipSuccessfulRequests: SKIP_SUCCESSFUL_REQUESTS,
-  skip: (req) => req.path === "/me" || req.path === "/demo-login",
+  skip: (req) =>
+    req.path === "/me" ||
+    req.path === "/demo-login" ||
+    req.path === "/demo-worker-login",
   message: {
     error: "Too many login attempts. Please wait 15 minutes before trying again.",
     retryAfter: 15 * 60,
