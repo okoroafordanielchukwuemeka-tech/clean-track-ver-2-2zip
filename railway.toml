@@ -2,20 +2,21 @@
 #
 # Architecture (single service):
 #   1. Build: install deps + compile TypeScript + build React frontend
-#   2. Start: run DB migrations then start the API server, which in
-#             production mode also serves the built React static files
-#             on port 3000 (or $PORT provided by Railway).
+#   2. Pre-deploy: safely baseline an existing CleanTrack database when needed,
+#      then apply only migrations newer than the recorded migration history.
+#   3. Start: start the compiled API server, which also serves the built React
+#      frontend in production.
 #
 # Database migration strategy:
-#   Checked-in Drizzle migrations are applied at startup. This keeps schema
-#   changes reviewable and avoids running an untracked schema diff in production.
+#   The one-time baseline command is idempotent. It only creates migration
+#   history when the ledger is missing AND the database passes the CleanTrack
+#   schema checks. It never replays historical migration SQL.
 #
 # Required environment variables (set in Railway dashboard):
 #   DATABASE_URL         — Neon PostgreSQL connection string
 #   JWT_SECRET           — ≥32-char random string
 #   BACKUP_SECRET        — ≥32-char random string
 #   ALLOWED_ORIGINS      — comma-separated list of your production domains
-#                          e.g. https://cleantrack.ng,https://www.cleantrack.ng
 #   NODE_ENV             — production
 #
 # Optional environment variables (enable specific features):
@@ -34,9 +35,8 @@ builder = "nixpacks"
 buildCommand = "pnpm install && pnpm build"
 
 [deploy]
-# Apply checked-in DB migrations then start the compiled API server.
-# The API server serves the built React frontend on the same port in production.
-startCommand = "pnpm --filter @workspace/db migrate && node artifacts/api-server/dist/index.js"
+preDeployCommand = "pnpm db:migrate:baseline && pnpm --filter @workspace/db migrate"
+startCommand = "node artifacts/api-server/dist/index.js"
 healthcheckPath = "/api/healthz"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
