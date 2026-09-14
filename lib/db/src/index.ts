@@ -1,13 +1,15 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
+// Same ConnectionParameters implementation used internally by pg.
+// @ts-ignore - pg exposes this internal module at runtime without a bundled declaration.
+import ConnectionParameters from "pg/lib/connection-parameters.js";
 import * as schema from "./schema/index.js";
 
 const { Pool } = pg;
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// TEMPORARY DIAGNOSTIC: safely inspect the runtime PostgreSQL connection
-// configuration without logging credentials, URLs, usernames, or query values.
+// TEMPORARY DIAGNOSTIC: inspect only non-secret connection routing fields.
 function logDatabaseConnectionDiagnostic(): void {
   const databaseUrl = process.env.DATABASE_URL;
   const externalDatabaseUrl = process.env.EXTERNAL_DATABASE_URL;
@@ -25,23 +27,26 @@ function logDatabaseConnectionDiagnostic(): void {
 
   try {
     const parsed = new URL(selectedUrl);
-    const protocol = parsed.protocol.toLowerCase();
-    const isPostgresProtocol = protocol === "postgres:" || protocol === "postgresql:";
-
-    console.log(`[db-diagnostic] Protocol: ${protocol}`);
-    console.log(`[db-diagnostic] Hostname: ${parsed.hostname || "<empty>"}`);
-    console.log(`[db-diagnostic] Port: ${parsed.port || "<default>"}`);
-    console.log(`[db-diagnostic] Database: ${parsed.pathname.startsWith("/") ? parsed.pathname.slice(1).split("/")[0] || "<empty>" : "<empty>"}`);
-    console.log(`[db-diagnostic] Username present: ${Boolean(parsed.username)}`);
-    console.log(`[db-diagnostic] Password present: ${Boolean(parsed.password)}`);
-    console.log(`[db-diagnostic] SSL parameter present: ${parsed.searchParams.has("sslmode")}`);
-
-    // URL.hostname is the hostname represented by this connection string and is
-    // the host value node-postgres will derive when given this URL.
-    console.log(`[db-diagnostic] pg hostname: ${isPostgresProtocol ? parsed.hostname || "<empty>" : "<non-postgresql-url>"}`);
+    console.log(`[db-diagnostic] URL parser protocol: ${parsed.protocol.toLowerCase()}`);
   } catch (error) {
     console.log(
-      `[db-diagnostic] PostgreSQL URL parsing failed: ${error instanceof Error ? error.name : "UnknownError"}`
+      `[db-diagnostic] Standard URL parser rejected value: ${error instanceof Error ? error.name : "UnknownError"}`
+    );
+  }
+
+  try {
+    // ConnectionParameters invokes pg-connection-string internally, the same
+    // parser path used by node-postgres when Pool receives connectionString.
+    const parsed = new ConnectionParameters({ connectionString: selectedUrl });
+
+    console.log(`[db-diagnostic] pg parser host: ${parsed.host || "<empty>"}`);
+    console.log(`[db-diagnostic] pg parser port: ${parsed.port || "<default>"}`);
+    console.log(`[db-diagnostic] pg parser database: ${parsed.database || "<empty>"}`);
+    console.log(`[db-diagnostic] pg parser username present: ${Boolean(parsed.user)}`);
+    console.log(`[db-diagnostic] pg parser SSL enabled: ${Boolean(parsed.ssl)}`);
+  } catch (error) {
+    console.log(
+      `[db-diagnostic] pg connection-string parser failed: ${error instanceof Error ? error.name : "UnknownError"}`
     );
   }
 }
