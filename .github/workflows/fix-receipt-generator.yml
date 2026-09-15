@@ -1,0 +1,48 @@
+name: Apply receipt generator safety fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-receipt-generator:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch unsafe receipt suffix cast
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/orders.ts')
+          s = p.read_text()
+          old = '''MAX(CAST(SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) AS INTEGER)),'''
+          new = '''MAX(\n              CASE\n                WHEN SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) ~ '^[0-9]+$'\n                THEN CAST(SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) AS INTEGER)\n              END\n            ),'''
+          if old not in s:
+              print('Receipt generator already patched or source differs; no change needed.')
+              raise SystemExit(0)
+          s = s.replace(old, new, 1)
+          marker = '''  // Concurrent first-time callers: one wins the INSERT; the other hits\n  // ON CONFLICT DO UPDATE and increments atomically — both get unique values.\n'''
+          note = marker + '''  // Ignore legacy/demo receipt suffixes that are not numeric so they cannot\n  // cause PostgreSQL 22P02 while initializing the daily counter.\n'''
+          if marker in s and note not in s:
+              s = s.replace(marker, note, 1)
+          p.write_text(s)
+          PY
+
+      - name: Commit source fix
+        run: |
+          if git diff --quiet; then
+            echo 'No source change required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/orders.ts
+          git commit -m 'fix: safely generate receipt numbers with legacy data'
+          git push
