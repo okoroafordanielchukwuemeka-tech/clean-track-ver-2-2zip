@@ -35,6 +35,58 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Harden order tenant boundaries and atomic creation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/orders.ts')
+          s = p.read_text()
+
+          if 'const requestedBranchId = data.branchId;' in s:
+              print('Order lifecycle hardening already applied; no change needed.')
+              raise SystemExit(0)
+
+          old = '''  discount: z.number().optional(),\n  discountReason: z.string().optional(),\n});'''
+          new = '''  discount: z.number().min(0).optional(),\n  discountReason: z.string().optional(),\n  branchId: z.number().int().positive().optional(),\n});'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = '''const workerOrderUpdateSchema = z.object({\n  status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"]).optional(),\n  paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),\n  verifiedShirts: z.number().int().optional(),\n  verifiedTrousers: z.number().int().optional(),'''
+          new = '''const workerOrderUpdateSchema = z.object({\n  status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"]).optional(),\n  verifiedShirts: z.number().int().min(0).optional(),\n  verifiedTrousers: z.number().int().min(0).optional(),'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = '''const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({\n  price: z.number().optional(),\n  extraCharge: z.number().optional(),\n  discount: z.number().optional(),\n});'''
+          new = '''const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({\n  price: z.number().min(0).optional(),\n  extraCharge: z.number().min(0).optional(),\n  discount: z.number().min(0).optional(),\n});'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          start = s.index('    let customerId: number | null = data.customerId ?? null;')
+          end = s.index('    const itemSummary = insertedItems.length > 0', start)
+          replacement = '''    const requestedBranchId = data.branchId;\n    const workerBranchId = req.auth!.branchId ?? null;\n    const orderBranchId = workerBranchId ?? requestedBranchId;\n\n    if (workerBranchId && requestedBranchId !== undefined && requestedBranchId !== workerBranchId) {\n      return res.status(403).json({ error: "Workers can only create orders in their assigned branch" });\n    }\n    if (orderBranchId !== undefined) {\n      const [ownedBranch] = await db.select({ id: branches.id }).from(branches)\n        .where(and(eq(branches.id, orderBranchId), eq(branches.laundryId, laundryId)));\n      if (!ownedBranch) return res.status(403).json({ error: "Branch not found" });\n    }\n\n    const sla = await getLaundrySla(laundryId);\n    const createdAt = new Date();\n    const processingDueAt = computeProcessingDueAt(createdAt, data.serviceType, sla);\n\n    const result = await db.transaction(async (tx) => {\n      let customerId: number | null = data.customerId ?? null;\n      const phoneNorm = data.phone.trim();\n\n      if (!customerId) {\n        const [existingCustomer] = await tx.select().from(customers)\n          .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, phoneNorm)));\n        if (existingCustomer) {\n          customerId = existingCustomer.id;\n          await tx.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, existingCustomer.id));\n        } else {\n          const [newCustomer] = await tx.insert(customers).values({\n            laundryId, fullName: data.customerName, phone: phoneNorm, address: data.address,\n          }).returning();\n          customerId = newCustomer.id;\n        }\n      } else {\n        const [ownedCustomer] = await tx.select().from(customers)\n          .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));\n        if (!ownedCustomer) throw new Error("CUSTOMER_NOT_FOUND");\n        await tx.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, customerId));\n      }\n\n      let computedPrice = data.price;\n      let insertedItems: typeof orderItems.$inferSelect[] = [];\n      let resolvedItems: Array<{ serviceId: number; name: string; quantity: number; unitPrice: number; lineTotal: number }> = [];\n\n      if (data.items && data.items.length > 0) {\n        const activeServices = await tx.select().from(services)\n          .where(and(eq(services.laundryId, laundryId), eq(services.isActive, true)));\n        const serviceMap = new Map(activeServices.map(s => [s.id, s]));\n        for (const item of data.items) {\n          const svc = serviceMap.get(item.serviceId);\n          if (!svc) throw new Error(`SERVICE_NOT_FOUND:${item.serviceId}`);\n          const priceField = data.serviceType === "express" ? svc.expressPrice\n            : data.serviceType === "premium" ? svc.premiumPrice : svc.standardPrice;\n          const unitPrice = parseFloat(priceField ?? svc.standardPrice);\n          resolvedItems.push({ serviceId: svc.id, name: svc.name, quantity: item.quantity, unitPrice, lineTotal: item.quantity * unitPrice });\n        }\n        computedPrice = resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0);\n      }\n\n      const totalDue = (computedPrice ?? 0) + (data.extraCharge ?? 0) - (data.discount ?? 0);\n      if (totalDue < 0) throw new Error("INVALID_ORDER_TOTAL");\n\n      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;\n      const [inserted] = await tx.insert(orders).values({\n        laundryId, branchId: orderBranchId, customerId, orderId: placeholder,\n        customerName: data.customerName, phone: phoneNorm, address: data.address,\n        serviceType: data.serviceType, shirts: data.shirts ?? 0, trousers: data.trousers ?? 0,\n        additionalNotes: data.additionalNotes, price: computedPrice?.toString(),\n        extraCharge: data.extraCharge?.toString(), discount: data.discount?.toString(), processingDueAt,\n      }).returning();\n\n      const finalOrderId = await generateOrderId(tx);\n      await tx.update(orders).set({ orderId: finalOrderId }).where(eq(orders.id, inserted.id));\n\n      if (resolvedItems.length > 0) {\n        insertedItems = await tx.insert(orderItems).values(resolvedItems.map(item => ({\n          orderId: inserted.id, serviceId: item.serviceId, serviceType: data.serviceType,\n          name: item.name, quantity: item.quantity, unitPrice: item.unitPrice.toString(), totalPrice: item.lineTotal.toString(),\n        }))).returning();\n      }\n\n      const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];\n      const appliedBy = actorName(req.auth!);\n      if (data.discount && data.discount > 0 && data.discountReason) {\n        adjustmentRows.push({ orderId: inserted.id, laundryId, type: "discount", amount: data.discount.toString(), reason: data.discountReason, appliedBy });\n      }\n      if (data.extraCharge && data.extraCharge > 0 && data.extraChargeReason) {\n        adjustmentRows.push({ orderId: inserted.id, laundryId, type: "extra_charge", amount: data.extraCharge.toString(), reason: data.extraChargeReason, appliedBy });\n      }\n      if (adjustmentRows.length > 0) await tx.insert(priceAdjustments).values(adjustmentRows);\n\n      return { order: { ...inserted, orderId: finalOrderId }, insertedItems, computedPrice, phoneNorm };\n    });\n\n    const { order, insertedItems, computedPrice, phoneNorm } = result;\n\n'''
+          s = s[:start] + replacement + s[end:]
+
+          old = '''    const data = isOwner\n      ? ownerOrderUpdateSchema.parse(req.body)\n      : workerOrderUpdateSchema.parse(req.body);'''
+          new = '''    if ("paymentStatus" in req.body) {\n      return res.status(400).json({ error: "paymentStatus is derived from recorded payments and cannot be edited directly" });\n    }\n\n    const data = isOwner\n      ? ownerOrderUpdateSchema.parse(req.body)\n      : workerOrderUpdateSchema.parse(req.body);'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = '''    const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));\n\n    // ── Status transition validation'''
+          new = '''    const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));\n    if (!beforeOrder) return res.status(404).json({ error: "Order not found" });\n\n    if (isOwner) {\n      const nextPrice = (data as any).price !== undefined ? (data as any).price : parseFloat(beforeOrder.price || "0");\n      const nextExtra = (data as any).extraCharge !== undefined ? (data as any).extraCharge : parseFloat(beforeOrder.extraCharge || "0");\n      const nextDiscount = (data as any).discount !== undefined ? (data as any).discount : parseFloat(beforeOrder.discount || "0");\n      if (nextPrice + nextExtra - nextDiscount < 0) {\n        return res.status(400).json({ error: "Discount cannot exceed the order subtotal plus extra charge" });\n      }\n    }\n\n    // ── Status transition validation'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          old = '''    const [order] = await db.update(orders).set(updateData)\n      .where(and(...patchConditions))\n      .returning();'''
+          new = '''    if ("assignedWorkerId" in req.body && data.assignedWorkerId !== null && data.assignedWorkerId !== undefined) {\n      const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId })\n        .from(workers).where(eq(workers.id, data.assignedWorkerId));\n      if (!targetWorker || targetWorker.laundryId !== laundryId) {\n        return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });\n      }\n      if (beforeOrder.branchId !== null && targetWorker.branchId !== beforeOrder.branchId) {\n        return res.status(400).json({ error: "Assigned worker must belong to the order's branch" });\n      }\n      if (workerBranchId && targetWorker.branchId !== workerBranchId) {\n        return res.status(403).json({ error: "Workers can only assign orders to workers in their branch" });\n      }\n    }\n\n    const [order] = await db.update(orders).set(updateData)\n      .where(and(...patchConditions))\n      .returning();'''
+          assert old in s
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Install and build
+        run: pnpm install --frozen-lockfile && pnpm run build
+
       - name: Commit source fix
         run: |
           if git diff --quiet; then
@@ -44,5 +96,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add artifacts/api-server/src/routes/orders.ts
-          git commit -m 'fix: safely generate receipt numbers with legacy data'
+          git commit -m 'fix: harden order tenant boundaries'
           git push
