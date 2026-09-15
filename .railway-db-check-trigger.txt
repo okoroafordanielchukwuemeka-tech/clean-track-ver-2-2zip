@@ -1,0 +1,1 @@
+Temporary deployment trigger for production payment schema diagnostics. Safe to remove after diagnosis.
