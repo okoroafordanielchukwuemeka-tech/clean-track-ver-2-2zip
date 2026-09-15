@@ -1,10 +1,12 @@
 name: Harden order lifecycle
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   harden:
+    if: "!contains(github.event.head_commit.message, 'fix: harden order tenant boundaries')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -189,26 +191,6 @@ jobs:
 '''
           s = s[:start] + replacement + s[end:]
 
-          # Add explicit branchId handling to order creation schema output only;
-          # branchId is consumed above and is not copied into the order payload twice.
-
-          # Reject invalid owner discounts/charges during PATCH as well as creation.
-          marker = '''    const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };'''
-          insert = '''    // Financial edits must never produce a negative total due.
-    if (isOwner) {
-      const nextPrice = (data as any).price !== undefined ? (data as any).price : parseFloat(beforeOrder?.price || "0");
-      const nextExtra = (data as any).extraCharge !== undefined ? (data as any).extraCharge : parseFloat(beforeOrder?.extraCharge || "0");
-      const nextDiscount = (data as any).discount !== undefined ? (data as any).discount : parseFloat(beforeOrder?.discount || "0");
-      if (nextPrice + nextExtra - nextDiscount < 0) {
-        return res.status(400).json({ error: "Discount cannot exceed the order subtotal plus extra charge" });
-      }
-    }
-
-    const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };'''
-          # This needs beforeOrder, so insert later after beforeOrder query instead.
-          assert marker in s
-
-          # Remove paymentStatus from PATCH by rejecting it explicitly (Zod object is strict only if configured).
           marker2 = '''    const data = isOwner
       ? ownerOrderUpdateSchema.parse(req.body)
       : workerOrderUpdateSchema.parse(req.body);'''
@@ -222,7 +204,6 @@ jobs:
           assert marker2 in s
           s = s.replace(marker2, replacement2, 1)
 
-          # Validate financial edit after beforeOrder has been loaded.
           marker3 = '''    const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
 
     // ── Status transition validation'''
@@ -243,7 +224,6 @@ jobs:
           assert marker3 in s
           s = s.replace(marker3, replacement3, 1)
 
-          # Add assigned-worker tenant/branch validation before update.
           marker4 = '''    const [order] = await db.update(orders).set(updateData)
       .where(and(...patchConditions))
       .returning();'''
@@ -281,5 +261,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add artifacts/api-server/src/routes/orders.ts
           git diff --cached --quiet && exit 0
-          git commit -m "fix: harden order tenant boundaries and atomic creation"
+          git commit -m "fix: harden order tenant boundaries"
           git push origin main
