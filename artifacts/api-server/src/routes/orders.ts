@@ -47,12 +47,19 @@ async function generateReceiptNumber(tx: typeof db): Promise<string> {
   // and legacy rows) so the counter never collides with already-stored receipts.
   // Concurrent first-time callers: one wins the INSERT; the other hits
   // ON CONFLICT DO UPDATE and increments atomically — both get unique values.
+  // Ignore legacy/demo receipt suffixes that are not numeric so they cannot
+  // cause PostgreSQL 22P02 while initializing the daily counter.
   const result = await tx.execute(
     sql`INSERT INTO receipt_number_counters (date_part, counter)
         SELECT
           ${datePart},
           COALESCE(
-            MAX(CAST(SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) AS INTEGER)),
+            MAX(
+              CASE
+                WHEN SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) ~ '^[0-9]+$'
+                THEN CAST(SUBSTRING(receipt_number FROM ${sql.raw(String(prefix.length + 1))}) AS INTEGER)
+              END
+            ),
             0
           ) + 1
         FROM payment_records
