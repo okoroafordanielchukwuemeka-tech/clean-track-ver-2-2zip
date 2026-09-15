@@ -217,7 +217,7 @@ async function main() {
       createdOrders++;
 
       if (amountPaid > 0) {
-        const receiptNumber = `RCT-${createdAt.toISOString().slice(0, 10).replace(/-/g, "")}-LIVE-${orderDbId}`;
+        const receiptNumber = `RCT-${createdAt.toISOString().slice(0, 10).replace(/-/g, "")}-${String(orderDbId).padStart(4, "0")}`;
         await client.query(
           `INSERT INTO payment_records (
              order_id, laundry_id, branch_id, receipt_number,
