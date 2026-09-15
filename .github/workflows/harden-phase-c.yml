@@ -1,0 +1,51 @@
+name: Phase C hardening
+
+on:
+  workflow_dispatch:
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Harden batch lifecycle
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/batches.ts')
+          s = p.read_text()
+          s = s.replace('import { checkPermission } from "../middleware/permissions.js";', 'import { checkPermission } from "../middleware/permissions.js";\nimport { idempotencyMiddleware } from "../lib/idempotency.js";')
+          s = s.replace('  orderIds: z.array(z.number().int()).min(1),', '  orderIds: z.array(z.number().int()).min(1).refine(ids => new Set(ids).size === ids.length, { message: "orderIds must not contain duplicates" }),')
+          s = s.replace('batchesRouter.post("/", checkPermission("process:orders"), async', 'batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware, async')
+          old = '''    // Workers: verify every order in the batch belongs to their branch\n    if (workerBranchId) {\n      const branchOrders = await db\n        .select({ id: orders.id })\n        .from(orders)\n        .where(\n          and(\n            inArray(orders.id, data.orderIds),\n            eq(orders.laundryId, laundryId),\n            eq(orders.branchId, workerBranchId)\n          )\n        );\n      if (branchOrders.length !== data.orderIds.length) {\n        return res.status(403).json({ error: "One or more orders do not belong to your branch" });\n      }\n    }\n\n    // Two-step insert+update: placeholder satisfies NOT NULL + UNIQUE on insert,\n    // then is immediately replaced with the serial-based collision-free code.\n    const batch = await db.transaction(async (tx) => {\n      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;\n      const [inserted] = await tx\n        .insert(batches)\n        .values({\n          batchCode: placeholder,\n          laundryId,\n          orderCount: data.orderIds.length,\n        })\n        .returning();\n\n      const finalCode = formatBatchCode(inserted.id);\n      await tx.update(batches).set({ batchCode: finalCode }).where(eq(batches.id, inserted.id));\n\n      return { ...inserted, batchCode: finalCode };\n    });\n\n    for (const orderId of data.orderIds) {\n      const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];\n      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n      await db\n        .update(orders)\n        .set({\n          batchId: batch.id,\n          status: "processing",\n          assignedWorkerId: data.assignedWorkerId || null,\n          updatedAt: new Date(),\n        })\n        .where(and(...orderConditions));\n    }\n\n    res.status(201).json(batch);'''
+          new = '''    if (data.assignedWorkerId !== undefined) {\n      const [worker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));\n      if (!worker || worker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });\n      if (workerBranchId && worker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign batches to workers in their branch" });\n    }\n\n    // Validate every target order and perform the batch creation + all order\n    // assignments in ONE transaction. No half-created batches.\n    const batch = await db.transaction(async (tx) => {\n      const orderConditions: any[] = [inArray(orders.id, data.orderIds), eq(orders.laundryId, laundryId)];\n      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n      const targetOrders = await tx.select({ id: orders.id, status: orders.status, batchId: orders.batchId }).from(orders).where(and(...orderConditions));\n      if (targetOrders.length !== data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");\n      const blocked = targetOrders.find(o => o.status === "cancelled" || o.status === "completed" || o.batchId !== null);\n      if (blocked) throw new Error("BATCH_ORDER_STATE");\n\n      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;\n      const [inserted] = await tx.insert(batches).values({ batchCode: placeholder, laundryId, orderCount: data.orderIds.length }).returning();\n      const finalCode = formatBatchCode(inserted.id);\n      const [finalBatch] = await tx.update(batches).set({ batchCode: finalCode }).where(eq(batches.id, inserted.id)).returning();\n\n      await tx.update(orders).set({\n        batchId: inserted.id,\n        status: "processing",\n        assignedWorkerId: data.assignedWorkerId ?? null,\n        updatedAt: new Date(),\n      }).where(and(...orderConditions));\n\n      return finalBatch;\n    });\n\n    res.status(201).json(batch);'''
+          if old not in s:
+              raise SystemExit('batch POST block not found')
+          s = s.replace(old, new)
+          s = s.replace('import { eq, desc, and, inArray, isNotNull } from "drizzle-orm";', 'import { eq, desc, and, inArray, isNotNull, sql } from "drizzle-orm";')
+          s = s.replace('''  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    res.status(500).json({ error: "Failed to create batch" });\n  }\n});''', '''  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });\n    if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });\n    res.status(500).json({ error: "Failed to create batch" });\n  }\n});''', 1)
+          old_patch = '''    const [batch] = await db\n      .update(batches)\n      .set(data)\n      .where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)))\n      .returning();\n    if (!batch) return res.status(404).json({ error: "Batch not found" });\n\n    if (data.status === "completed") {\n      const orderConditions: any[] = [eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)];\n      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n      await db.update(orders).set({ status: "ready", updatedAt: new Date() }).where(and(...orderConditions));\n    }\n    res.json(batch);'''
+          new_patch = '''    const batch = await db.transaction(async (tx) => {\n      const [current] = await tx.select().from(batches).where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)));\n      if (!current) return null;\n      if (data.status === current.status) return current;\n      if (data.status === "active" && current.status === "completed") throw new Error("BATCH_TERMINAL");\n\n      if (data.status === "completed") {\n        const orderConditions: any[] = [eq(orders.batchId, current.id), eq(orders.laundryId, laundryId)];\n        if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n        // Never move cancelled/completed orders backwards. Only active orders\n        // in this batch may advance to ready.\n        await tx.update(orders).set({ status: "ready", updatedAt: new Date() })\n          .where(and(...orderConditions, eq(orders.status, "processing")));\n      }\n      const [updated] = await tx.update(batches).set(data).where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId))).returning();\n      return updated;\n    });\n    if (!batch) return res.status(404).json({ error: "Batch not found" });\n    res.json(batch);'''
+          if old_patch not in s:
+              raise SystemExit('batch PATCH block not found')
+          s = s.replace(old_patch, new_patch)
+          s = s.replace('  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    res.status(500).json({ error: "Failed to update batch" });', '  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    if (err instanceof Error && err.message === "BATCH_TERMINAL") return res.status(409).json({ error: "A completed batch cannot be reopened" });\n    res.status(500).json({ error: "Failed to update batch" });')
+          p.write_text(s)
+      - name: Install and build
+        run: pnpm install --frozen-lockfile && pnpm run build
+      - name: Commit source fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/batches.ts
+          git diff --cached --quiet || git commit -m 'fix: harden batch lifecycle'
+          git push
