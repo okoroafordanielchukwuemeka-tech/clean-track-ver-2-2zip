@@ -144,8 +144,9 @@ const orderInputSchema = z.object({
   price: z.number().optional(),
   extraCharge: z.number().optional(),
   extraChargeReason: z.string().optional(),
-  discount: z.number().optional(),
+  discount: z.number().min(0).optional(),
   discountReason: z.string().optional(),
+  branchId: z.number().int().positive().optional(),
 });
 
 /**
@@ -167,18 +168,17 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 
 const workerOrderUpdateSchema = z.object({
   status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"]).optional(),
-  paymentStatus: z.enum(["unpaid", "partial", "paid"]).optional(),
-  verifiedShirts: z.number().int().optional(),
-  verifiedTrousers: z.number().int().optional(),
+  verifiedShirts: z.number().int().min(0).optional(),
+  verifiedTrousers: z.number().int().min(0).optional(),
   isVerified: z.boolean().optional(),
   additionalNotes: z.string().optional(),
   assignedWorkerId: z.number().int().nullable().optional(),
 });
 
 const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({
-  price: z.number().optional(),
-  extraCharge: z.number().optional(),
-  discount: z.number().optional(),
+  price: z.number().min(0).optional(),
+  extraCharge: z.number().min(0).optional(),
+  discount: z.number().min(0).optional(),
 });
 
 ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, res) => {
@@ -293,136 +293,89 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       discountReason: undefined,
     };
 
-    let customerId: number | null = data.customerId ?? null;
-    const phoneNorm = data.phone.trim();
+    const requestedBranchId = data.branchId;
+    const workerBranchId = req.auth!.branchId ?? null;
+    const orderBranchId = workerBranchId ?? requestedBranchId;
 
-    if (!customerId) {
-      const [existingCustomer] = await db.select().from(customers)
-        .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, phoneNorm)));
-
-      if (existingCustomer) {
-        customerId = existingCustomer.id;
-        await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, existingCustomer.id));
-      } else {
-        const [newCustomer] = await db.insert(customers).values({
-          laundryId,
-          fullName: data.customerName,
-          phone: phoneNorm,
-          address: data.address,
-        }).returning();
-        customerId = newCustomer.id;
-      }
-    } else {
-      const [ownedCustomer] = await db.select().from(customers)
-        .where(and(eq(customers.id, customerId!), eq(customers.laundryId, laundryId)));
-      if (!ownedCustomer) {
-        return res.status(403).json({ error: "Customer not found" });
-      }
-      await db.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, customerId!));
+    if (workerBranchId && requestedBranchId !== undefined && requestedBranchId !== workerBranchId) {
+      return res.status(403).json({ error: "Workers can only create orders in their assigned branch" });
+    }
+    if (orderBranchId !== undefined) {
+      const [ownedBranch] = await db.select({ id: branches.id }).from(branches)
+        .where(and(eq(branches.id, orderBranchId), eq(branches.laundryId, laundryId)));
+      if (!ownedBranch) return res.status(403).json({ error: "Branch not found" });
     }
 
     const sla = await getLaundrySla(laundryId);
     const createdAt = new Date();
     const processingDueAt = computeProcessingDueAt(createdAt, data.serviceType, sla);
 
-    let computedPrice = data.price;
-    let insertedItems: typeof orderItems.$inferSelect[] = [];
-    let resolvedItems: Array<{ serviceId: number; name: string; quantity: number; unitPrice: number; lineTotal: number }> = [];
-
-    if (data.items && data.items.length > 0) {
-      const activeServices = await db.select().from(services)
-        .where(and(eq(services.laundryId, laundryId), eq(services.isActive, true)));
-
-      const serviceMap = new Map(activeServices.map(s => [s.id, s]));
-
-      for (const item of data.items) {
-        const svc = serviceMap.get(item.serviceId);
-        if (!svc) {
-          return res.status(400).json({ error: `Service ID ${item.serviceId} not found or is inactive` });
+    const result = await db.transaction(async (tx) => {
+      let customerId: number | null = data.customerId ?? null;
+      const phoneNorm = data.phone.trim();
+      if (!customerId) {
+        const [existingCustomer] = await tx.select().from(customers)
+          .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, phoneNorm)));
+        if (existingCustomer) {
+          customerId = existingCustomer.id;
+          await tx.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, existingCustomer.id));
+        } else {
+          const [newCustomer] = await tx.insert(customers).values({ laundryId, fullName: data.customerName, phone: phoneNorm, address: data.address }).returning();
+          customerId = newCustomer.id;
         }
-        const priceField = data.serviceType === "express" ? svc.expressPrice
-          : data.serviceType === "premium" ? svc.premiumPrice
-          : svc.standardPrice;
-        const unitPrice = parseFloat(priceField ?? svc.standardPrice);
-        resolvedItems.push({ serviceId: svc.id, name: svc.name, quantity: item.quantity, unitPrice, lineTotal: item.quantity * unitPrice });
+      } else {
+        const [ownedCustomer] = await tx.select().from(customers)
+          .where(and(eq(customers.id, customerId), eq(customers.laundryId, laundryId)));
+        if (!ownedCustomer) throw new Error("CUSTOMER_NOT_FOUND");
+        await tx.update(customers).set({ lastActivityAt: new Date() }).where(eq(customers.id, customerId));
       }
 
-      computedPrice = resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0);
-    }
+      let computedPrice = data.price;
+      let insertedItems: typeof orderItems.$inferSelect[] = [];
+      let resolvedItems: Array<{ serviceId: number; name: string; quantity: number; unitPrice: number; lineTotal: number }> = [];
+      if (data.items && data.items.length > 0) {
+        const activeServices = await tx.select().from(services).where(and(eq(services.laundryId, laundryId), eq(services.isActive, true)));
+        const serviceMap = new Map(activeServices.map(s => [s.id, s]));
+        for (const item of data.items) {
+          const svc = serviceMap.get(item.serviceId);
+          if (!svc) throw new Error(`SERVICE_NOT_FOUND:${item.serviceId}`);
+          const priceField = data.serviceType === "express" ? svc.expressPrice : data.serviceType === "premium" ? svc.premiumPrice : svc.standardPrice;
+          const unitPrice = parseFloat(priceField ?? svc.standardPrice);
+          resolvedItems.push({ serviceId: svc.id, name: svc.name, quantity: item.quantity, unitPrice, lineTotal: item.quantity * unitPrice });
+        }
+        computedPrice = resolvedItems.reduce((sum, i) => sum + i.lineTotal, 0);
+      }
 
-    const orderBranchId = req.auth!.branchId ?? ((req.body as any).branchId ? parseInt((req.body as any).branchId) : undefined);
+      const totalDue = (computedPrice ?? 0) + (data.extraCharge ?? 0) - (data.discount ?? 0);
+      if (totalDue < 0) throw new Error("INVALID_ORDER_TOTAL");
 
-    // Two-step insert+update inside a transaction guarantees orderId is
-    // collision-free: the placeholder UUID satisfies the NOT NULL / UNIQUE
-    // constraint on insert, and is immediately replaced with the formatted
-    // serial-based ID before any other code sees it.
-    const order = await db.transaction(async (tx) => {
       const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const [inserted] = await tx.insert(orders).values({
-        laundryId,
-        branchId: orderBranchId,
-        customerId,
-        orderId: placeholder,
-        customerName: data.customerName,
-        phone: phoneNorm,
-        address: data.address,
-        serviceType: data.serviceType,
-        shirts: data.shirts ?? 0,
-        trousers: data.trousers ?? 0,
-        additionalNotes: data.additionalNotes,
-        price: computedPrice?.toString(),
-        extraCharge: data.extraCharge?.toString(),
-        discount: data.discount?.toString(),
-        processingDueAt,
+        laundryId, branchId: orderBranchId, customerId, orderId: placeholder, customerName: data.customerName, phone: phoneNorm,
+        address: data.address, serviceType: data.serviceType, shirts: data.shirts ?? 0, trousers: data.trousers ?? 0, additionalNotes: data.additionalNotes,
+        price: computedPrice?.toString(), extraCharge: data.extraCharge?.toString(), discount: data.discount?.toString(), processingDueAt,
       }).returning();
 
       const finalOrderId = await generateOrderId(tx);
-      await tx.update(orders)
-        .set({ orderId: finalOrderId })
-        .where(eq(orders.id, inserted.id));
+      await tx.update(orders).set({ orderId: finalOrderId }).where(eq(orders.id, inserted.id));
 
-      return { ...inserted, orderId: finalOrderId };
+      if (resolvedItems.length > 0) {
+        insertedItems = await tx.insert(orderItems).values(resolvedItems.map(item => ({
+          orderId: inserted.id, serviceId: item.serviceId, serviceType: data.serviceType, name: item.name, quantity: item.quantity,
+          unitPrice: item.unitPrice.toString(), totalPrice: item.lineTotal.toString(),
+        }))).returning();
+      }
+
+      const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];
+      const appliedBy = actorName(req.auth!);
+      if (data.discount && data.discount > 0 && data.discountReason) adjustmentRows.push({ orderId: inserted.id, laundryId, type: "discount", amount: data.discount.toString(), reason: data.discountReason, appliedBy });
+      if (data.extraCharge && data.extraCharge > 0 && data.extraChargeReason) adjustmentRows.push({ orderId: inserted.id, laundryId, type: "extra_charge", amount: data.extraCharge.toString(), reason: data.extraChargeReason, appliedBy });
+      if (adjustmentRows.length > 0) await tx.insert(priceAdjustments).values(adjustmentRows);
+
+      return { order: { ...inserted, orderId: finalOrderId }, insertedItems, computedPrice, phoneNorm };
     });
 
-    if (resolvedItems.length > 0) {
-      const itemRows = resolvedItems.map(item => ({
-        orderId: order.id,
-        serviceId: item.serviceId,
-        serviceType: data.serviceType,
-        name: item.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice.toString(),
-        totalPrice: item.lineTotal.toString(),
-      }));
-      insertedItems = await db.insert(orderItems).values(itemRows).returning();
-    }
-
-    const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];
-    const appliedBy = actorName(req.auth!);
-
-    if (data.discount && data.discount > 0 && data.discountReason) {
-      adjustmentRows.push({
-        orderId: order.id,
-        laundryId,
-        type: "discount",
-        amount: data.discount.toString(),
-        reason: data.discountReason,
-        appliedBy,
-      });
-    }
-    if (data.extraCharge && data.extraCharge > 0 && data.extraChargeReason) {
-      adjustmentRows.push({
-        orderId: order.id,
-        laundryId,
-        type: "extra_charge",
-        amount: data.extraCharge.toString(),
-        reason: data.extraChargeReason,
-        appliedBy,
-      });
-    }
-    if (adjustmentRows.length > 0) {
-      await db.insert(priceAdjustments).values(adjustmentRows);
-    }
+    const { order, insertedItems, computedPrice, phoneNorm } = result;
 
     const itemSummary = insertedItems.length > 0
       ? insertedItems.map(i => `${i.quantity}x ${i.name}`).join(", ")
@@ -494,6 +447,10 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
       }
     }
 
+    if ("paymentStatus" in req.body) {
+      return res.status(400).json({ error: "paymentStatus is derived from recorded payments and cannot be edited directly" });
+    }
+
     const data = isOwner
       ? ownerOrderUpdateSchema.parse(req.body)
       : workerOrderUpdateSchema.parse(req.body);
@@ -509,6 +466,14 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
     if (workerBranchId) patchConditions.push(eq(orders.branchId, workerBranchId));
 
     const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
+    if (!beforeOrder) return res.status(404).json({ error: "Order not found" });
+
+    if (isOwner) {
+      const nextPrice = (data as any).price !== undefined ? (data as any).price : parseFloat(beforeOrder.price || "0");
+      const nextExtra = (data as any).extraCharge !== undefined ? (data as any).extraCharge : parseFloat(beforeOrder.extraCharge || "0");
+      const nextDiscount = (data as any).discount !== undefined ? (data as any).discount : parseFloat(beforeOrder.discount || "0");
+      if (nextPrice + nextExtra - nextDiscount < 0) return res.status(400).json({ error: "Discount cannot exceed the order subtotal plus extra charge" });
+    }
 
     // ── Status transition validation ──────────────────────────────────────
     // Enforce the state machine before touching the database.
@@ -528,6 +493,13 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
           allowed: allowedNext,
         });
       }
+    }
+
+    if ("assignedWorkerId" in req.body && data.assignedWorkerId !== null && data.assignedWorkerId !== undefined) {
+      const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
+      if (!targetWorker || targetWorker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
+      if (beforeOrder.branchId !== null && targetWorker.branchId !== beforeOrder.branchId) return res.status(400).json({ error: "Assigned worker must belong to the order's branch" });
+      if (workerBranchId && targetWorker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign orders to workers in their branch" });
     }
 
     const [order] = await db.update(orders).set(updateData)
