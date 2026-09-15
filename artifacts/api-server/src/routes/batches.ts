@@ -5,6 +5,7 @@ import { eq, desc, and, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
+import { idempotencyMiddleware } from "../lib/idempotency.js";
 
 export const batchesRouter = Router();
 
@@ -23,7 +24,7 @@ function formatBatchCode(serialId: number): string {
 }
 
 const batchInputSchema = z.object({
-  orderIds: z.array(z.number().int()).min(1),
+  orderIds: z.array(z.number().int()).min(1).refine(ids => new Set(ids).size === ids.length, { message: "orderIds must not contain duplicates" }),
   assignedWorkerId: z.number().int().optional(),
 });
 
@@ -109,65 +110,35 @@ batchesRouter.get("/:id", checkPermission("view:orders"), async (req: AuthReques
 });
 
 // ── POST /batches ─────────────────────────────────────────────────────────────
-batchesRouter.post("/", checkPermission("process:orders"), async (req: AuthRequest, res) => {
+batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const data = batchInputSchema.parse(req.body);
 
-    // Workers: verify every order in the batch belongs to their branch
-    if (workerBranchId) {
-      const branchOrders = await db
-        .select({ id: orders.id })
-        .from(orders)
-        .where(
-          and(
-            inArray(orders.id, data.orderIds),
-            eq(orders.laundryId, laundryId),
-            eq(orders.branchId, workerBranchId)
-          )
-        );
-      if (branchOrders.length !== data.orderIds.length) {
-        return res.status(403).json({ error: "One or more orders do not belong to your branch" });
-      }
+    if (data.assignedWorkerId !== undefined) {
+      const [worker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
+      if (!worker || worker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
+      if (workerBranchId && worker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign batches to workers in their branch" });
     }
-
-    // Two-step insert+update: placeholder satisfies NOT NULL + UNIQUE on insert,
-    // then is immediately replaced with the serial-based collision-free code.
     const batch = await db.transaction(async (tx) => {
-      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const [inserted] = await tx
-        .insert(batches)
-        .values({
-          batchCode: placeholder,
-          laundryId,
-          orderCount: data.orderIds.length,
-        })
-        .returning();
-
-      const finalCode = formatBatchCode(inserted.id);
-      await tx.update(batches).set({ batchCode: finalCode }).where(eq(batches.id, inserted.id));
-
-      return { ...inserted, batchCode: finalCode };
+      const conditions:any[]=[inArray(orders.id,data.orderIds),eq(orders.laundryId,laundryId)];
+      if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
+      const targets=await tx.select({id:orders.id,status:orders.status,batchId:orders.batchId}).from(orders).where(and(...conditions));
+      if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
+      if(targets.some(o=>o.status==="cancelled"||o.status==="completed"||o.batchId!==null)) throw new Error("BATCH_ORDER_STATE");
+      const placeholder=`GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const [inserted]=await tx.insert(batches).values({batchCode:placeholder,laundryId,orderCount:data.orderIds.length}).returning();
+      const finalCode=formatBatchCode(inserted.id);
+      const [finalBatch]=await tx.update(batches).set({batchCode:finalCode}).where(eq(batches.id,inserted.id)).returning();
+      await tx.update(orders).set({batchId:inserted.id,status:"processing",assignedWorkerId:data.assignedWorkerId??null,updatedAt:new Date()}).where(and(...conditions));
+      return finalBatch;
     });
-
-    for (const orderId of data.orderIds) {
-      const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
-      await db
-        .update(orders)
-        .set({
-          batchId: batch.id,
-          status: "processing",
-          assignedWorkerId: data.assignedWorkerId || null,
-          updatedAt: new Date(),
-        })
-        .where(and(...orderConditions));
-    }
-
     res.status(201).json(batch);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });
+    if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });
     res.status(500).json({ error: "Failed to create batch" });
   }
 });
@@ -188,21 +159,24 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
       }
     }
 
-    const [batch] = await db
-      .update(batches)
-      .set(data)
-      .where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)))
-      .returning();
-    if (!batch) return res.status(404).json({ error: "Batch not found" });
-
-    if (data.status === "completed") {
-      const orderConditions: any[] = [eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)];
-      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
-      await db.update(orders).set({ status: "ready", updatedAt: new Date() }).where(and(...orderConditions));
-    }
+    const batch = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(batches).where(and(eq(batches.id,batchId),eq(batches.laundryId,laundryId)));
+      if(!current) return null;
+      if(data.status===current.status) return current;
+      if(data.status==="active" && current.status==="completed") throw new Error("BATCH_TERMINAL");
+      if(data.status==="completed"){
+        const conditions:any[]=[eq(orders.batchId,current.id),eq(orders.laundryId,laundryId)];
+        if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
+        await tx.update(orders).set({status:"ready",updatedAt:new Date()}).where(and(...conditions,eq(orders.status,"processing")));
+      }
+      const [updated]=await tx.update(batches).set(data).where(and(eq(batches.id,batchId),eq(batches.laundryId,laundryId))).returning();
+      return updated;
+    });
+    if(!batch) return res.status(404).json({error:"Batch not found"});
     res.json(batch);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    if (err instanceof Error && err.message === "BATCH_TERMINAL") return res.status(409).json({ error: "A completed batch cannot be reopened" });
     res.status(500).json({ error: "Failed to update batch" });
   }
 });
