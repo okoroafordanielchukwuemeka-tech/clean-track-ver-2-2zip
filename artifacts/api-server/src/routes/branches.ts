@@ -1,18 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { branches, orders } from "@workspace/db/schema";
-import { eq, and, desc, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
-import { logAction } from "../lib/audit.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const branchesRouter = Router();
 
+const branchTypeSchema = z.enum(["PROCESSING", "PICKUP", "HYBRID"]);
+
 const branchInputSchema = z.object({
   name: z.string().min(1, "Branch name is required"),
   address: z.string().optional(),
+  type: branchTypeSchema.optional(),
 });
 
 branchesRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
@@ -35,7 +37,7 @@ branchesRouter.post("/", requireOwner, requireOperational, requirePlanLimit("bra
     const data = branchInputSchema.parse(req.body);
     const [branch] = await db
       .insert(branches)
-      .values({ laundryId, ...data })
+      .values({ laundryId, ...data, type: data.type ?? "HYBRID" })
       .returning();
     trackActivationEvent(laundryId, "branch_created");
     res.status(201).json(branch);
