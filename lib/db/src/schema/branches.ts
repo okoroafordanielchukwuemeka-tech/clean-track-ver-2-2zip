@@ -6,6 +6,7 @@ export const branches = pgTable("branches", {
   laundryId: integer("laundry_id").notNull().references(() => laundries.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   address: text("address"),
+  type: text("type", { enum: ["PROCESSING", "PICKUP", "HYBRID"] }).notNull().default("HYBRID"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),
   deletedById: integer("deleted_by_id"),
@@ -15,3 +16,5 @@ export const branches = pgTable("branches", {
 
 export type Branch = typeof branches.$inferSelect;
 export type NewBranch = typeof branches.$inferInsert;
+
+export type BranchType = "PROCESSING" | "PICKUP" | "HYBRID";
