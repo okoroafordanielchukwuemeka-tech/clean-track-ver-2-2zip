@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { useAuth } from "./auth-context";
 
+export type BranchType = "PROCESSING" | "PICKUP" | "HYBRID";
+
 export interface Branch {
   id: number;
   laundryId: number;
   name: string;
   address?: string | null;
+  type: BranchType;
   createdAt: string;
 }
 
@@ -45,7 +48,6 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Clear active branch when user logs out or changes
   useEffect(() => {
     if (!isOwner) {
       setActiveBranchState(null);
