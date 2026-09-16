@@ -1,13 +1,16 @@
-name: Phase C hardening
+name: Phase C order lifecycle hardening
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   harden:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -17,35 +20,142 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-      - name: Harden batch lifecycle
+      - name: Patch lifecycle invariants
         shell: python
         run: |
           from pathlib import Path
-          p = Path('artifacts/api-server/src/routes/batches.ts')
+
+          # Pickup: aggregate duplicate item IDs before checking availability.
+          p = Path('artifacts/api-server/src/routes/pickups.ts')
           s = p.read_text()
-          s = s.replace('import { checkPermission } from "../middleware/permissions.js";', 'import { checkPermission } from "../middleware/permissions.js";\nimport { idempotencyMiddleware } from "../lib/idempotency.js";')
-          s = s.replace('  orderIds: z.array(z.number().int()).min(1),', '  orderIds: z.array(z.number().int()).min(1).refine(ids => new Set(ids).size === ids.length, { message: "orderIds must not contain duplicates" }),')
-          s = s.replace('batchesRouter.post("/", checkPermission("process:orders"), async', 'batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware, async')
-          old = '''    // Workers: verify every order in the batch belongs to their branch\n    if (workerBranchId) {\n      const branchOrders = await db\n        .select({ id: orders.id })\n        .from(orders)\n        .where(\n          and(\n            inArray(orders.id, data.orderIds),\n            eq(orders.laundryId, laundryId),\n            eq(orders.branchId, workerBranchId)\n          )\n        );\n      if (branchOrders.length !== data.orderIds.length) {\n        return res.status(403).json({ error: "One or more orders do not belong to your branch" });\n      }\n    }\n\n    // Two-step insert+update: placeholder satisfies NOT NULL + UNIQUE on insert,\n    // then is immediately replaced with the serial-based collision-free code.\n    const batch = await db.transaction(async (tx) => {\n      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;\n      const [inserted] = await tx\n        .insert(batches)\n        .values({\n          batchCode: placeholder,\n          laundryId,\n          orderCount: data.orderIds.length,\n        })\n        .returning();\n\n      const finalCode = formatBatchCode(inserted.id);\n      await tx.update(batches).set({ batchCode: finalCode }).where(eq(batches.id, inserted.id));\n\n      return { ...inserted, batchCode: finalCode };\n    });\n\n    for (const orderId of data.orderIds) {\n      const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];\n      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n      await db\n        .update(orders)\n        .set({\n          batchId: batch.id,\n          status: "processing",\n          assignedWorkerId: data.assignedWorkerId || null,\n          updatedAt: new Date(),\n        })\n        .where(and(...orderConditions));\n    }\n\n    res.status(201).json(batch);'''
-          new = '''    if (data.assignedWorkerId !== undefined) {\n      const [worker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));\n      if (!worker || worker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });\n      if (workerBranchId && worker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign batches to workers in their branch" });\n    }\n\n    // Validate every target order and perform the batch creation + all order\n    // assignments in ONE transaction. No half-created batches.\n    const batch = await db.transaction(async (tx) => {\n      const orderConditions: any[] = [inArray(orders.id, data.orderIds), eq(orders.laundryId, laundryId)];\n      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n      const targetOrders = await tx.select({ id: orders.id, status: orders.status, batchId: orders.batchId }).from(orders).where(and(...orderConditions));\n      if (targetOrders.length !== data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");\n      const blocked = targetOrders.find(o => o.status === "cancelled" || o.status === "completed" || o.batchId !== null);\n      if (blocked) throw new Error("BATCH_ORDER_STATE");\n\n      const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;\n      const [inserted] = await tx.insert(batches).values({ batchCode: placeholder, laundryId, orderCount: data.orderIds.length }).returning();\n      const finalCode = formatBatchCode(inserted.id);\n      const [finalBatch] = await tx.update(batches).set({ batchCode: finalCode }).where(eq(batches.id, inserted.id)).returning();\n\n      await tx.update(orders).set({\n        batchId: inserted.id,\n        status: "processing",\n        assignedWorkerId: data.assignedWorkerId ?? null,\n        updatedAt: new Date(),\n      }).where(and(...orderConditions));\n\n      return finalBatch;\n    });\n\n    res.status(201).json(batch);'''
-          if old not in s:
-              raise SystemExit('batch POST block not found')
-          s = s.replace(old, new)
-          s = s.replace('import { eq, desc, and, inArray, isNotNull } from "drizzle-orm";', 'import { eq, desc, and, inArray, isNotNull, sql } from "drizzle-orm";')
-          s = s.replace('''  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    res.status(500).json({ error: "Failed to create batch" });\n  }\n});''', '''  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });\n    if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });\n    res.status(500).json({ error: "Failed to create batch" });\n  }\n});''', 1)
-          old_patch = '''    const [batch] = await db\n      .update(batches)\n      .set(data)\n      .where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)))\n      .returning();\n    if (!batch) return res.status(404).json({ error: "Batch not found" });\n\n    if (data.status === "completed") {\n      const orderConditions: any[] = [eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)];\n      if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n      await db.update(orders).set({ status: "ready", updatedAt: new Date() }).where(and(...orderConditions));\n    }\n    res.json(batch);'''
-          new_patch = '''    const batch = await db.transaction(async (tx) => {\n      const [current] = await tx.select().from(batches).where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)));\n      if (!current) return null;\n      if (data.status === current.status) return current;\n      if (data.status === "active" && current.status === "completed") throw new Error("BATCH_TERMINAL");\n\n      if (data.status === "completed") {\n        const orderConditions: any[] = [eq(orders.batchId, current.id), eq(orders.laundryId, laundryId)];\n        if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));\n        // Never move cancelled/completed orders backwards. Only active orders\n        // in this batch may advance to ready.\n        await tx.update(orders).set({ status: "ready", updatedAt: new Date() })\n          .where(and(...orderConditions, eq(orders.status, "processing")));\n      }\n      const [updated] = await tx.update(batches).set(data).where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId))).returning();\n      return updated;\n    });\n    if (!batch) return res.status(404).json({ error: "Batch not found" });\n    res.json(batch);'''
-          if old_patch not in s:
-              raise SystemExit('batch PATCH block not found')
-          s = s.replace(old_patch, new_patch)
-          s = s.replace('  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    res.status(500).json({ error: "Failed to update batch" });', '  } catch (err) {\n    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });\n    if (err instanceof Error && err.message === "BATCH_TERMINAL") return res.status(409).json({ error: "A completed batch cannot be reopened" });\n    res.status(500).json({ error: "Failed to update batch" });')
-          p.write_text(s)
+          old = '''        // Validate all quantities before making any changes
+        for (const itemReq of data.items) {
+          const oi = allOrderItems.find(i => i.id === itemReq.orderItemId);
+          if (!oi) {
+            return { itemNotFound: itemReq.orderItemId } as const;
+          }
+          const remaining = oi.quantity - oi.quantityPickedUp;
+          if (itemReq.quantity > remaining) {
+            return { overPickup: { name: oi.name, remaining } } as const;
+          }
+        }
+
+        // All validations passed — apply updates within the transaction
+        const updatedPickedUp = new Map(allOrderItems.map(oi => [oi.id, oi.quantityPickedUp]));
+        for (const itemReq of data.items) {
+          const oi = allOrderItems.find(i => i.id === itemReq.orderItemId)!;
+          const newQty = oi.quantityPickedUp + itemReq.quantity;
+          await tx.update(orderItems).set({ quantityPickedUp: newQty }).where(eq(orderItems.id, oi.id));
+          updatedPickedUp.set(oi.id, newQty);
+        }
+'''
+          new = '''        // Aggregate duplicate item IDs before validation. Otherwise a request such as
+        // [{orderItemId: 7, quantity: 4}, {orderItemId: 7, quantity: 4}] could pass
+        // validation against 5 remaining units and then record 8 picked up.
+        const requestedByItem = new Map<number, number>();
+        for (const itemReq of data.items) {
+          requestedByItem.set(itemReq.orderItemId, (requestedByItem.get(itemReq.orderItemId) ?? 0) + itemReq.quantity);
+        }
+
+        // Validate the aggregated quantity before making any changes.
+        for (const [itemId, requestedQuantity] of requestedByItem) {
+          const oi = allOrderItems.find(i => i.id === itemId);
+          if (!oi) {
+            return { itemNotFound: itemId } as const;
+          }
+          const remaining = oi.quantity - oi.quantityPickedUp;
+          if (requestedQuantity > remaining) {
+            return { overPickup: { name: oi.name, remaining } } as const;
+          }
+        }
+
+        // Apply each item exactly once inside the transaction.
+        const updatedPickedUp = new Map(allOrderItems.map(oi => [oi.id, oi.quantityPickedUp]));
+        for (const [itemId, requestedQuantity] of requestedByItem) {
+          const oi = allOrderItems.find(i => i.id === itemId)!;
+          const newQty = oi.quantityPickedUp + requestedQuantity;
+          await tx.update(orderItems).set({ quantityPickedUp: newQty }).where(eq(orderItems.id, oi.id));
+          updatedPickedUp.set(oi.id, newQty);
+        }
+'''
+          if old not in s: raise SystemExit('pickup validation block not found')
+          s = s.replace(old, new, 1)
+          old = '''        itemPickupsJson = data.items.map(req => {
+          const oi = allOrderItems.find(i => i.id === req.orderItemId)!;
+          return { orderItemId: req.orderItemId, quantity: req.quantity, name: oi.name };
+        });
+'''
+          new = '''        itemPickupsJson = Array.from(requestedByItem.entries()).map(([orderItemId, quantity]) => {
+          const oi = allOrderItems.find(i => i.id === orderItemId)!;
+          return { orderItemId, quantity, name: oi.name };
+        });
+'''
+          if old not in s: raise SystemExit('pickup JSON block not found')
+          p.write_text(s.replace(old, new, 1))
+
+          # Payment deletion: lock the order and recalculate in the same transaction.
+          p = Path('artifacts/api-server/src/routes/orders.ts')
+          s = p.read_text()
+          start = s.index('ordersRouter.delete("/:id/payments/:paymentId"')
+          end = s.index('\nordersRouter.', start + 20)
+          old = s[start:end]
+          new = '''ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments"), idempotencyMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const workerBranchId = req.auth!.branchId;
+    const orderId = parseInt(req.params.id);
+    const paymentId = parseInt(req.params.paymentId);
+    const auth = req.auth!;
+
+    const result = await db.transaction(async (tx) => {
+      const branchClause = workerBranchId ? sql` AND branch_id = ${workerBranchId}` : sql``;
+      const locked = await tx.execute(sql`SELECT id, order_id, price, extra_charge, discount
+        FROM orders WHERE id = ${orderId} AND laundry_id = ${laundryId}${branchClause} FOR UPDATE`);
+      const order = (locked as any).rows?.[0];
+      if (!order) return { orderNotFound: true } as const;
+
+      const [existing] = await tx.select().from(paymentRecords)
+        .where(and(eq(paymentRecords.id, paymentId), eq(paymentRecords.orderId, order.id)));
+      if (!existing || existing.deletedAt) return { paymentNotFound: true } as const;
+
+      await tx.update(paymentRecords).set({
+        deletedAt: new Date(),
+        deletedById: auth.type === "owner" ? (auth.ownerId ?? null) : (auth.workerId ?? null),
+        deletedByType: auth.type,
+        deletedByName: auth.name ?? auth.email ?? "unknown",
+      }).where(eq(paymentRecords.id, paymentId));
+
+      const remaining = await tx.select().from(paymentRecords)
+        .where(and(eq(paymentRecords.orderId, order.id), isNull(paymentRecords.deletedAt)));
+      const newAmountPaid = remaining.reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
+      const totalDue = parseFloat(order.price || "0") + parseFloat(order.extra_charge || "0") - parseFloat(order.discount || "0");
+      const newPaymentStatus = totalDue <= 0 || newAmountPaid >= totalDue ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
+
+      await tx.update(orders).set({ amountPaid: newAmountPaid.toString(), paymentStatus: newPaymentStatus, updatedAt: new Date() })
+        .where(eq(orders.id, order.id));
+      return { orderId: order.id as number, orderRef: order.order_id as string, newAmountPaid, newPaymentStatus };
+    });
+
+    if ("orderNotFound" in result) return res.status(404).json({ error: "Order not found" });
+    if ("paymentNotFound" in result) return res.status(404).json({ error: "Payment not found" });
+
+    logAction({ auth: req.auth!, laundryId, action: "payment_deleted", orderId: result.orderId,
+      metadata: { paymentId, orderId: result.orderRef, newAmountPaid: result.newAmountPaid, paymentStatus: result.newPaymentStatus } }).catch(() => {});
+    res.status(204).send();
+  } catch (err: any) {
+    console.error("[payment delete] err:", err?.message, err?.code);
+    res.status(500).json({ error: "Failed to delete payment" });
+  }
+});
+'''
+          p.write_text(s[:start] + new + s[end:])
+
       - name: Install and build
         run: pnpm install --frozen-lockfile && pnpm run build
-      - name: Commit source fix
+      - name: Commit source fixes
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add artifacts/api-server/src/routes/batches.ts
-          git diff --cached --quiet || git commit -m 'fix: harden batch lifecycle'
+          git add artifacts/api-server/src/routes/pickups.ts artifacts/api-server/src/routes/orders.ts
+          git diff --cached --quiet || git commit -m 'fix: harden pickup aggregation and payment deletion'
           git push
