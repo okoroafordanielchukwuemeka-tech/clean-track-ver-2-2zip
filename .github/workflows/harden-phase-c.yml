@@ -150,6 +150,89 @@ jobs:
 '''
           p.write_text(s[:start] + new + s[end:])
 
+          # Order PATCH: optimistic concurrency. A stale client must never overwrite
+          # an order that changed after it was read and validated.
+          p = Path('artifacts/api-server/src/routes/orders.ts')
+          s = p.read_text()
+          old = '''    const [order] = await db.update(orders).set(updateData)
+      .where(and(...patchConditions))
+      .returning();
+    if (!order) return res.status(404).json({ error: "Order not found" });
+'''
+          new = '''    const [order] = await db.update(orders).set(updateData)
+      .where(and(...patchConditions, eq(orders.updatedAt, beforeOrder.updatedAt)))
+      .returning();
+    if (!order) {
+      return res.status(409).json({
+        error: "Order changed while you were editing it. Refresh the order and try again.",
+        code: "STALE_ORDER_UPDATE",
+      });
+    }
+'''
+          if old not in s: raise SystemExit('order PATCH update block not found')
+          s = s.replace(old, new, 1)
+
+          # Cancellation: idempotent + optimistic concurrency, and only before pickup-ready.
+          old = 'ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRequest, res) => {'
+          new = 'ordersRouter.delete("/:id", checkPermission("delete:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {'
+          if old not in s: raise SystemExit('order delete route not found')
+          s = s.replace(old, new, 1)
+          old = '''    if (existing.status === "completed") {
+      return res.status(409).json({ error: "Cannot delete a completed order. Completed orders are permanently preserved for financial records." });
+    }
+
+    const [cancelled] = await db.update(orders).set({
+      status: "cancelled",
+      updatedAt: new Date(),
+    }).where(and(...conditions)).returning();
+
+    logAction({
+'''
+          new = '''    if (existing.status !== "pending" && existing.status !== "processing") {
+      return res.status(409).json({ error: "Only pending or processing orders can be cancelled. Ready, partially picked-up, and completed orders must follow their operational lifecycle." });
+    }
+
+    const [cancelled] = await db.update(orders).set({
+      status: "cancelled",
+      updatedAt: new Date(),
+    }).where(and(...conditions, eq(orders.updatedAt, existing.updatedAt))).returning();
+    if (!cancelled) {
+      return res.status(409).json({ error: "Order changed while cancellation was being processed. Refresh and try again.", code: "STALE_ORDER_CANCELLATION" });
+    }
+
+    logAction({
+'''
+          if old not in s: raise SystemExit('order cancellation block not found')
+          s = s.replace(old, new, 1)
+
+          # Normal payment recording cannot mutate terminal orders. Corrections/refunds
+          # should use a separate audited workflow rather than silently reopening history.
+          old = '''      if (!row) return null;
+
+      const price = parseFloat(row.price || "0");
+'''
+          new = '''      if (!row) return null;
+      if (row.status === "cancelled" || row.status === "completed") {
+        return { terminalStatus: row.status } as const;
+      }
+
+      const price = parseFloat(row.price || "0");
+'''
+          if old not in s: raise SystemExit('payment terminal insertion point not found')
+          s = s.replace(old, new, 1)
+          old = '''    if (!txResult) return res.status(404).json({ error: "Order not found" });
+
+    const { payment, orderId: oId, orderRef, customerName, remainingBalance, paymentStatus, autoCompleted } = txResult;
+'''
+          new = '''    if (!txResult) return res.status(404).json({ error: "Order not found" });
+    if ("terminalStatus" in txResult) return res.status(409).json({ error: `Cannot record a normal payment on a ${txResult.terminalStatus} order. Use the audited correction/refund workflow.` });
+
+    const { payment, orderId: oId, orderRef, customerName, remainingBalance, paymentStatus, autoCompleted } = txResult;
+'''
+          if old not in s: raise SystemExit('payment result block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
       - name: Install and build
         run: pnpm install --frozen-lockfile && pnpm run build
       - name: Commit source fixes
@@ -157,5 +240,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add artifacts/api-server/src/routes/pickups.ts artifacts/api-server/src/routes/orders.ts
-          git diff --cached --quiet || git commit -m 'fix: harden pickup aggregation and payment deletion'
+          git diff --cached --quiet || git commit -m 'fix: harden order lifecycle concurrency'
           git push
