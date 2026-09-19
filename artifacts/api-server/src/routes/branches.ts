@@ -130,7 +130,7 @@ branchesRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
 
     const [deleted] = await db
       .update(branches)
-      .set({ deletedAt: new Date(), deletedById: req.auth!.userId ?? null, deletedByType: req.auth!.type, deletedByName: req.auth!.name ?? null })
+      .set({ deletedAt: new Date() })
       .where(and(eq(branches.id, id), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)))
       .returning();
     if (!deleted) return res.status(404).json({ error: "Branch not found" });
