@@ -128,7 +128,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     if (!payment) return res.status(404).json({ error: "Receipt not found" });
 
     const orderConditions: any[] = [eq(orders.id, payment.orderId)];
-    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) orderConditions.push(eq(orders.currentBranchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
