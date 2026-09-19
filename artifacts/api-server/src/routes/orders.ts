@@ -172,7 +172,10 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 };
 
 const orderMovementSchema = z.object({
-  toBranchId: z.number().int().positive(),
+  // Guided handoffs may omit the target because CleanTrack already knows the
+  // order's assigned processing/return branch. Owners can still supply it for
+  // manual transfers.
+  toBranchId: z.number().int().positive().optional(),
   movementType: z.enum(["PROCESSING_TRANSFER", "RETURN_TRANSFER", "MANUAL_TRANSFER"]),
   reason: z.string().max(500).optional(),
 });
@@ -558,9 +561,13 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
         return { manualForbidden: true } as const;
       }
 
+      const targetBranchId = data.toBranchId
+        ?? (data.movementType === "PROCESSING_TRANSFER" ? order.processingBranchId : order.returnBranchId);
+      if (targetBranchId == null) return { missingTarget: true } as const;
+
       const [target] = await tx.select({ id: branches.id, type: branches.type, name: branches.name })
         .from(branches)
-        .where(and(eq(branches.id, data.toBranchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+        .where(and(eq(branches.id, targetBranchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
       if (!target) return { badBranch: true } as const;
 
       if (data.movementType === "PROCESSING_TRANSFER") {
@@ -604,6 +611,7 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
     if ("terminal" in result) return res.status(409).json({ error: "Completed or cancelled orders cannot be moved" });
     if ("forbidden" in result) return res.status(403).json({ error: "You can only move orders currently at your assigned branch" });
     if ("manualForbidden" in result) return res.status(403).json({ error: "Workers can only use the guided branch handoff actions" });
+    if ("missingTarget" in result) return res.status(400).json({ error: "This order has no destination branch configured" });
     if ("badBranch" in result) return res.status(400).json({ error: "Target branch not found" });
     if ("wrongTarget" in result) return res.status(400).json({ error: "Target branch does not match the order lifecycle location" });
     if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
