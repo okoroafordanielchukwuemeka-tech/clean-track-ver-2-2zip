@@ -679,7 +679,7 @@ export default function OrderDetail() {
                 return <div key={String(label)} className="rounded-lg border p-2.5"><p className="text-xs text-muted-foreground">{label}</p><p className="font-medium mt-0.5 truncate">{branch?.name ?? (id ? "Branch #" + id : "Not assigned")}</p></div>;
               })}
             </div>
-            {order.status !== "completed" && order.status !== "cancelled" && (
+            {order.status !== "completed" && (order.status as string) !== "cancelled" && (
               <Button size="sm" variant="outline" onClick={() => setShowMove(true)}><ArrowRight className="h-4 w-4 mr-1" />Move Order</Button>
             )}
           </CardContent>
