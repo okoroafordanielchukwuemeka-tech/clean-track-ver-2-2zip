@@ -994,47 +994,80 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
-    const delPmtConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) delPmtConditions.push(eq(orders.currentBranchId, workerBranchId));
-    const [order] = await db.select().from(orders).where(and(...delPmtConditions));
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    const orderId = parseInt(req.params.id, 10);
+    const paymentId = parseInt(req.params.paymentId, 10);
+    if (!Number.isInteger(orderId) || !Number.isInteger(paymentId)) {
+      return res.status(400).json({ error: "Invalid order or payment ID" });
+    }
 
-    const paymentId = parseInt(req.params.paymentId);
-    const [existing] = await db.select().from(paymentRecords)
-      .where(and(eq(paymentRecords.id, paymentId), eq(paymentRecords.orderId, order.id)));
-    if (!existing || existing.deletedAt) return res.status(404).json({ error: "Payment not found" });
+    const txResult = await db.transaction(async (tx) => {
+      const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
+      if (workerBranchId) conditions.push(eq(orders.currentBranchId, workerBranchId));
 
-    const auth = req.auth!;
-    await db.update(paymentRecords).set({
-      deletedAt: new Date(),
-      deletedById: auth.type === "owner" ? (auth.ownerId ?? null) : (auth.workerId ?? null),
-      deletedByType: auth.type,
-      deletedByName: auth.name ?? auth.email ?? "unknown",
-    }).where(eq(paymentRecords.id, paymentId));
+      const [order] = await tx.select().from(orders).where(and(...conditions)).for("update");
+      if (!order) return { notFound: true } as const;
+      if (order.status === "completed" || order.status === "cancelled") return { terminal: true } as const;
 
-    // Recalculate order balance excluding soft-deleted payments
-    const remaining = await db.select().from(paymentRecords)
-      .where(and(eq(paymentRecords.orderId, order.id), isNull(paymentRecords.deletedAt)));
-    const newAmountPaid = remaining.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-    const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
-    const newPaymentStatus = totalDue <= 0 || newAmountPaid >= totalDue ? "paid" : newAmountPaid > 0 ? "partial" : "unpaid";
+      const [existing] = await tx.select().from(paymentRecords)
+        .where(and(eq(paymentRecords.id, paymentId), eq(paymentRecords.orderId, order.id)));
 
-    await db.update(orders).set({
-      amountPaid: newAmountPaid.toString(),
-      paymentStatus: newPaymentStatus,
-      updatedAt: new Date(),
-    }).where(eq(orders.id, order.id));
+      if (!existing || existing.deletedAt) return { paymentNotFound: true } as const;
+
+      const auth = req.auth!;
+      await tx.update(paymentRecords).set({
+        deletedAt: new Date(),
+        deletedById: auth.type === "owner" ? (auth.ownerId ?? null) : (auth.workerId ?? null),
+        deletedByType: auth.type,
+        deletedByName: auth.name ?? auth.email ?? "unknown",
+      }).where(eq(paymentRecords.id, paymentId));
+
+      const remaining = await tx.select().from(paymentRecords)
+        .where(and(eq(paymentRecords.orderId, order.id), isNull(paymentRecords.deletedAt)));
+
+      const newAmountPaid = remaining.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+      const totalDue = parseFloat(order.price || "0") + parseFloat(order.extraCharge || "0") - parseFloat(order.discount || "0");
+      const newPaymentStatus = totalDue <= 0 || newAmountPaid >= totalDue
+        ? "paid"
+        : newAmountPaid > 0
+          ? "partial"
+          : "unpaid";
+
+      await tx.update(orders).set({
+        amountPaid: newAmountPaid.toString(),
+        paymentStatus: newPaymentStatus,
+        updatedAt: new Date(),
+      }).where(eq(orders.id, order.id));
+
+      return {
+        existing,
+        newAmountPaid,
+        newPaymentStatus,
+        orderRef: order.orderId,
+      } as const;
+    });
+
+    if ("notFound" in txResult) return res.status(404).json({ error: "Order not found" });
+    if ("terminal" in txResult) return res.status(409).json({ error: "Payments on completed or cancelled orders require an audited correction or refund workflow." });
+    if ("paymentNotFound" in txResult) return res.status(404).json({ error: "Payment not found" });
 
     logAction({
-      auth,
+      auth: req.auth!,
       laundryId,
       action: "payment_voided",
-      orderId: order.id,
-      metadata: { paymentId: existing.id, receiptNumber: existing.receiptNumber, amount: existing.amount, newAmountPaid, newPaymentStatus, orderId: order.orderId },
+      orderId,
+      metadata: {
+        paymentId,
+        receiptNumber: txResult.existing.receiptNumber,
+        amount: txResult.existing.amount,
+        newAmountPaid: txResult.newAmountPaid,
+        newPaymentStatus: txResult.newPaymentStatus,
+        orderId: txResult.orderRef,
+      },
     }).catch(() => {});
 
     res.status(204).send();
-  } catch {
+  } catch (err) {
+    console.error("[payment void] err:", err);
     res.status(500).json({ error: "Failed to void payment" });
   }
 });
