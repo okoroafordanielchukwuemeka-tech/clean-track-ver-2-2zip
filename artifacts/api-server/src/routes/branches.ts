@@ -43,6 +43,7 @@ branchesRouter.post("/", requireOwner, requireOperational, requirePlanLimit("bra
     res.status(201).json(branch);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+    console.error("[branches] Failed to create branch:", err);
     res.status(500).json({ error: "Failed to create branch" });
   }
 });
