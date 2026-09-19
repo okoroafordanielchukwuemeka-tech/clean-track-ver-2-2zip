@@ -76,8 +76,25 @@ async function getNextDisplayOrder(laundryId: number): Promise<number> {
 }
 
 /** Set of branchIds a service is available at; null/empty means "all branches" */
-async function setServiceBranches(serviceId: number, branchIds: number[] | null | undefined) {
+async function setServiceBranches(laundryId: number, serviceId: number, branchIds: number[] | null | undefined) {
   if (branchIds === undefined) return; // not provided — leave untouched
+  if (branchIds && branchIds.length > 0) {
+    const uniqueIds = [...new Set(branchIds)];
+    if (uniqueIds.length !== branchIds.length) throw new Error("DUPLICATE_BRANCH_IDS");
+
+    const ownedBranches = await db.select({ id: branches.id })
+      .from(branches)
+      .where(and(
+        eq(branches.laundryId, laundryId),
+        inArray(branches.id, uniqueIds),
+        isNull(branches.deletedAt),
+      ));
+
+    if (ownedBranches.length !== uniqueIds.length) {
+      throw new Error("BRANCH_SCOPE");
+    }
+  }
+
   await db.delete(serviceBranches).where(eq(serviceBranches.serviceId, serviceId));
   if (branchIds && branchIds.length > 0) {
     await db.insert(serviceBranches).values(branchIds.map(branchId => ({ serviceId, branchId })));
@@ -510,7 +527,7 @@ servicesRouter.post("/", requireOwner, async (req: AuthRequest, res) => {
       imageUrl: data.imageUrl ?? null,
     }).returning();
 
-    if (data.branchIds !== undefined) await setServiceBranches(service.id, data.branchIds);
+    if (data.branchIds !== undefined) await setServiceBranches(laundryId, service.id, data.branchIds);
 
     trackActivationEvent(laundryId, "service_created");
     res.status(201).json({ ...service, branchIds: data.branchIds ?? null });
@@ -543,7 +560,7 @@ servicesRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
       .returning();
     if (!service) return res.status(404).json({ error: "Service not found" });
 
-    if (branchIds !== undefined) await setServiceBranches(id, branchIds);
+    if (branchIds !== undefined) await setServiceBranches(laundryId, id, branchIds);
     const branchMap = await loadBranchAvailability(laundryId, [id]);
 
     res.json({ ...service, branchIds: branchMap.get(id) ?? null });
