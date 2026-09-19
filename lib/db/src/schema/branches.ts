@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, AnyPgColumn } from "drizzle-orm/pg-core";
 import { laundries } from "./laundries.js";
 
 export const branches = pgTable("branches", {
@@ -7,7 +7,7 @@ export const branches = pgTable("branches", {
   name: text("name").notNull(),
   address: text("address"),
   type: text("type", { enum: ["PROCESSING", "PICKUP", "HYBRID"] }).notNull().default("HYBRID"),
-  processingDestinationBranchId: integer("processing_destination_branch_id").references(() => branches.id, { onDelete: "set null" }),
+  processingDestinationBranchId: integer("processing_destination_branch_id").references((): AnyPgColumn => branches.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),
   deletedById: integer("deleted_by_id"),
