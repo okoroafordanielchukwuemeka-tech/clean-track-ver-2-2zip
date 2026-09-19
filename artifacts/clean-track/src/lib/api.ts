@@ -707,7 +707,9 @@ export interface OrderMovement {
   orderId: number;
   laundryId: number;
   fromBranchId?: number | null;
+  fromBranchName?: string | null;
   toBranchId: number;
+  toBranchName?: string | null;
   movementType: "COLLECTION" | "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER";
   reason?: string | null;
   movedByType?: string | null;
