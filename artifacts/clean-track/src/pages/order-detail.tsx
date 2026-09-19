@@ -173,6 +173,11 @@ export default function OrderDetail() {
     queryFn: () => api.branches.list(),
     enabled: isOwner,
   });
+  const { data: movements = [] } = useQuery({
+    queryKey: ["orders", orderId, "movements"],
+    queryFn: () => api.orders.movements(orderId),
+    enabled: !!orderId,
+  });
 
   usePageTitle(order ? `Order #${order.orderId}` : "Order");
 
@@ -681,6 +686,21 @@ export default function OrderDetail() {
             </div>
             {order.status !== "completed" && (order.status as string) !== "cancelled" && (
               <Button size="sm" variant="outline" onClick={() => setShowMove(true)}><ArrowRight className="h-4 w-4 mr-1" />Move Order</Button>
+            )}
+            {movements.length > 0 && (
+              <div className="pt-2 border-t space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Movement history</p>
+                {movements.map(m => (
+                  <div key={m.id} className="flex items-start gap-2 text-xs">
+                    <ArrowRight className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p><span className="font-medium">{m.fromBranchName ?? "Unknown"}</span> → <span className="font-medium">{m.toBranchName ?? "Unknown"}</span></p>
+                      <p className="text-muted-foreground">{m.movementType.replaceAll("_", " ")} · {m.movedByName ?? "Unknown"} · {new Date(m.createdAt).toLocaleString("en-NG")}</p>
+                      {m.reason && <p className="text-muted-foreground mt-0.5">“{m.reason}”</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
