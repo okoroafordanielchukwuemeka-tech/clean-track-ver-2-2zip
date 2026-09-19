@@ -695,7 +695,7 @@ export default function OrderDetail() {
                     <ArrowRight className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
                       <p><span className="font-medium">{m.fromBranchName ?? "Unknown"}</span> → <span className="font-medium">{m.toBranchName ?? "Unknown"}</span></p>
-                      <p className="text-muted-foreground">{m.movementType.replaceAll("_", " ")} · {m.movedByName ?? "Unknown"} · {new Date(m.createdAt).toLocaleString("en-NG")}</p>
+                      <p className="text-muted-foreground">{m.movementType.replace(/_/g, " ")} · {m.movedByName ?? "Unknown"} · {new Date(m.createdAt).toLocaleString("en-NG")}</p>
                       {m.reason && <p className="text-muted-foreground mt-0.5">“{m.reason}”</p>}
                     </div>
                   </div>
