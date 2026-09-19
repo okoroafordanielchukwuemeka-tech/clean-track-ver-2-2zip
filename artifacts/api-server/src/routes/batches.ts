@@ -100,7 +100,7 @@ batchesRouter.get("/:id", checkPermission("view:orders"), async (req: AuthReques
 
     // Workers: only include orders from their branch in the batch detail
     const orderConditions: any[] = [eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) orderConditions.push(eq(orders.currentBranchId, workerBranchId));
     const batchOrders = await db.select().from(orders).where(and(...orderConditions));
 
     res.json({ ...batch, orders: batchOrders });
@@ -123,7 +123,7 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     }
     const batch = await db.transaction(async (tx) => {
       const conditions:any[]=[inArray(orders.id,data.orderIds),eq(orders.laundryId,laundryId)];
-      if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
+      if(workerBranchId) conditions.push(eq(orders.currentBranchId,workerBranchId));
       const targets=await tx.select({ id: orders.id, status: orders.status, batchId: orders.batchId, processingBranchId: orders.processingBranchId, currentBranchId: orders.currentBranchId }).from(orders).where(and(...conditions));
       if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
       if(targets.some(o => o.processingBranchId == null || o.currentBranchId !== o.processingBranchId)) throw new Error("BATCH_NOT_AT_PROCESSING_BRANCH");
@@ -174,7 +174,7 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
       if(data.status==="active" && current.status==="completed") throw new Error("BATCH_TERMINAL");
       if(data.status==="completed"){
         const conditions:any[]=[eq(orders.batchId,current.id),eq(orders.laundryId,laundryId)];
-        if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
+        if(workerBranchId) conditions.push(eq(orders.currentBranchId,workerBranchId));
         await tx.update(orders).set({status:"ready",updatedAt:new Date()}).where(and(...conditions,eq(orders.status,"processing")));
       }
       const [updated]=await tx.update(batches).set(data).where(and(eq(batches.id,batchId),eq(batches.laundryId,laundryId))).returning();
