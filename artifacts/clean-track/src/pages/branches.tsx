@@ -47,12 +47,12 @@ export default function BranchesPage() {
   const branchToDelete = branches.find(b => b.id === deleteId);
 
   const createMut = useMutation({
-    mutationFn: (data: { name: string; address?: string; type: BranchType }) => api.branches.create(data as any),
+    mutationFn: (data: { name: string; address?: string; type: BranchType; processingDestinationBranchId?: number | null }) => api.branches.create(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); toast.success("Branch created successfully"); setDialogOpen(false); },
     onError: (e: Error) => toast.error("Could not create branch — " + (e.message || "please try again.")),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { name: string; address?: string; type: BranchType } }) => api.branches.update(id, data as any),
+    mutationFn: ({ id, data }: { id: number; data: { name: string; address?: string; type: BranchType; processingDestinationBranchId?: number | null } }) => api.branches.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); toast.success("Branch details updated"); setEditing(null); setDialogOpen(false); },
     onError: (e: Error) => toast.error("Could not update branch — " + (e.message || "please try again.")),
   });
@@ -114,6 +114,9 @@ export default function BranchesPage() {
             const active = activeWorkerCountByBranch[branch.id] ?? 0;
             const type = branch.type ?? "HYBRID";
             const typeInfo = BRANCH_TYPES.find(t => t.value === type)!;
+            const processingDestination = branch.processingDestinationBranchId != null
+              ? branches.find(b => b.id === branch.processingDestinationBranchId)
+              : null;
             return (
               <div key={branch.id} className="border rounded-xl p-5 bg-card space-y-4 hover:shadow-sm transition-shadow">
                 <div className="flex items-start justify-between gap-2">
@@ -123,7 +126,7 @@ export default function BranchesPage() {
                   </div>
                   <div className="flex gap-1 shrink-0"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpen(branch)}><Pencil className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(branch.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>
                 </div>
-                <div><Badge variant="outline" className={typeBadgeClass[type]}>{typeInfo.label} branch</Badge><p className="text-xs text-muted-foreground mt-1">{typeInfo.description}</p></div>
+                <div><Badge variant="outline" className={typeBadgeClass[type]}>{typeInfo.label} branch</Badge><p className="text-xs text-muted-foreground mt-1">{typeInfo.description}</p>{type === "PICKUP" && <p className="text-xs mt-1"><span className="text-muted-foreground">Processes at:</span> <span className="font-medium">{processingDestination?.name ?? "Not configured"}</span></p>}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-muted/50 rounded-lg p-2.5 text-center"><p className="text-lg font-bold">{total}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5"><Users className="h-3 w-3" /> Workers</p>{total > 0 && active < total && <p className="text-xs text-amber-600 mt-0.5">{active} active</p>}{total > 0 && active === total && <p className="text-xs text-green-600 mt-0.5">All active</p>}</div>
                   <div className="bg-muted/50 rounded-lg p-2.5 text-center"><p className="text-lg font-bold text-muted-foreground">{new Date(branch.createdAt).toLocaleDateString("en-NG", { month: "short", year: "numeric" })}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5"><Calendar className="h-3 w-3" /> Opened</p></div>
