@@ -31,7 +31,7 @@ export default function BranchesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<{ id: number } | null>(null);
-  const [form, setForm] = useState<{ name: string; address: string; type: BranchType }>({ name: "", address: "", type: "HYBRID" });
+  const [form, setForm] = useState<{ name: string; address: string; type: BranchType; processingDestinationBranchId: number | null }>({ name: "", address: "", type: "HYBRID", processingDestinationBranchId: null });
 
   const { data: branches = [], isLoading } = useQuery({ queryKey: ["branches"], queryFn: () => api.branches.list() });
   const { data: workers = [] } = useQuery({ queryKey: ["workers"], queryFn: () => api.workers.list() });
@@ -65,17 +65,26 @@ export default function BranchesPage() {
   const handleOpen = (branch?: typeof branches[0]) => {
     if (branch) {
       setEditing({ id: branch.id });
-      setForm({ name: branch.name, address: branch.address ?? "", type: branch.type ?? "HYBRID" });
+      setForm({ name: branch.name, address: branch.address ?? "", type: branch.type ?? "HYBRID", processingDestinationBranchId: branch.processingDestinationBranchId ?? null });
     } else {
       setEditing(null);
-      setForm({ name: "", address: "", type: "HYBRID" });
+      setForm({ name: "", address: "", type: "HYBRID", processingDestinationBranchId: null });
     }
     setDialogOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const data = { name: form.name.trim(), address: form.address.trim() || undefined, type: form.type };
+    const data = {
+      name: form.name.trim(),
+      address: form.address.trim() || undefined,
+      type: form.type,
+      processingDestinationBranchId: form.type === "PICKUP" ? form.processingDestinationBranchId : null,
+    };
+    if (form.type === "PICKUP" && form.processingDestinationBranchId == null) {
+      toast.error("Choose where this Pickup branch sends clothes for processing.");
+      return;
+    }
     if (!data.name) return;
     if (editing) updateMut.mutate({ id: editing.id, data });
     else createMut.mutate(data);
@@ -132,8 +141,29 @@ export default function BranchesPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5"><Label htmlFor="name">Branch Name *</Label><Input id="name" placeholder="e.g. Ikeja Location" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></div>
             <div className="space-y-1.5"><Label htmlFor="address">Address <span className="text-muted-foreground text-xs">(optional)</span></Label><Input id="address" placeholder="e.g. 12 Allen Avenue, Ikeja" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Branch Type *</Label><Select value={form.type} onValueChange={value => setForm(f => ({ ...f, type: value as BranchType }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{BRANCH_TYPES.map(t => <SelectItem key={t.value} value={t.value}><div><div>{t.label}</div><div className="text-xs text-muted-foreground">{t.description}</div></div></SelectItem>)}</SelectContent></Select></div>
-            <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground"><strong className="text-foreground">Why this matters:</strong> CleanTrack will use this type when deciding which branch can collect, process, or return an order. You can change this type later when the location's capabilities change. CleanTrack will block changes that would strand active orders.</div>
+            <div className="space-y-1.5"><Label>Branch Type *</Label><Select value={form.type} onValueChange={value => setForm(f => ({ ...f, type: value as BranchType, processingDestinationBranchId: value === "PICKUP" ? f.processingDestinationBranchId : null }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{BRANCH_TYPES.map(t => <SelectItem key={t.value} value={t.value}><div><div>{t.label}</div><div className="text-xs text-muted-foreground">{t.description}</div></div></SelectItem>)}</SelectContent></Select></div>
+            {form.type === "PICKUP" && (
+              <div className="space-y-1.5">
+                <Label>Processing Destination *</Label>
+                <Select
+                  value={form.processingDestinationBranchId != null ? String(form.processingDestinationBranchId) : ""}
+                  onValueChange={value => setForm(f => ({ ...f, processingDestinationBranchId: Number(value) }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Choose the branch that processes these clothes" /></SelectTrigger>
+                  <SelectContent>
+                    {branches
+                      .filter(b => b.id !== editing?.id && (b.type === "PROCESSING" || b.type === "HYBRID"))
+                      .map(b => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          <div><div>{b.name}</div><div className="text-xs text-muted-foreground">{b.type === "HYBRID" ? "Hybrid — processes locally" : "Processing — processing only"}</div></div>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">CleanTrack will route orders from this Pickup branch here automatically. Workers will not choose the destination for each order.</p>
+              </div>
+            )}
+            <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground"><strong className="text-foreground">Routing:</strong> Hybrid branches process their own orders. Pickup branches send orders to the processing destination you choose above, then receive the finished clothes back. Processing branches only receive work from other branches.</div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={createMut.isPending || updateMut.isPending}>{editing ? "Save Changes" : "Create Branch"}</Button></DialogFooter>
           </form>
         </DialogContent>
