@@ -317,7 +317,12 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       return res.status(400).json({ error: "A collection branch is required to create an order" });
     }
 
-    const activeBranches = await db.select({ id: branches.id, type: branches.type, name: branches.name })
+    const activeBranches = await db.select({
+      id: branches.id,
+      type: branches.type,
+      name: branches.name,
+      processingDestinationBranchId: branches.processingDestinationBranchId,
+    })
       .from(branches)
       .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
 
@@ -327,18 +332,34 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       return res.status(400).json({ error: "This branch cannot receive customer orders" });
     }
 
-    // Keep routing out of the worker's hands: if the owner does not explicitly
-    // choose a processing branch, CleanTrack selects the collection branch when
-    // it can process; otherwise it selects the first active processing-capable branch.
-    const requestedProcessingBranchId = data.processingBranchId;
-    const processingBranchId = requestedProcessingBranchId
-      ?? ( ["PROCESSING", "HYBRID"].includes(collectionBranch.type)
-        ? collectionBranchId
-        : activeBranches.find(b => ["PROCESSING", "HYBRID"].includes(b.type))?.id
-      )
-      ?? null;
+    // Branch configuration is the routing source of truth. Workers do not
+    // choose a processing destination for each order.
+    const processingBranchId = collectionBranch.type === "HYBRID"
+      ? collectionBranchId
+      : collectionBranch.processingDestinationBranchId ?? null;
 
-    const returnBranchId = data.returnBranchId ?? collectionBranchId;
+    if (collectionBranch.type === "PICKUP" && processingBranchId == null) {
+      return res.status(409).json({
+        error: "This Pickup branch has no processing destination configured. Ask the owner to configure it in Branches.",
+        code: "PROCESSING_DESTINATION_NOT_CONFIGURED",
+      });
+    }
+
+    // Return to the same branch where the customer handed the clothes in.
+    const returnBranchId = collectionBranchId;
+
+    if (data.processingBranchId != null && data.processingBranchId !== processingBranchId) {
+      return res.status(400).json({
+        error: "Processing destination is controlled by the collection branch configuration. Update the branch settings instead.",
+        code: "PROCESSING_DESTINATION_CONFIGURED_AT_BRANCH",
+      });
+    }
+    if (data.returnBranchId != null && data.returnBranchId !== returnBranchId) {
+      return res.status(400).json({
+        error: "Return branch is automatically the collection branch.",
+        code: "RETURN_BRANCH_FOLLOWS_COLLECTION",
+      });
+    }
 
     const requestedBranches = [
       ["processing", processingBranchId],
