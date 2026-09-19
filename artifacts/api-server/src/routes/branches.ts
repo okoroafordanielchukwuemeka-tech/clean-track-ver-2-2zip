@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { branches, orders } from "@workspace/db/schema";
+import { branches, orders, workers } from "@workspace/db/schema";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
@@ -126,6 +126,19 @@ branchesRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
 
     if (Number(activeOrders?.count ?? 0) > 0) {
       return res.status(409).json({ error: "Cannot delete a branch that still has active orders. Move or complete those orders first." });
+    }
+
+    const [activeWorkers] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(workers)
+      .where(and(
+        eq(workers.laundryId, laundryId),
+        eq(workers.branchId, id),
+        eq(workers.isActive, true)
+      ));
+
+    if (Number(activeWorkers?.count ?? 0) > 0) {
+      return res.status(409).json({ error: "Cannot delete a branch that still has active workers. Reassign those workers first." });
     }
 
     const [deleted] = await db
