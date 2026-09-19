@@ -54,6 +54,22 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isOwner, user?.id]);
 
+  // If a branch was renamed, deleted, or its capabilities changed in another tab,
+  // never keep a stale branch object as the owner's active filter.
+  useEffect(() => {
+    if (!isOwner || !activeBranch) return;
+    const fresh = branches.find(b => b.id === activeBranch.id);
+    if (!fresh) {
+      setActiveBranchState(null);
+      localStorage.removeItem(ACTIVE_BRANCH_KEY);
+      return;
+    }
+    if (fresh.name !== activeBranch.name || fresh.type !== activeBranch.type) {
+      setActiveBranchState(fresh);
+      localStorage.setItem(ACTIVE_BRANCH_KEY, JSON.stringify(fresh));
+    }
+  }, [isOwner, activeBranch, branches]);
+
   const activeBranchId = activeBranch?.id ?? null;
 
   return (
