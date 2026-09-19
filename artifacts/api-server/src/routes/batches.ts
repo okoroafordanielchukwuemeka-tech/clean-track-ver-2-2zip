@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { batches, orders, workers, branches } from "@workspace/db/schema";
-import { eq, desc, and, inArray, isNotNull } from "drizzle-orm";
+import { eq, desc, and, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -129,7 +129,7 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
       if(targets.some(o => o.processingBranchId == null || o.currentBranchId !== o.processingBranchId)) throw new Error("BATCH_NOT_AT_PROCESSING_BRANCH");
       const processingBranchIds = [...new Set(targets.map(o => o.processingBranchId!).filter(Boolean))];
       if(processingBranchIds.length !== 1) throw new Error("BATCH_MIXED_PROCESSING_BRANCHES");
-      const [processingBranch] = await tx.select({ id: branches.id, type: branches.type }).from(branches).where(and(eq(branches.id, processingBranchIds[0]), eq(branches.laundryId, laundryId), eq(branches.deletedAt, null)));
+      const [processingBranch] = await tx.select({ id: branches.id, type: branches.type }).from(branches).where(and(eq(branches.id, processingBranchIds[0]), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
       if(!processingBranch || !["PROCESSING", "HYBRID"].includes(processingBranch.type)) throw new Error("BATCH_PROCESSING_CAPABILITY");
       if(targets.some(o=>o.status==="cancelled"||o.status==="completed"||o.batchId!==null)) throw new Error("BATCH_ORDER_STATE");
       const placeholder=`GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
