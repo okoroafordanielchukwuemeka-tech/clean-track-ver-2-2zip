@@ -1165,8 +1165,8 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
     const latestPayment = allPayments.length > 0 ? allPayments[allPayments.length - 1] : null;
 
     const [orderBranch, cashierWorker] = await Promise.all([
-      order.branchId
-        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
+      order.currentBranchId
+        ? db.select().from(branches).where(eq(branches.id, order.currentBranchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
       latestPayment?.workerId
         ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, latestPayment.workerId)).then(r => r[0] ?? null)
@@ -1214,7 +1214,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
       order: {
         id: order.id,
         orderId: order.orderId,
-        branchId: order.branchId,
+        branchId: order.currentBranchId,
         serviceType: order.serviceType,
         shirts: order.shirts,
         trousers: order.trousers,
@@ -1478,8 +1478,8 @@ ordersRouter.post(
 
       // Fetch branch + laundry for variable interpolation
       const [laundry] = await db.select().from(laundries).where(eq(laundries.id, laundryId));
-      const branchName = order.branchId
-        ? ((await db.select({ name: branches.name }).from(branches).where(eq(branches.id, order.branchId)))[0]?.name ?? "Main Branch")
+      const branchName = order.currentBranchId
+        ? ((await db.select({ name: branches.name }).from(branches).where(eq(branches.id, order.currentBranchId)))[0]?.name ?? "Main Branch")
         : "Main Branch";
 
       const totalDue = Number(order.price ?? 0) + Number(order.extraCharge ?? 0) - Number(order.discount ?? 0);
@@ -1505,7 +1505,7 @@ ordersRouter.post(
 
       dispatchNotification({
         laundryId,
-        branchId: order.branchId ?? null,
+        branchId: order.currentBranchId ?? null,
         eventType: type === "ready" ? "order_ready" : "overdue",
         orderId: order.id,
         customerId: order.customerId ?? null,
