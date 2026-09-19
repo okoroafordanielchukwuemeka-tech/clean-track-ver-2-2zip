@@ -593,6 +593,15 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
     const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
     if (!beforeOrder) return res.status(404).json({ error: "Order not found" });
 
+    // Terminal orders are immutable through the general PATCH endpoint.
+    // Financial corrections/refunds and pickup completion have their own audited workflows.
+    if (beforeOrder.status === "completed" || beforeOrder.status === "cancelled") {
+      return res.status(409).json({
+        error: "Completed or cancelled orders are read-only. Use the audited correction/refund workflow for exceptional changes.",
+        code: "TERMINAL_ORDER_READ_ONLY",
+      });
+    }
+
     if (isOwner) {
       const nextPrice = (data as any).price !== undefined ? (data as any).price : parseFloat(beforeOrder.price || "0");
       const nextExtra = (data as any).extraCharge !== undefined ? (data as any).extraCharge : parseFloat(beforeOrder.extraCharge || "0");
@@ -623,7 +632,10 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
     if ("assignedWorkerId" in req.body && data.assignedWorkerId !== null && data.assignedWorkerId !== undefined) {
       const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
       if (!targetWorker || targetWorker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
-      if (beforeOrder.branchId !== null && targetWorker.branchId !== beforeOrder.branchId) return res.status(400).json({ error: "Assigned worker must belong to the order's branch" });
+      const workerAssignmentBranch = beforeOrder.currentBranchId ?? beforeOrder.processingBranchId ?? beforeOrder.collectionBranchId;
+      if (workerAssignmentBranch !== null && targetWorker.branchId !== workerAssignmentBranch) {
+        return res.status(400).json({ error: "Assigned worker must belong to the order's current operating branch" });
+      }
       if (workerBranchId && targetWorker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign orders to workers in their branch" });
     }
 
@@ -715,8 +727,12 @@ ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRe
     const [existing] = await db.select().from(orders).where(and(...conditions));
     if (!existing) return res.status(404).json({ error: "Order not found" });
 
-    if (existing.status === "completed") {
-      return res.status(409).json({ error: "Cannot delete a completed order. Completed orders are permanently preserved for financial records." });
+    if (existing.status !== "pending" && existing.status !== "processing") {
+      return res.status(409).json({
+        error: "Only pending or processing orders can be cancelled.",
+        code: "INVALID_CANCELLATION_STATE",
+        status: existing.status,
+      });
     }
 
     const [cancelled] = await db.update(orders).set({
