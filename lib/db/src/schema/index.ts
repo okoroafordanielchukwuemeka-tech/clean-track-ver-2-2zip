@@ -2,6 +2,7 @@ export * from "./laundries.js";
 export * from "./branches.js";
 export * from "./customers.js";
 export * from "./orders.js";
+export * from "./order-movements.js";
 export * from "./order-items.js";
 export * from "./payment-records.js";
 export * from "./pickup-records.js";
