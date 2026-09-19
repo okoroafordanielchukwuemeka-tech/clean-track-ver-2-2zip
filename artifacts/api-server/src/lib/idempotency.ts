@@ -14,7 +14,7 @@ const TTL_MS = 24 * 60 * 60 * 1000;
  *  2. First request proceeds; concurrent requests receive 409 while pending.
  *  3. Successful 2xx responses are cached before being flushed to the client.
  *  4. Non-2xx responses release the reservation so the client can retry.
- *  5. DB errors fail open rather than blocking legitimate traffic.
+ *  5. DB errors fail closed with a retryable 503 so financial mutations are never duplicated silently.
  *
  * The response interceptor handles both res.json() and res.send(). This is
  * important for DELETE endpoints that correctly return HTTP 204: those routes
