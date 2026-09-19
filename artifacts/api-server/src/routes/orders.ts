@@ -146,7 +146,11 @@ const orderInputSchema = z.object({
   extraChargeReason: z.string().optional(),
   discount: z.number().min(0).optional(),
   discountReason: z.string().optional(),
+  // Legacy compatibility: branchId means collection branch only.
   branchId: z.number().int().positive().optional(),
+  collectionBranchId: z.number().int().positive().optional(),
+  processingBranchId: z.number().int().positive().optional(),
+  returnBranchId: z.number().int().positive().optional(),
 });
 
 /**
@@ -191,7 +195,7 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
 
     // Branch scoping: workers are locked to their branch; owners can filter by ?branchId
     const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
-    if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) conditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
     const [orderList, [{ total }]] = await Promise.all([
       db.select().from(orders)
@@ -214,7 +218,7 @@ ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthReq
     const { branchId: branchParam } = req.query;
     const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
     const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) summaryConditions.push(eq(orders.currentBranchId, effectiveBranchId));
     const result = await db.select().from(orders).where(and(...summaryConditions));
     res.json({
       total: result.length,
@@ -244,7 +248,7 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
     const { branchId: branchParam } = req.query;
     const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) conditions.push(eq(orders.currentBranchId, effectiveBranchId));
     const recentOrders = await db.select().from(orders)
       .where(and(...conditions))
       .orderBy(desc(orders.createdAt))
@@ -260,7 +264,7 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const idConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) idConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) idConditions.push(eq(orders.currentBranchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...idConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -293,19 +297,35 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       discountReason: undefined,
     };
 
-    const requestedBranchId = data.branchId;
+    const requestedCollectionBranchId = data.collectionBranchId ?? data.branchId;
     const workerBranchId = req.auth!.branchId ?? null;
-    const orderBranchId = workerBranchId ?? requestedBranchId;
+    const collectionBranchId = workerBranchId ?? requestedCollectionBranchId ?? null;
+    const processingBranchId = data.processingBranchId ?? null;
+    const returnBranchId = data.returnBranchId ?? collectionBranchId;
 
-    if (workerBranchId && requestedBranchId !== undefined && requestedBranchId !== workerBranchId) {
-      return res.status(403).json({ error: "Workers can only create orders in their assigned branch" });
-    }
-    if (orderBranchId !== undefined) {
-      const [ownedBranch] = await db.select({ id: branches.id }).from(branches)
-        .where(and(eq(branches.id, orderBranchId), eq(branches.laundryId, laundryId)));
-      if (!ownedBranch) return res.status(403).json({ error: "Branch not found" });
+    if (workerBranchId && requestedCollectionBranchId !== undefined && requestedCollectionBranchId !== workerBranchId) {
+      return res.status(403).json({ error: "Workers can only create orders at their assigned branch" });
     }
 
+    const requestedBranches = [
+      ["collection", collectionBranchId],
+      ["processing", processingBranchId],
+      ["return", returnBranchId],
+    ] as const;
+
+    for (const [operation, branchId] of requestedBranches) {
+      if (branchId == null) continue;
+      const [ownedBranch] = await db.select({ id: branches.id, type: branches.type })
+        .from(branches)
+        .where(and(eq(branches.id, branchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+      if (!ownedBranch) return res.status(403).json({ error: operation + " branch not found" });
+      const allowed = operation === "collection"
+        ? ["PICKUP", "HYBRID"].includes(ownedBranch.type)
+        : operation === "processing"
+          ? ["PROCESSING", "HYBRID"].includes(ownedBranch.type)
+          : ["PICKUP", "HYBRID"].includes(ownedBranch.type);
+      if (!allowed) return res.status(400).json({ error: operation + " operation is not supported by the selected branch" });
+    }
     const sla = await getLaundrySla(laundryId);
     const createdAt = new Date();
     const processingDueAt = computeProcessingDueAt(createdAt, data.serviceType, sla);
@@ -351,9 +371,15 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
 
       const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const [inserted] = await tx.insert(orders).values({
-        laundryId, branchId: orderBranchId, customerId, orderId: placeholder, customerName: data.customerName, phone: phoneNorm,
+        laundryId,
+        // Legacy bridge: branchId remains the collection branch until all consumers migrate.
+        branchId: collectionBranchId,
+        collectionBranchId,
+        processingBranchId,
+        returnBranchId,
+        currentBranchId: collectionBranchId,
+        customerId, orderId: placeholder, customerName: data.customerName, phone: phoneNorm,
         address: data.address, serviceType: data.serviceType, shirts: data.shirts ?? 0, trousers: data.trousers ?? 0, additionalNotes: data.additionalNotes,
-        price: computedPrice?.toString(), extraCharge: data.extraCharge?.toString(), discount: data.discount?.toString(), processingDueAt,
       }).returning();
 
       const finalOrderId = await generateOrderId(tx);
