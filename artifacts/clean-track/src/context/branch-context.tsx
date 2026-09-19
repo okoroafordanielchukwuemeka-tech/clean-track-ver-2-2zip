@@ -9,6 +9,7 @@ export interface Branch {
   name: string;
   address?: string | null;
   type: BranchType;
+  processingDestinationBranchId?: number | null;
   createdAt: string;
 }
 
