@@ -562,7 +562,7 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
       }
 
       const targetBranchId = data.toBranchId
-        ?? (data.movementType === "PROCESSING_TRANSFER" ? order.processingBranchId : order.returnBranchId);
+        ?? (data.movementType === "PROCESSING_TRANSFER" ? order.processingBranchId : data.movementType === "RETURN_TRANSFER" ? order.returnBranchId : null);
       if (targetBranchId == null) return { missingTarget: true } as const;
 
       const [target] = await tx.select({ id: branches.id, type: branches.type, name: branches.name })
