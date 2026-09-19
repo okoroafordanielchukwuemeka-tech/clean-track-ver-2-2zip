@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { aliasedTable } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, orderMovements, notificationMessages, notificationEvents } from "@workspace/db/schema";
@@ -466,8 +466,8 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
     const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    const fromBranch = aliasedTable(branches, "from_branch");
-    const toBranch = aliasedTable(branches, "to_branch");
+    const fromBranch = alias(branches, "from_branch");
+    const toBranch = alias(branches, "to_branch");
 
     const movements = await db
       .select({
