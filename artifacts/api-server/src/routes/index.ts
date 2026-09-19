@@ -36,28 +36,6 @@ import { searchRouter } from "./search.js";
 
 export const router = Router();
 
-// Startup guard: make route-import failures explicit instead of allowing Express
-// to throw the opaque "Router.use() ... undefined" error.
-const routeMounts: Array<[string, unknown]> = [
-  ["healthRouter", healthRouter], ["authRouter", authRouter], ["webhooksRouter", webhooksRouter],
-  ["ordersRouter", ordersRouter], ["pickupsRouter", pickupsRouter], ["customersRouter", customersRouter],
-  ["servicesRouter", servicesRouter], ["notificationsRouter", notificationsRouter], ["settingsRouter", settingsRouter],
-  ["analyticsRouter", analyticsRouter], ["workersRouter", workersRouter], ["batchesRouter", batchesRouter],
-  ["expendituresRouter", expendituresRouter], ["expenseCategoriesRouter", expenseCategoriesRouter],
-  ["messageTemplatesRouter", messageTemplatesRouter], ["discountApprovalsRouter", discountApprovalsRouter],
-  ["receiptsRouter", receiptsRouter], ["branchesRouter", branchesRouter], ["operationsRouter", operationsRouter],
-  ["telemetryRouter", telemetryRouter], ["recoveryRouter", recoveryRouter], ["productionHealthRouter", productionHealthRouter],
-  ["alertsRouter", alertsRouter], ["communicationRouter", communicationRouter], ["whatsappRouter", whatsappRouter],
-  ["conversationsRouter", conversationsRouter], ["subscriptionRouter", subscriptionRouter],
-  ["automationRulesRouter", automationRulesRouter], ["marketingRouter", marketingRouter], ["campaignsRouter", campaignsRouter],
-  ["searchRouter", searchRouter], ["adminRouter", adminRouter], ["requireAuth", requireAuth], ["requireOwner", requireOwner],
-];
-for (const [name, middleware] of routeMounts) {
-  if (typeof middleware !== "function" && typeof middleware !== "object") {
-    throw new Error("[route-startup] " + name + " imported as " + typeof middleware + "; expected an Express router/middleware");
-  }
-}
-
 router.use(healthRouter);
 router.use("/auth", authRouter);
 router.use("/webhooks", webhooksRouter);
