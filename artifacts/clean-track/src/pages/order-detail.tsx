@@ -247,7 +247,7 @@ export default function OrderDetail() {
   // ── Mutations ────────────────────────────────────────────────────────────
 
   const moveMutation = useMutation({
-    mutationFn: (data: { toBranchId: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
+    mutationFn: (data: { toBranchId?: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
       api.orders.move(orderId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders", orderId] });
