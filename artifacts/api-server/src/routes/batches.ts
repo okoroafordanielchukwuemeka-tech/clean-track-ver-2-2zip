@@ -168,16 +168,47 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
     }
 
     const batch = await db.transaction(async (tx) => {
-      const [current] = await tx.select().from(batches).where(and(eq(batches.id,batchId),eq(batches.laundryId,laundryId)));
-      if(!current) return null;
-      if(data.status===current.status) return current;
-      if(data.status==="active" && current.status==="completed") throw new Error("BATCH_TERMINAL");
-      if(data.status==="completed"){
-        const conditions:any[]=[eq(orders.batchId,current.id),eq(orders.laundryId,laundryId)];
-        if(workerBranchId) conditions.push(eq(orders.currentBranchId,workerBranchId));
-        await tx.update(orders).set({status:"ready",updatedAt:new Date()}).where(and(...conditions,eq(orders.status,"processing")));
+      const [current] = await tx.select().from(batches)
+        .where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)))
+        .for("update");
+      if (!current) return null;
+      if (data.status === current.status) return current;
+      if (data.status === "active" && current.status === "completed") throw new Error("BATCH_TERMINAL");
+
+      if (data.status === "completed") {
+        const conditions: any[] = [eq(orders.batchId, current.id), eq(orders.laundryId, laundryId)];
+        if (workerBranchId) conditions.push(eq(orders.currentBranchId, workerBranchId));
+
+        const batchRows = await tx.select({
+          id: orders.id,
+          status: orders.status,
+          currentBranchId: orders.currentBranchId,
+          processingBranchId: orders.processingBranchId,
+        }).from(orders).where(and(...conditions)).for("update");
+
+        // A worker must complete the whole visible batch, not silently leave
+        // some orders behind because they moved or became terminal meanwhile.
+        if (workerBranchId && batchRows.length !== current.orderCount) {
+          throw new Error("BATCH_SCOPE_CHANGED");
+        }
+        if (batchRows.length !== current.orderCount) {
+          throw new Error("BATCH_INCOMPLETE");
+        }
+        if (batchRows.some(o => o.status !== "processing")) {
+          throw new Error("BATCH_ORDER_STATE");
+        }
+        if (batchRows.some(o => o.processingBranchId == null || o.currentBranchId !== o.processingBranchId)) {
+          throw new Error("BATCH_LOCATION_CHANGED");
+        }
+
+        await tx.update(orders).set({ status: "ready", updatedAt: new Date() })
+          .where(and(...conditions, eq(orders.status, "processing")));
       }
-      const [updated]=await tx.update(batches).set(data).where(and(eq(batches.id,batchId),eq(batches.laundryId,laundryId))).returning();
+
+      const [updated] = await tx.update(batches)
+        .set(data)
+        .where(and(eq(batches.id, batchId), eq(batches.laundryId, laundryId)))
+        .returning();
       return updated;
     });
     if(!batch) return res.status(404).json({error:"Batch not found"});
@@ -185,6 +216,10 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     if (err instanceof Error && err.message === "BATCH_TERMINAL") return res.status(409).json({ error: "A completed batch cannot be reopened" });
+    if (err instanceof Error && err.message === "BATCH_SCOPE_CHANGED") return res.status(409).json({ error: "The batch changed while you were working. Refresh and review all orders before completing it." });
+    if (err instanceof Error && err.message === "BATCH_INCOMPLETE") return res.status(409).json({ error: "Not all orders in this batch are currently available for completion." });
+    if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "Every order in the batch must still be processing before the batch can be completed." });
+    if (err instanceof Error && err.message === "BATCH_LOCATION_CHANGED") return res.status(409).json({ error: "One or more orders are no longer at their assigned processing branch." });
     res.status(500).json({ error: "Failed to update batch" });
   }
 });
