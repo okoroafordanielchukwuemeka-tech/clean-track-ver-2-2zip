@@ -27,7 +27,7 @@ import {
   ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus,
   TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock,
   Receipt, Printer, Eye, MessageSquare, Send, RotateCcw, RefreshCw,
-  ChevronDown, ChevronUp, Zap, AlertTriangle,
+  ChevronDown, ChevronUp, Zap, AlertTriangle, GitBranch, ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -154,6 +154,10 @@ export default function OrderDetail() {
   const [showMessages, setShowMessages]           = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(true);
   const [showFullTimeline, setShowFullTimeline]   = useState(false);
+  const [showMove, setShowMove]                   = useState(false);
+  const [moveType, setMoveType]                   = useState<"PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER">("MANUAL_TRANSFER");
+  const [moveTarget, setMoveTarget]               = useState("");
+  const [moveReason, setMoveReason]               = useState("");
 
   const orderId = parseInt(id!);
 
@@ -162,6 +166,12 @@ export default function OrderDetail() {
   const { data: order, isLoading } = useQuery({
     queryKey: ["orders", orderId],
     queryFn: () => api.orders.get(orderId),
+  });
+  
+  const { data: branchList = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: () => api.branches.list(),
+    enabled: isOwner,
   });
 
   usePageTitle(order ? `Order #${order.orderId}` : "Order");
@@ -230,6 +240,20 @@ export default function OrderDetail() {
   }, [orderId, qc]);
 
   // ── Mutations ────────────────────────────────────────────────────────────
+
+  const moveMutation = useMutation({
+    mutationFn: (data: { toBranchId: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
+      api.orders.move(orderId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders", orderId] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      setShowMove(false);
+      setMoveTarget("");
+      setMoveReason("");
+      toast.success("Order moved successfully");
+    },
+    onError: (e: Error) => toast.error("Could not move order — " + (e.message || "please try again.")),
+  });
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, any>) => api.orders.update(orderId, data),
@@ -639,6 +663,28 @@ export default function OrderDetail() {
           )}
         </div>
       </div>
+      
+      {isOwner && (
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><GitBranch className="h-4 w-4" /> Order Locations</CardTitle></CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-sm">
+              {[
+                ["Collection", order.collectionBranchId],
+                ["Processing", order.processingBranchId],
+                ["Return", order.returnBranchId],
+                ["Current", order.currentBranchId],
+              ].map(([label, id]) => {
+                const branch = branchList.find(b => b.id === id);
+                return <div key={String(label)} className="rounded-lg border p-2.5"><p className="text-xs text-muted-foreground">{label}</p><p className="font-medium mt-0.5 truncate">{branch?.name ?? (id ? "Branch #" + id : "Not assigned")}</p></div>;
+              })}
+            </div>
+            {order.status !== "completed" && order.status !== "cancelled" && (
+              <Button size="sm" variant="outline" onClick={() => setShowMove(true)}><ArrowRight className="h-4 w-4 mr-1" />Move Order</Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Status Pipeline ───────────────────────────────────────────────── */}
       {!isCancelled && (
