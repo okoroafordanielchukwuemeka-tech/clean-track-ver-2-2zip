@@ -29,7 +29,7 @@ discountApprovalsRouter.get("/", async (req: AuthRequest, res) => {
     if (workerBranchId) {
       const branchOrders = await db.select({ id: orders.id })
         .from(orders)
-        .where(and(eq(orders.laundryId, laundryId), eq(orders.branchId, workerBranchId)));
+        .where(and(eq(orders.laundryId, laundryId), eq(orders.currentBranchId, workerBranchId)));
       const branchOrderIds = new Set(branchOrders.map(o => o.id));
       results = results.filter(r => branchOrderIds.has(r.orderId));
     }
