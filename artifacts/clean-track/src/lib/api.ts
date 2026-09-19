@@ -170,7 +170,7 @@ export const api = {
       request<{ messages: OrderMessage[]; total: number }>("GET", `/orders/${id}/messages`),
     retryMessage: (id: number, msgId: number) =>
       request<{ success: boolean; status: string; error?: string }>("POST", `/orders/${id}/messages/${msgId}/retry`),
-    move: (id: number, data: { toBranchId: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
+    move: (id: number, data: { toBranchId?: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
       request<{ order: Order; movement: OrderMovement }>("POST", `/orders/${id}/move`, data),
     movements: (id: number) => request<OrderMovement[]>("GET", `/orders/${id}/movements`),
   },
