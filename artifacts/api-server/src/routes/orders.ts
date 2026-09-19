@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, notificationMessages, notificationEvents } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, orderMovements, notificationMessages, notificationEvents } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
 import { computeOrderPricing } from "../lib/order-financials.js";
 import { z } from "zod";
@@ -170,6 +170,11 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   cancelled:      [],          // terminal
 };
 
+const orderMovementSchema = z.object({
+  toBranchId: z.number().int().positive(),
+  movementType: z.enum(["PROCESSING_TRANSFER", "RETURN_TRANSFER", "MANUAL_TRANSFER"]),
+  reason: z.string().max(500).optional(),
+});
 const workerOrderUpdateSchema = z.object({
   status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"]).optional(),
   verifiedShirts: z.number().int().min(0).optional(),
@@ -448,6 +453,56 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
   }
 });
 
+ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
+  try {
+    if (req.auth!.type !== "owner") return res.status(403).json({ error: "Only the laundry owner can move orders between branches" });
+    const orderId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
+    const data = orderMovementSchema.parse(req.body);
+    const laundryId = req.auth!.laundryId;
+
+    const result = await db.transaction(async (tx) => {
+      const [order] = await tx.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId))).for("update");
+      if (!order) return { notFound: true } as const;
+      if (["completed", "cancelled"].includes(order.status)) return { terminal: true } as const;
+
+      const [target] = await tx.select({ id: branches.id, type: branches.type }).from(branches)
+        .where(and(eq(branches.id, data.toBranchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+      if (!target) return { badBranch: true } as const;
+
+      if (data.movementType === "PROCESSING_TRANSFER") {
+        if (order.processingBranchId !== target.id) return { wrongTarget: "processing" } as const;
+        if (!["PROCESSING", "HYBRID"].includes(target.type)) return { badCapability: "processing" } as const;
+      }
+      if (data.movementType === "RETURN_TRANSFER") {
+        if (order.returnBranchId !== target.id) return { wrongTarget: "return" } as const;
+        if (!["PICKUP", "HYBRID"].includes(target.type)) return { badCapability: "return" } as const;
+        if (order.status !== "ready" && order.status !== "partial_pickup") return { badStatus: "return" } as const;
+      }
+      if (target.id === order.currentBranchId) return { unchanged: true, order } as const;
+
+      const [updated] = await tx.update(orders).set({ currentBranchId: target.id, updatedAt: new Date() })
+        .where(and(eq(orders.id, order.id), eq(orders.laundryId, laundryId))).returning();
+      const [movement] = await tx.insert(orderMovements).values({
+        laundryId, orderId: order.id, fromBranchId: order.currentBranchId, toBranchId: target.id,
+        movementType: data.movementType, reason: data.reason ?? null, movedByType: "owner", movedByName: actorName(req.auth!),
+      }).returning();
+      return { order: updated, movement } as const;
+    });
+
+    if ("notFound" in result) return res.status(404).json({ error: "Order not found" });
+    if ("terminal" in result) return res.status(409).json({ error: "Completed or cancelled orders cannot be moved" });
+    if ("badBranch" in result) return res.status(400).json({ error: "Target branch not found" });
+    if ("wrongTarget" in result) return res.status(400).json({ error: "Target branch does not match the order lifecycle location" });
+    if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
+    if ("badStatus" in result) return res.status(409).json({ error: "Order must be ready before it can move to the return branch" });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+    console.error("[order-move]", err);
+    res.status(500).json({ error: "Failed to move order" });
+  }
+});
 ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
