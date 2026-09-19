@@ -2,47 +2,12 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1781557864268,
-      "tag": "0000_flimsy_captain_marvel",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1781559474151,
-      "tag": "0001_salty_deathbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1785126813169,
-      "tag": "0002_phase-719a-baseline",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1789573446148,
-      "tag": "0003_branch_operational_types",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1789721095461,
-      "tag": "0004_order_explicit_locations",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1789725000000,
-      "tag": "0005_order_movements",
-      "breakpoints": true
-    }
+    {"idx":0,"version":"7","when":1781557864268,"tag":"0000_flimsy_captain_marvel","breakpoints":true},
+    {"idx":1,"version":"7","when":1781559474151,"tag":"0001_salty_deathbird","breakpoints":true},
+    {"idx":2,"version":"7","when":1785126813169,"tag":"0002_phase-719a-baseline","breakpoints":true},
+    {"idx":3,"version":"7","when":1789573446148,"tag":"0003_branch_operational_types","breakpoints":true},
+    {"idx":4,"version":"7","when":1789721095461,"tag":"0004_order_explicit_locations","breakpoints":true},
+    {"idx":5,"version":"7","when":1789725000000,"tag":"0005_order_movements","breakpoints":true},
+    {"idx":6,"version":"7","when":1790100000000,"tag":"0006_branch_processing_destinations","breakpoints":true}
   ]
 }
