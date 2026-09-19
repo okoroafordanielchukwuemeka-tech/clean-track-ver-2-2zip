@@ -136,9 +136,9 @@ export const api = {
   },
   branches: {
     list: () => request<import("@/context/branch-context").Branch[]>("GET", "/branches"),
-    create: (data: { name: string; address?: string; type?: import("@/context/branch-context").BranchType }) =>
+    create: (data: { name: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
       request<import("@/context/branch-context").Branch>("POST", "/branches", data),
-    update: (id: number, data: { name?: string; address?: string; type?: import("@/context/branch-context").BranchType }) =>
+    update: (id: number, data: { name?: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
       request<import("@/context/branch-context").Branch>("PATCH", `/branches/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/branches/${id}`),
   },
