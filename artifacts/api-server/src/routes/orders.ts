@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { aliasedTable } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, orderMovements, notificationMessages, notificationEvents } from "@workspace/db/schema";
@@ -465,14 +466,17 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
     const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
+    const fromBranch = aliasedTable(branches, "from_branch");
+    const toBranch = aliasedTable(branches, "to_branch");
+
     const movements = await db
       .select({
         id: orderMovements.id,
         orderId: orderMovements.orderId,
         fromBranchId: orderMovements.fromBranchId,
-        fromBranchName: sql<string | null>`from_branch.name`,
+        fromBranchName: fromBranch.name,
         toBranchId: orderMovements.toBranchId,
-        toBranchName: sql<string | null>`to_branch.name`,
+        toBranchName: toBranch.name,
         movementType: orderMovements.movementType,
         reason: orderMovements.reason,
         movedByType: orderMovements.movedByType,
@@ -480,8 +484,8 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
         createdAt: orderMovements.createdAt,
       })
       .from(orderMovements)
-      .leftJoin(sql`branches AS from_branch`, sql`from_branch.id = ${orderMovements.fromBranchId}`)
-      .leftJoin(sql`branches AS to_branch`, sql`to_branch.id = ${orderMovements.toBranchId}`)
+      .leftJoin(fromBranch, eq(fromBranch.id, orderMovements.fromBranchId))
+      .leftJoin(toBranch, eq(toBranch.id, orderMovements.toBranchId))
       .where(eq(orderMovements.orderId, orderId))
       .orderBy(desc(orderMovements.createdAt));
 
