@@ -123,33 +123,33 @@ try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(918273645)");
 
-    if (await tableExists(client, "__drizzle_migrations")) {
-      await client.query("COMMIT");
-      console.log("[db-reconcile] migration ledger already exists; no reconciliation needed.");
-      process.exit(0);
-    }
+    const ledgerExists = await tableExists(client, "__drizzle_migrations");
 
-    const baseline = await requiredBaselinePresent(client);
-    if (!baseline.ok) {
-      throw new Error("existing database does not match the expected CleanTrack baseline: " + baseline.reason);
-    }
+    if (!ledgerExists) {
+      const baseline = await requiredBaselinePresent(client);
+      if (!baseline.ok) {
+        throw new Error("existing database does not match the expected CleanTrack baseline: " + baseline.reason);
+      }
 
-    await client.query(
-      "CREATE TABLE public.__drizzle_migrations (id SERIAL PRIMARY KEY NOT NULL, hash TEXT NOT NULL, created_at BIGINT)"
-    );
+      await client.query(
+        "CREATE TABLE public.__drizzle_migrations (id SERIAL PRIMARY KEY NOT NULL, hash TEXT NOT NULL, created_at BIGINT)"
+      );
+
+      const byTag = new Map(entries.map((entry) => [entry.tag, entry]));
+
+      // 0000-0002 are represented by the verified existing baseline. Never replay them.
+      for (const tag of [
+        "0000_flimsy_captain_marvel",
+        "0001_salty_deathbird",
+        "0002_phase-719a-baseline",
+      ]) {
+        const entry = byTag.get(tag);
+        if (!entry) throw new Error("Journal entry missing: " + tag);
+        await recordMigration(client, entry);
+      }
+    }
 
     const byTag = new Map(entries.map((entry) => [entry.tag, entry]));
-
-    // 0000-0002 are represented by the verified existing baseline. Never replay them.
-    for (const tag of [
-      "0000_flimsy_captain_marvel",
-      "0001_salty_deathbird",
-      "0002_phase-719a-baseline",
-    ]) {
-      const entry = byTag.get(tag);
-      if (!entry) throw new Error("Journal entry missing: " + tag);
-      await recordMigration(client, entry);
-    }
 
     // 0003: branch operational type.
     {
