@@ -380,6 +380,7 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
         currentBranchId: collectionBranchId,
         customerId, orderId: placeholder, customerName: data.customerName, phone: phoneNorm,
         address: data.address, serviceType: data.serviceType, shirts: data.shirts ?? 0, trousers: data.trousers ?? 0, additionalNotes: data.additionalNotes,
+        price: computedPrice?.toString(), extraCharge: data.extraCharge?.toString(), discount: data.discount?.toString(), processingDueAt,
       }).returning();
 
       const finalOrderId = await generateOrderId(tx);
