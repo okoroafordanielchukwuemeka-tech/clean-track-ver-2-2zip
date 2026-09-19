@@ -453,6 +453,45 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
   }
 });
 
+ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const orderId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
+
+    const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
+    if (req.auth!.branchId) conditions.push(eq(orders.currentBranchId, req.auth!.branchId));
+
+    const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const movements = await db
+      .select({
+        id: orderMovements.id,
+        orderId: orderMovements.orderId,
+        fromBranchId: orderMovements.fromBranchId,
+        fromBranchName: sql<string | null>`from_branch.name`,
+        toBranchId: orderMovements.toBranchId,
+        toBranchName: sql<string | null>`to_branch.name`,
+        movementType: orderMovements.movementType,
+        reason: orderMovements.reason,
+        movedByType: orderMovements.movedByType,
+        movedByName: orderMovements.movedByName,
+        createdAt: orderMovements.createdAt,
+      })
+      .from(orderMovements)
+      .leftJoin(sql`branches AS from_branch`, sql`from_branch.id = ${orderMovements.fromBranchId}`)
+      .leftJoin(sql`branches AS to_branch`, sql`to_branch.id = ${orderMovements.toBranchId}`)
+      .where(eq(orderMovements.orderId, orderId))
+      .orderBy(desc(orderMovements.createdAt));
+
+    res.json(movements);
+  } catch (err) {
+    console.error("[order-movements]", err);
+    res.status(500).json({ error: "Failed to list order movements" });
+  }
+});
+
 ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
   try {
     if (req.auth!.type !== "owner") return res.status(403).json({ error: "Only the laundry owner can move orders between branches" });
