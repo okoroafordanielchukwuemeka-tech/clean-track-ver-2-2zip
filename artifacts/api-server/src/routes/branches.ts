@@ -98,7 +98,7 @@ branchesRouter.get("/:id/stats", requireOwner, async (req: AuthRequest, res) => 
     const branchOrders = await db
       .select()
       .from(orders)
-      .where(and(eq(orders.laundryId, laundryId), eq(orders.branchId, id)));
+      .where(and(eq(orders.laundryId, laundryId), eq(orders.currentBranchId, id)));
 
     res.json({
       branch,
