@@ -52,7 +52,7 @@ analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
     const effectiveBranchId = getEffectiveBranchId(req);
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
     const batchConditions: any[] = [eq(batches.laundryId, laundryId)];
 
@@ -129,7 +129,7 @@ analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
     const isOwner = req.auth!.type === "owner";
     const effectiveBranchId = getEffectiveBranchId(req);
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
     const allOrders = await db.select().from(orders).where(and(...orderConditions));
     const dailyMap: Record<string, { count: number; revenue: number }> = {};
@@ -170,7 +170,7 @@ analyticsRouter.get("/full", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async
     const prevSince = new Date(since.getTime() - (Date.now() - since.getTime()));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
     const allOrders = await db.select().from(orders).where(and(...orderConditions));
 
     const periodOrders = allOrders.filter(o => new Date(o.createdAt) >= since);
@@ -326,7 +326,7 @@ analyticsRouter.get("/customers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), 
     if (effectiveBranchId) custConditions.push(eq(customers.branchId, effectiveBranchId));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
     const [allCustomers, allOrders] = await Promise.all([
       db.select().from(customers).where(and(...custConditions)),
@@ -397,7 +397,7 @@ analyticsRouter.get("/workers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), as
     if (effectiveBranchId) workerConditions.push(eq(workers.branchId, effectiveBranchId));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
     const [allWorkers, allOrders, allPickups] = await Promise.all([
       db.select().from(workers).where(and(...workerConditions)),
@@ -453,7 +453,7 @@ analyticsRouter.get("/sla", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async 
       .where(eq(laundries.id, laundryId));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
     const allOrders = await db.select().from(orders).where(and(...orderConditions));
     const now = new Date();
 
@@ -544,7 +544,7 @@ analyticsRouter.get("/services", async (req: AuthRequest, res) => {
     const allServices = await db.select().from(services).where(eq(services.laundryId, laundryId));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchId) orderConditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
     const rows = await db
       .select({
