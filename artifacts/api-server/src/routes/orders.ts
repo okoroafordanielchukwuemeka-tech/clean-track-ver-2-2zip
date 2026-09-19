@@ -306,31 +306,57 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
     const requestedCollectionBranchId = data.collectionBranchId ?? data.branchId;
     const workerBranchId = req.auth!.branchId ?? null;
     const collectionBranchId = workerBranchId ?? requestedCollectionBranchId ?? null;
-    const processingBranchId = data.processingBranchId ?? null;
-    const returnBranchId = data.returnBranchId ?? collectionBranchId;
-
     if (workerBranchId && requestedCollectionBranchId !== undefined && requestedCollectionBranchId !== workerBranchId) {
       return res.status(403).json({ error: "Workers can only create orders at their assigned branch" });
     }
 
+    if (collectionBranchId == null) {
+      return res.status(400).json({ error: "A collection branch is required to create an order" });
+    }
+
+    const activeBranches = await db.select({ id: branches.id, type: branches.type, name: branches.name })
+      .from(branches)
+      .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+
+    const collectionBranch = activeBranches.find(b => b.id === collectionBranchId);
+    if (!collectionBranch) return res.status(403).json({ error: "Collection branch not found" });
+    if (!["PICKUP", "HYBRID"].includes(collectionBranch.type)) {
+      return res.status(400).json({ error: "This branch cannot receive customer orders" });
+    }
+
+    // Keep routing out of the worker's hands: if the owner does not explicitly
+    // choose a processing branch, CleanTrack selects the collection branch when
+    // it can process; otherwise it selects the first active processing-capable branch.
+    const requestedProcessingBranchId = data.processingBranchId;
+    const processingBranchId = requestedProcessingBranchId
+      ?? ( ["PROCESSING", "HYBRID"].includes(collectionBranch.type)
+        ? collectionBranchId
+        : activeBranches.find(b => ["PROCESSING", "HYBRID"].includes(b.type))?.id
+      )
+      ?? null;
+
+    const returnBranchId = data.returnBranchId ?? collectionBranchId;
+
     const requestedBranches = [
-      ["collection", collectionBranchId],
       ["processing", processingBranchId],
       ["return", returnBranchId],
     ] as const;
 
     for (const [operation, branchId] of requestedBranches) {
       if (branchId == null) continue;
-      const [ownedBranch] = await db.select({ id: branches.id, type: branches.type })
-        .from(branches)
-        .where(and(eq(branches.id, branchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+      const ownedBranch = activeBranches.find(b => b.id === branchId);
       if (!ownedBranch) return res.status(403).json({ error: operation + " branch not found" });
-      const allowed = operation === "collection"
-        ? ["PICKUP", "HYBRID"].includes(ownedBranch.type)
-        : operation === "processing"
-          ? ["PROCESSING", "HYBRID"].includes(ownedBranch.type)
-          : ["PICKUP", "HYBRID"].includes(ownedBranch.type);
+      const allowed = operation === "processing"
+        ? ["PROCESSING", "HYBRID"].includes(ownedBranch.type)
+        : ["PICKUP", "HYBRID"].includes(ownedBranch.type);
       if (!allowed) return res.status(400).json({ error: operation + " operation is not supported by the selected branch" });
+    }
+
+    if (processingBranchId == null) {
+      return res.status(400).json({
+        error: "No processing branch is configured. Add a Processing or Hybrid branch before creating orders.",
+        code: "NO_PROCESSING_BRANCH",
+      });
     }
     const sla = await getLaundrySla(laundryId);
     const createdAt = new Date();
@@ -398,6 +424,19 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
           unitPrice: item.unitPrice.toString(), totalPrice: item.lineTotal.toString(),
         }))).returning();
       }
+
+      // One order, one source of truth. Record its first handoff location without
+      // cloning the order into another branch.
+      await tx.insert(orderMovements).values({
+        laundryId,
+        orderId: inserted.id,
+        fromBranchId: null,
+        toBranchId: collectionBranchId!,
+        movementType: "COLLECTION",
+        reason: "Order received at collection branch",
+        movedByType: req.auth!.type,
+        movedByName: actorName(req.auth!),
+      });
 
       const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];
       const appliedBy = actorName(req.auth!);
@@ -496,49 +535,80 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
   }
 });
 
-ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
+ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: AuthRequest, res) => {
   try {
-    if (req.auth!.type !== "owner") return res.status(403).json({ error: "Only the laundry owner can move orders between branches" });
     const orderId = parseInt(req.params.id, 10);
     if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
     const data = orderMovementSchema.parse(req.body);
     const laundryId = req.auth!.laundryId;
+    const isOwner = req.auth!.type === "owner";
+    const workerBranchId = req.auth!.branchId ?? null;
 
     const result = await db.transaction(async (tx) => {
-      const [order] = await tx.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId))).for("update");
+      const [order] = await tx.select().from(orders)
+        .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)))
+        .for("update");
       if (!order) return { notFound: true } as const;
       if (["completed", "cancelled"].includes(order.status)) return { terminal: true } as const;
 
-      const [target] = await tx.select({ id: branches.id, type: branches.type }).from(branches)
+      if (!isOwner && (!workerBranchId || order.currentBranchId !== workerBranchId)) {
+        return { forbidden: true } as const;
+      }
+      if (!isOwner && data.movementType === "MANUAL_TRANSFER") {
+        return { manualForbidden: true } as const;
+      }
+
+      const [target] = await tx.select({ id: branches.id, type: branches.type, name: branches.name })
+        .from(branches)
         .where(and(eq(branches.id, data.toBranchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
       if (!target) return { badBranch: true } as const;
 
       if (data.movementType === "PROCESSING_TRANSFER") {
         if (order.processingBranchId !== target.id) return { wrongTarget: "processing" } as const;
         if (!["PROCESSING", "HYBRID"].includes(target.type)) return { badCapability: "processing" } as const;
+        if (order.currentBranchId !== order.collectionBranchId) return { badSource: "processing" } as const;
+        if (!["pending", "processing"].includes(order.status)) return { badStatus: "processing" } as const;
       }
+
       if (data.movementType === "RETURN_TRANSFER") {
         if (order.returnBranchId !== target.id) return { wrongTarget: "return" } as const;
         if (!["PICKUP", "HYBRID"].includes(target.type)) return { badCapability: "return" } as const;
-        if (order.status !== "ready" && order.status !== "partial_pickup") return { badStatus: "return" } as const;
+        if (order.currentBranchId !== order.processingBranchId) return { badSource: "return" } as const;
+        if (!["ready", "partial_pickup"].includes(order.status)) return { badStatus: "return" } as const;
       }
+
+      if (data.movementType === "MANUAL_TRANSFER" && !isOwner) return { manualForbidden: true } as const;
       if (target.id === order.currentBranchId) return { unchanged: true, order } as const;
 
-      const [updated] = await tx.update(orders).set({ currentBranchId: target.id, updatedAt: new Date() })
-        .where(and(eq(orders.id, order.id), eq(orders.laundryId, laundryId))).returning();
+      const [updated] = await tx.update(orders)
+        .set({ currentBranchId: target.id, updatedAt: new Date() })
+        .where(and(eq(orders.id, order.id), eq(orders.laundryId, laundryId)))
+        .returning();
+
       const [movement] = await tx.insert(orderMovements).values({
-        laundryId, orderId: order.id, fromBranchId: order.currentBranchId, toBranchId: target.id,
-        movementType: data.movementType, reason: data.reason ?? null, movedByType: "owner", movedByName: actorName(req.auth!),
+        laundryId,
+        orderId: order.id,
+        fromBranchId: order.currentBranchId,
+        toBranchId: target.id,
+        movementType: data.movementType,
+        reason: data.reason ?? null,
+        movedByWorkerId: req.auth!.workerId ?? null,
+        movedByType: req.auth!.type,
+        movedByName: actorName(req.auth!),
       }).returning();
+
       return { order: updated, movement } as const;
     });
 
     if ("notFound" in result) return res.status(404).json({ error: "Order not found" });
     if ("terminal" in result) return res.status(409).json({ error: "Completed or cancelled orders cannot be moved" });
+    if ("forbidden" in result) return res.status(403).json({ error: "You can only move orders currently at your assigned branch" });
+    if ("manualForbidden" in result) return res.status(403).json({ error: "Workers can only use the guided branch handoff actions" });
     if ("badBranch" in result) return res.status(400).json({ error: "Target branch not found" });
     if ("wrongTarget" in result) return res.status(400).json({ error: "Target branch does not match the order lifecycle location" });
     if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
-    if ("badStatus" in result) return res.status(409).json({ error: "Order must be ready before it can move to the return branch" });
+    if ("badSource" in result) return res.status(409).json({ error: "The order is not currently at the branch that should send it" });
+    if ("badStatus" in result) return res.status(409).json({ error: "The order is not ready for this handoff" });
     res.json(result);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
