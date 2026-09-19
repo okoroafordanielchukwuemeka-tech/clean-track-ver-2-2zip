@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+type AuthRequestLike = Request & { auth?: { laundryId?: number } };
 import { db } from "@workspace/db";
 import { idempotencyKeys, type IdempotencyKey } from "@workspace/db/schema";
 import { eq, and, gt } from "drizzle-orm";
@@ -25,19 +26,23 @@ export function idempotencyMiddleware(
   res: Response,
   next: NextFunction
 ): void {
-  const key = (req.headers["idempotency-key"] as string | undefined)?.trim();
+  const clientKey = (req.headers["idempotency-key"] as string | undefined)?.trim();
 
-  if (!key) {
+  if (!clientKey) {
     next();
     return;
   }
 
+  const laundryId = (req as AuthRequestLike).auth?.laundryId ?? "anonymous";
+  const key = `${laundryId}:${req.method}:${req.baseUrl}${req.path}:${clientKey}`;
   const cutoff = new Date(Date.now() - TTL_MS);
 
-  db.insert(idempotencyKeys)
-    .values({ key, status: "pending", statusCode: 0, responseBody: null })
+  db.delete(idempotencyKeys)
+    .where(and(eq(idempotencyKeys.key, key), gt(cutoff, idempotencyKeys.createdAt)))
+    .then(() => db.insert(idempotencyKeys)
+      .values({ key, status: "pending", statusCode: 0, responseBody: null })
     .onConflictDoNothing()
-    .returning()
+      .returning())
     .then(async (inserted: IdempotencyKey[]) => {
       if (inserted.length > 0) {
         attachResponseInterceptor(res, key);
@@ -73,8 +78,8 @@ export function idempotencyMiddleware(
       });
     })
     .catch((err: unknown) => {
-      console.error("[Idempotency] DB error — proceeding without protection:", err);
-      next();
+      console.error("[Idempotency] DB error:", err);
+      res.status(503).json({ error: "Idempotency service temporarily unavailable. Please retry." });
     });
 }
 
