@@ -125,8 +125,13 @@ export function requireEntitlement(feature: PlanFeature) {
       }
 
       next();
-    } catch {
-      next();
+    } catch (err) {
+      console.error("[subscription] Plan-limit check failed:", err);
+      return res.status(503).json({
+        error: "Subscription limits could not be verified",
+        code: "SUBSCRIPTION_CHECK_UNAVAILABLE",
+        message: "We could not verify your plan limits right now. Please try again.",
+      });
     }
   };
 }
