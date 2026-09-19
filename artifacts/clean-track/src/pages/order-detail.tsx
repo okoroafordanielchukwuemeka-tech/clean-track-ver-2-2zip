@@ -251,6 +251,7 @@ export default function OrderDetail() {
       api.orders.move(orderId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders", orderId] });
+      qc.invalidateQueries({ queryKey: ["orders", orderId, "movements"] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setShowMove(false);
       setMoveTarget("");
@@ -704,6 +705,72 @@ export default function OrderDetail() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Guided branch handoff ─────────────────────────────────────────── */}
+      {hasPermission("canProcessOrders") && !isCancelled && order && (
+        (() => {
+          const canSendToProcessing =
+            order.currentBranchId === order.collectionBranchId &&
+            !!order.processingBranchId &&
+            ["pending", "processing"].includes(order.status);
+
+          const canSendBack =
+            order.currentBranchId === order.processingBranchId &&
+            !!order.returnBranchId &&
+            ["ready", "partial_pickup"].includes(order.status);
+
+          if (!canSendToProcessing && !canSendBack) return null;
+
+          return (
+            <Card className="border-2 border-primary/20 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                  Branch Handoff
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  CleanTrack keeps one order and routes it between the branches automatically.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {canSendToProcessing && (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">Ready to send for processing</p>
+                      <p className="text-xs text-muted-foreground">Send this order to its assigned processing branch.</p>
+                    </div>
+                    <Button
+                      className="gap-2"
+                      disabled={moveMutation.isPending}
+                      onClick={() => moveMutation.mutate({ movementType: "PROCESSING_TRANSFER" })}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      {moveMutation.isPending ? "Sending..." : "Send to Processing"}
+                    </Button>
+                  </div>
+                )}
+
+                {canSendBack && (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">Processing complete</p>
+                      <p className="text-xs text-muted-foreground">Send the finished clothes back to the order's return branch.</p>
+                    </div>
+                    <Button
+                      className="gap-2"
+                      disabled={moveMutation.isPending}
+                      onClick={() => moveMutation.mutate({ movementType: "RETURN_TRANSFER" })}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      {moveMutation.isPending ? "Sending..." : "Send Back to Pickup"}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()
       )}
 
       {/* ── Status Pipeline ───────────────────────────────────────────────── */}
