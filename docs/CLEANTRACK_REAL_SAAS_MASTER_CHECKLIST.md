@@ -125,13 +125,17 @@ Legacy branchId remains temporarily as a compatibility bridge.
 - [x] Guided worker handoffs infer configured destinations; workers do not choose arbitrary destinations per order.
 - [x] Pickup workers can receive/verify/send without being granted processing capability.
 - [x] Processing/Hybrid workers can process and mark ready only at the configured processing branch.
+- [x] Receiving workers see the source branch, destination branch and current location on the Worker Station.
 - [x] Worker queues distinguish processing work, branch handoffs, incoming work and returned ready work.
+- [x] Receiving-branch workers receive an in-app handoff notification for incoming/returned orders.
+- [x] Owner receives an in-app handoff notification showing the order and branch-to-branch movement.
 - [x] Owner All Branches view uses current operational location while order detail exposes the complete route/history.
 - [ ] Investigate the one legacy-unassigned order.
 - [ ] Complete remaining backend branchId consumer audit.
 - [ ] Update batch transfer/receiving workflow for multi-order handoffs.
 - [ ] Update analytics definitions and branch workload reporting for collection/processing/return/current dimensions.
-- [ ] Update search/receipts/notifications for lifecycle-specific branch context where still required.
+- [ ] Update search/receipts for lifecycle-specific branch context where still required.
+- [ ] Extend branch handoff notifications to richer branch-level/event filtering if operational volume requires it.
 - [ ] Verify offline/PWA synchronization for branch handoffs.
 - [ ] Only remove legacy branchId after every dependent workflow is migrated and production data has been verified.
 
@@ -896,9 +900,13 @@ After the first real users:
 - [x] Returned ready orders do not show a false “Mark Ready” processing action at Pickup.
 - [x] Worker UI exposes route, current branch, incoming/returned context and next handoff.
 - [x] Owner All Branches can follow current operational location; order detail exposes movement history.
-- [x] Latest routing deployment succeeded: 2ac3dfe0-1562-4c48-a5d6-fe3d6ca61a84.
+- [x] Latest routing deployment succeeded: `6f907b77-2f06-491a-b10a-78bc8f9daa2a`.
+- [x] Production build, database reconciliation/migrations and `/healthz` all passed on the handoff-notification deployment.
 
 ### Current certification gate
+**Code/runtime gate:** PASSED — branch routing, movement recording, worker queue visibility, handoff notifications, production build, migration and healthcheck are in place.
+
+**Manual production scenarios still required:**
 - [ ] Production scenario: Pickup → Hybrid → Pickup.
 - [ ] Production scenario: Pickup → Processing → Pickup.
 - [ ] Production scenario: two Pickup branches linked to different processing-capable branches.
@@ -932,8 +940,9 @@ Completed in the current realignment:
 5. Operation-specific worker capability enforcement.
 6. Worker receiving/handoff queues and route visibility.
 7. Owner All Branches/current-location visibility.
-8. Production migration 0006 for Pickup processing destinations.
-9. Frontend/PWA update handling improved so deployed routing UI activates promptly.
+8. Receiving-branch and owner handoff notifications.
+9. Production migration 0006 for Pickup processing destinations.
+10. Frontend/PWA update handling improved so deployed routing UI activates promptly.
 
 Certification sequence now:
 1. Verify Pickup → Hybrid end-to-end.
@@ -945,7 +954,7 @@ Certification sequence now:
 7. Verify owner All Branches and per-branch views never mix current locations.
 8. Verify batch transfer/receiving behavior.
 9. Verify offline/PWA handoff behavior.
-10. Deprecate legacy order.branchId only after all consumers are migrated and production data is verified.
+11. Deprecate legacy order.branchId only after all consumers are migrated and production data is verified.
 
 ## Phase 3 — Complete order/customer/worker operations
 STATUS: Pending Phase 2.2.
