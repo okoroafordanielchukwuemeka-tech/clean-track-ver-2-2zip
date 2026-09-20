@@ -899,9 +899,11 @@ After the first real users:
 - [x] Verified intake is required before a cross-branch processing transfer.
 - [x] Returned ready orders do not show a false “Mark Ready” processing action at Pickup.
 - [x] Worker UI exposes route, current branch, incoming/returned context and next handoff.
-- [x] Owner All Branches can follow current operational location; order detail exposes movement history.
-- [x] Latest routing deployment succeeded: `6f907b77-2f06-491a-b10a-78bc8f9daa2a`.
-- [x] Production build, database reconciliation/migrations and `/healthz` all passed on the handoff-notification deployment.
+- [x] Worker order detail exposes the same route/current-location context and movement history available to that branch.
+- [x] Owner All Branches can follow current operational location; owner order detail exposes full movement history.
+- [x] Receiving-branch workers and owner receive in-app handoff notifications.
+- [x] Latest verified routing deployment succeeded: `bbc5015d-d10f-4b4d-9a41-836869dfa41a`.
+- [x] Production TypeScript/Vite build, database reconciliation/migrations and `/healthz` all passed on the latest routing deployment.
 
 ### Current certification gate
 **Code/runtime gate:** PASSED — branch routing, movement recording, worker queue visibility, handoff notifications, production build, migration and healthcheck are in place.
@@ -913,6 +915,7 @@ After the first real users:
 - [ ] Production scenario: multiple Hybrid branches process locally.
 - [ ] Production scenario: owner and workers see the same single order moving between branches without duplicate records.
 - [ ] Production scenario: movement history and branch queues remain correct after refresh/reload.
+- [ ] Production scenario: owner/worker notifications identify the correct destination branch and order.
 - [ ] Production scenario: batch transfer and discrepancy handling.
 ## Phase 0 — Production foundation
 STATUS: Mostly complete; hardening remains.
@@ -954,10 +957,10 @@ Certification sequence now:
 7. Verify owner All Branches and per-branch views never mix current locations.
 8. Verify batch transfer/receiving behavior.
 9. Verify offline/PWA handoff behavior.
-11. Deprecate legacy order.branchId only after all consumers are migrated and production data is verified.
+10. Deprecate legacy order.branchId only after all consumers are migrated and production data is verified.
 
 ## Phase 3 — Complete order/customer/worker operations
-STATUS: Pending Phase 2.2.
+STATUS: Blocked on Phase 2.2 manual branch-routing certification; implementation work can continue only where it does not invalidate the routing model.
 
 ## Phase 4 — Payments + subscription billing
 STATUS: Customer payment core working; subscription production certification remains.
