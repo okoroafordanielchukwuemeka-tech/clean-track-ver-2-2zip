@@ -104,6 +104,31 @@ function UrgencySection({
                   {order.additionalNotes && (
                     <p className="text-xs text-muted-foreground mt-1 italic">"{order.additionalNotes}"</p>
                   )}
+
+                  <div className="mt-2 rounded-lg border bg-background/70 px-3 py-2 text-xs space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-semibold text-foreground">Route:</span>
+                      <span>{order.collectionBranchName ?? "Collection branch"}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span>{order.processingBranchName ?? "Processing branch"}</span>
+                      {order.returnBranchName && order.returnBranchName !== order.processingBranchName && (
+                        <>
+                          <span className="text-muted-foreground">→</span>
+                          <span>{order.returnBranchName}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                      <span><strong className="text-foreground">Currently at:</strong> {order.currentBranchName ?? "this branch"}</span>
+                      {order.currentBranchId === order.processingBranchId &&
+                        order.collectionBranchId !== order.processingBranchId &&
+                        order.collectionBranchName && (
+                          <span className="text-blue-600 dark:text-blue-400">
+                            <strong>Incoming from:</strong> {order.collectionBranchName}
+                          </span>
+                        )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -113,7 +138,7 @@ function UrgencySection({
                       <span className="hidden sm:inline text-xs">Open</span>
                     </Link>
                   </Button>
-                  {order.status === "pending" && onClaim && (
+                  {["pending", "processing"].includes(order.status) && onClaim && (
                     <Button size="sm" variant="outline" onClick={() => onClaim(order.id)} disabled={isPending}>
                       Claim
                     </Button>
@@ -208,7 +233,9 @@ export default function WorkerStation() {
   const activeOrders = orders.filter(o => !["completed", "ready"].includes(o.status));
 
   const myOrders = activeOrders.filter(o => o.assignedWorkerId === user?.id);
-  const sharedQueue = orders.filter(o => o.status === "pending" && !o.assignedWorkerId);
+  const sharedQueue = orders.filter(o =>
+    ["pending", "processing"].includes(o.status) && !o.assignedWorkerId
+  );
   const readyOrders = orders.filter(o => o.status === "ready");
 
   const sortByUrgency = (arr: typeof orders) =>
