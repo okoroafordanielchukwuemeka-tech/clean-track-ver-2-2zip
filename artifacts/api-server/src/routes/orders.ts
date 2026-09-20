@@ -683,6 +683,11 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
         .set({
           currentBranchId: target.id,
           assignedWorkerId: null,
+          // Verification belongs to the branch currently holding the clothes.
+          // The receiving branch must verify its own physical count.
+          isVerified: false,
+          verifiedShirts: null,
+          verifiedTrousers: null,
           updatedAt: new Date(),
         })
         .where(and(eq(orders.id, order.id), eq(orders.laundryId, laundryId)))
@@ -839,6 +844,7 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
     }
 
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
+
     if (isOwner) {
       if ((data as any).price !== undefined) updateData.price = (data as any).price?.toString();
       if ((data as any).extraCharge !== undefined) updateData.extraCharge = (data as any).extraCharge?.toString();
@@ -875,6 +881,12 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
         return res.status(409).json({
           error: "This order is not at a processing-capable branch",
           code: "PROCESSING_BRANCH_REQUIRED",
+        });
+      }
+      if (data.status === "processing" && data.isVerified !== true && beforeOrder.isVerified !== true) {
+        return res.status(409).json({
+          error: "Receive and verify the order at the processing branch before processing it",
+          code: "PROCESSING_RECEIPT_VERIFICATION_REQUIRED",
         });
       }
     }
