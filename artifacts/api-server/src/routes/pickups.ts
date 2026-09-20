@@ -71,8 +71,10 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
     const [items, allPayments, orderBranch, processedByWorker] = await Promise.all([
       db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)),
-      order.branchId
-        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
+      // Pickup receipts must identify the branch physically handling the
+      // pickup, not the legacy collection-only order.branchId.
+      order.currentBranchId
+        ? db.select().from(branches).where(eq(branches.id, order.currentBranchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
       pickup.processedBy
         ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, pickup.processedBy)).then(r => r[0] ?? null)
