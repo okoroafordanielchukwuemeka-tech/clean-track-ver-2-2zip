@@ -136,6 +136,20 @@ export const api = {
   },
   branches: {
     list: () => request<import("@/context/branch-context").Branch[]>("GET", "/branches"),
+    networkSummary: () => request<Array<{
+      id: number;
+      name: string;
+      type: import("@/context/branch-context").BranchType;
+      processingDestinationBranchId?: number | null;
+      counts: {
+        active: number;
+        incoming: number;
+        local: number;
+        processing: number;
+        ready: number;
+        awaitingTransfer: number;
+      };
+    }>>("GET", "/branches/network-summary"),
     create: (data: { name: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
       request<import("@/context/branch-context").Branch>("POST", "/branches", data),
     update: (id: number, data: { name?: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
