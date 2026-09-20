@@ -603,7 +603,7 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
   }
 });
 
-ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: AuthRequest, res) => {
+ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
   try {
     const orderId = parseInt(req.params.id, 10);
     if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
@@ -611,6 +611,19 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
     const workerBranchId = req.auth!.branchId ?? null;
+
+    // Handoffs are operation-specific: Pickup workers need the pickup/collection
+    // permission to send an order onward; processing workers need processing
+    // permission to send finished work back. Neither operation grants processing
+    // capability to a Pickup worker.
+    if (!isOwner) {
+      const allowed = data.movementType === "PROCESSING_TRANSFER"
+        ? !!req.auth!.permissions?.canRecordPickups
+        : data.movementType === "RETURN_TRANSFER"
+          ? !!req.auth!.permissions?.canProcessOrders
+          : false;
+      if (!allowed) return res.status(403).json({ error: "You do not have permission to perform this branch handoff" });
+    }
 
     const result = await db.transaction(async (tx) => {
       const [order] = await tx.select().from(orders)
@@ -716,7 +729,7 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
     res.status(500).json({ error: "Failed to move order" });
   }
 });
-ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
+ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -750,6 +763,13 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
       ? ownerOrderUpdateSchema.parse(req.body)
       : workerOrderUpdateSchema.parse(req.body);
 
+    // Pickup workers may receive/verify/handoff without gaining processing
+    // permission. Processing state changes remain restricted to processing-capable
+    // workers and are additionally checked against the order's current branch.
+    if (!isOwner && !req.auth!.permissions?.canRecordPickups && !req.auth!.permissions?.canProcessOrders) {
+      return res.status(403).json({ error: "You do not have permission to operate orders" });
+    }
+
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
     if (isOwner) {
       if ((data as any).price !== undefined) updateData.price = (data as any).price?.toString();
@@ -776,6 +796,9 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
     // its configured processing branch. A Pickup branch may receive/verify/send,
     // but it can never turn an order into "processing" or "ready".
     if (data.status === "processing" || data.status === "ready") {
+      if (!isOwner && !req.auth!.permissions?.canProcessOrders) {
+        return res.status(403).json({ error: "Processing permission is required to process or mark an order ready" });
+      }
       const [currentBranch] = await db.select({ id: branches.id, type: branches.type })
         .from(branches)
         .where(and(eq(branches.id, beforeOrder.currentBranchId ?? -1), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
