@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard, Users } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard, Users, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PaymentStatusBadge } from "@/lib/order-status";
 import { toast } from "sonner";
@@ -41,8 +41,11 @@ function UrgencySection({
   iconClass: string;
   headerClass: string;
   onClaim?: (id: number) => void;
+  onReceive?: (id: number) => void;
   onVerify?: (id: number, o: any) => void;
   onMarkReady?: (id: number) => void;
+  onSendToProcessing?: (id: number) => void;
+  onSendBack?: (id: number) => void;
   sla: any;
   userId?: number;
   isPending: boolean;
@@ -127,6 +130,21 @@ function UrgencySection({
                             <strong>Incoming from:</strong> {order.collectionBranchName}
                           </span>
                         )}
+                      {order.currentBranchId === order.returnBranchId &&
+                        order.returnBranchId !== order.processingBranchId &&
+                        order.status === "ready" &&
+                        order.processingBranchName && (
+                          <span className="text-green-600 dark:text-green-400">
+                            <strong>Returned from:</strong> {order.processingBranchName}
+                          </span>
+                        )}
+                      {order.currentBranchId === order.collectionBranchId &&
+                        order.collectionBranchId !== order.processingBranchId &&
+                        order.processingBranchName && (
+                          <span className="text-amber-600 dark:text-amber-400">
+                            <strong>Next:</strong> Send to {order.processingBranchName}
+                          </span>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -138,7 +156,12 @@ function UrgencySection({
                       <span className="hidden sm:inline text-xs">Open</span>
                     </Link>
                   </Button>
-                  {["pending", "processing"].includes(order.status) && onClaim && (
+                  {order.status === "pending" && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && onReceive && !order.assignedWorkerId && (
+                    <Button size="sm" variant="outline" onClick={() => onReceive(order.id)} disabled={isPending}>
+                      Receive
+                    </Button>
+                  )}
+                  {["pending", "processing"].includes(order.status) && onClaim && order.currentBranchId === order.processingBranchId && !order.assignedWorkerId && (
                     <Button size="sm" variant="outline" onClick={() => onClaim(order.id)} disabled={isPending}>
                       Claim
                     </Button>
@@ -149,9 +172,21 @@ function UrgencySection({
                       Verify
                     </Button>
                   )}
-                  {order.status === "processing" && order.isVerified && onMarkReady && (
+                  {order.status === "processing" && order.isVerified && onMarkReady && order.currentBranchId === order.processingBranchId && (
                     <Button size="sm" onClick={() => onMarkReady(order.id)} disabled={isPending}>
                       Mark Ready
+                    </Button>
+                  )}
+                  {order.status === "processing" && order.isVerified && onSendToProcessing && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && order.assignedWorkerId === userId && (
+                    <Button size="sm" onClick={() => onSendToProcessing(order.id)} disabled={isPending}>
+                      <ArrowRight className="h-3.5 w-3.5 mr-1" />
+                      Send to {order.processingBranchName ?? "Processing"}
+                    </Button>
+                  )}
+                  {order.status === "ready" && onSendBack && order.currentBranchId === order.processingBranchId && order.returnBranchId !== order.processingBranchId && (
+                    <Button size="sm" onClick={() => onSendBack(order.id)} disabled={isPending}>
+                      <ArrowRight className="h-3.5 w-3.5 mr-1" />
+                      Send Back
                     </Button>
                   )}
                 </div>
@@ -220,9 +255,19 @@ export default function WorkerStation() {
     mutationFn: ({ id, data }: { id: number; data: Record<string, any> }) => api.orders.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Order status updated");
+      toast.success("Order updated");
     },
     onError: (e: Error) => toast.error("Could not update order — " + (e.message || "please try again.")),
+  });
+
+  const moveMutation = useMutation({
+    mutationFn: ({ id, movementType }: { id: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" }) =>
+      api.orders.move(id, { movementType }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Branch handoff recorded");
+    },
+    onError: (e: Error) => toast.error("Could not complete branch handoff — " + (e.message || "please try again.")),
   });
 
   const orders = rawOrders.map(o => {
@@ -233,8 +278,18 @@ export default function WorkerStation() {
   const activeOrders = orders.filter(o => !["completed", "ready"].includes(o.status));
 
   const myOrders = activeOrders.filter(o => o.assignedWorkerId === user?.id);
+  // Only processing-capable destinations enter the claim queue. Pickup collection
+  // orders have their own handoff queue and never get turned into "processing"
+  // merely because a Pickup worker clicked Claim.
   const sharedQueue = orders.filter(o =>
-    ["pending", "processing"].includes(o.status) && !o.assignedWorkerId
+    ["pending", "processing"].includes(o.status) &&
+    !o.assignedWorkerId &&
+    o.currentBranchId === o.processingBranchId
+  );
+  const handoffQueue = orders.filter(o =>
+    ["pending", "processing"].includes(o.status) &&
+    o.currentBranchId === o.collectionBranchId &&
+    o.collectionBranchId !== o.processingBranchId
   );
   const readyOrders = orders.filter(o => o.status === "ready");
 
@@ -271,8 +326,23 @@ export default function WorkerStation() {
     }
   };
 
-  const claimOrder = (id: number) =>
+  const claimOrder = (id: number) => {
+    const order = orders.find(o => o.id === id);
+    if (!order) return;
+    if (order.currentBranchId !== order.processingBranchId) {
+      applyOrderUpdate(id, { assignedWorkerId: user?.id });
+      return;
+    }
     applyOrderUpdate(id, { assignedWorkerId: user?.id, status: "processing" });
+  };
+
+  const moveOrder = (id: number, movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER") => {
+    if (!getIsOnline()) {
+      toast.error("Branch handoffs require a connection. Reconnect before sending this order.");
+      return;
+    }
+    moveMutation.mutate({ id, movementType });
+  };
 
   const markVerified = (id: number, o: any) => {
     const isItemBased = (o.itemCount ?? 0) > 0;
@@ -335,7 +405,13 @@ export default function WorkerStation() {
         <Card>
           <CardContent className="p-3 text-center">
             <p className={cn("text-xl font-bold", sharedQueue.length > 0 ? "text-blue-600" : "text-muted-foreground")}>{sharedQueue.length}</p>
-            <p className="text-xs text-muted-foreground">In Queue</p>
+            <p className="text-xs text-muted-foreground">Processing Queue</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className={cn("text-xl font-bold", handoffQueue.length > 0 ? "text-amber-600" : "text-muted-foreground")}>{handoffQueue.length}</p>
+            <p className="text-xs text-muted-foreground">To Send</p>
           </CardContent>
         </Card>
         <Card>
@@ -400,9 +476,11 @@ export default function WorkerStation() {
               headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
               onVerify={markVerified}
               onMarkReady={markReady}
+              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
+              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
               userId={user?.id}
-              isPending={updateMutation.isPending}
+              isPending={updateMutation.isPending || moveMutation.isPending}
             />
             <UrgencySection
               title="Urgent — act now"
@@ -445,6 +523,30 @@ export default function WorkerStation() {
         )}
       </div>
 
+      {handoffQueue.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-semibold text-base flex items-center gap-2">
+            <ArrowRight className="h-4 w-4 text-amber-600" />
+            Branch Handoffs ({handoffQueue.length})
+          </h2>
+          <div className="space-y-2">
+            <UrgencySection
+              title="Waiting to be sent"
+              orders={sortByUrgency(handoffQueue)}
+              icon={ArrowRight}
+              iconClass="text-amber-600"
+              headerClass="bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50"
+              onReceive={(id) => applyOrderUpdate(id, { assignedWorkerId: user?.id })}
+              onVerify={markVerified}
+              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
+              sla={sla}
+              userId={user?.id}
+              isPending={updateMutation.isPending || moveMutation.isPending}
+            />
+          </div>
+        </div>
+      )}
+
       {sharedQueue.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-semibold text-base flex items-center gap-2">
@@ -459,8 +561,11 @@ export default function WorkerStation() {
               iconClass="text-red-700"
               headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
               onClaim={claimOrder}
+              onVerify={markVerified}
+              onMarkReady={markReady}
+              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
-              isPending={updateMutation.isPending}
+              isPending={updateMutation.isPending || moveMutation.isPending}
             />
             <UrgencySection
               title="Urgent"
