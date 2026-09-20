@@ -493,7 +493,14 @@ export default function OrderDetail() {
     processing: { value: "ready",      label: "Mark as Ready"    },
   };
   const nextStatus = NEXT_STATUS[order.status];
-  const canAdvanceStatus = !!nextStatus && (isOwner || hasPermission("canProcessOrders"));
+  const canProcessAtCurrentBranch =
+    !!order.currentBranchId &&
+    order.currentBranchId === order.processingBranchId &&
+    !!order.processingBranchId;
+  const canAdvanceStatus =
+    !!nextStatus &&
+    canProcessAtCurrentBranch &&
+    (isOwner || hasPermission("canProcessOrders"));
 
   function setItemQty(itemId: number, qty: number, max: number) {
     const map = new Map(itemPickupQtys);
