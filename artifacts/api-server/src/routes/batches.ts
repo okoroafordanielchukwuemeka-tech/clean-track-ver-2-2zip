@@ -124,8 +124,9 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     const batch = await db.transaction(async (tx) => {
       const conditions:any[]=[inArray(orders.id,data.orderIds),eq(orders.laundryId,laundryId)];
       if(workerBranchId) conditions.push(eq(orders.currentBranchId,workerBranchId));
-      const targets=await tx.select({ id: orders.id, status: orders.status, batchId: orders.batchId, processingBranchId: orders.processingBranchId, currentBranchId: orders.currentBranchId }).from(orders).where(and(...conditions));
+      const targets=await tx.select({ id: orders.id, status: orders.status, batchId: orders.batchId, processingBranchId: orders.processingBranchId, currentBranchId: orders.currentBranchId, isVerified: orders.isVerified }).from(orders).where(and(...conditions)).for("update");
       if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
+      if(targets.some(o => !o.isVerified)) throw new Error("BATCH_ORDER_NOT_VERIFIED");
       if(targets.some(o => o.processingBranchId == null || o.currentBranchId !== o.processingBranchId)) throw new Error("BATCH_NOT_AT_PROCESSING_BRANCH");
       const processingBranchIds = [...new Set(targets.map(o => o.processingBranchId!).filter(Boolean))];
       if(processingBranchIds.length !== 1) throw new Error("BATCH_MIXED_PROCESSING_BRANCHES");
@@ -144,6 +145,7 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });
     if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });
+    if (err instanceof Error && err.message === "BATCH_ORDER_NOT_VERIFIED") return res.status(409).json({ error: "Every order must be verified before it can enter a processing batch", code: "ORDER_NOT_VERIFIED" });
     if (err instanceof Error && err.message === "BATCH_NOT_AT_PROCESSING_BRANCH") return res.status(409).json({ error: "One or more orders are not currently at their assigned processing branch" });
     if (err instanceof Error && err.message === "BATCH_MIXED_PROCESSING_BRANCHES") return res.status(400).json({ error: "A batch cannot combine orders assigned to different processing branches" });
     if (err instanceof Error && err.message === "BATCH_PROCESSING_CAPABILITY") return res.status(400).json({ error: "The processing branch cannot process orders" });
