@@ -717,11 +717,14 @@ export default function OrderDetail() {
         (() => {
           const canSendToProcessing =
             order.currentBranchId === order.collectionBranchId &&
+            order.collectionBranchId !== order.processingBranchId &&
             !!order.processingBranchId &&
+            order.isVerified === true &&
             ["pending", "processing"].includes(order.status);
 
           const canSendBack =
             order.currentBranchId === order.processingBranchId &&
+            order.returnBranchId !== order.processingBranchId &&
             !!order.returnBranchId &&
             ["ready", "partial_pickup"].includes(order.status);
 
