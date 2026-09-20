@@ -132,7 +132,7 @@ export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isOwner, laundryId: authLaundryId, hasPermission } = useAuth();
+  const { isOwner, laundryId: authLaundryId, hasPermission, user } = useAuth();
 
   // Dialog / form state
   const [showPayment, setShowPayment]             = useState(false);
@@ -713,9 +713,13 @@ export default function OrderDetail() {
       )}
 
       {/* ── Guided branch handoff ─────────────────────────────────────────── */}
-      {hasPermission("canProcessOrders") && !isCancelled && order && (
+      {(!isCancelled && order) && (
         (() => {
+          const isWorker = user?.type === "worker";
+          const isAssignedWorker = !isWorker || order.assignedWorkerId === user?.id;
           const canSendToProcessing =
+            hasPermission("canRecordPickups") &&
+            isAssignedWorker &&
             order.currentBranchId === order.collectionBranchId &&
             order.collectionBranchId !== order.processingBranchId &&
             !!order.processingBranchId &&
@@ -723,6 +727,8 @@ export default function OrderDetail() {
             ["pending", "processing"].includes(order.status);
 
           const canSendBack =
+            hasPermission("canProcessOrders") &&
+            isAssignedWorker &&
             order.currentBranchId === order.processingBranchId &&
             order.returnBranchId !== order.processingBranchId &&
             !!order.returnBranchId &&
