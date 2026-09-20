@@ -700,6 +700,10 @@ export interface Order {
   processingBranchId?: number | null;
   returnBranchId?: number | null;
   currentBranchId?: number | null;
+  collectionBranchName?: string | null;
+  processingBranchName?: string | null;
+  returnBranchName?: string | null;
+  currentBranchName?: string | null;
 }
 
 export interface OrderMovement {
