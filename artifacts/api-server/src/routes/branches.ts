@@ -235,7 +235,7 @@ branchesRouter.get("/network-summary", requireOwner, async (req: AuthRequest, re
     const branchOrders = await db
       .select()
       .from(orders)
-      .where(and(eq(orders.laundryId, laundryId), isNull(orders.deletedAt)));
+      .where(eq(orders.laundryId, laundryId));
 
     const summary = activeBranches.map(branch => {
       const current = branchOrders.filter(o => o.currentBranchId === branch.id && !["completed", "cancelled"].includes(o.status));
