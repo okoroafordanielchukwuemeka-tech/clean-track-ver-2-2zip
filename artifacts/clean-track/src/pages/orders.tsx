@@ -481,6 +481,7 @@ export default function Orders() {
                     <TableHead className="hidden sm:table-cell">Type</TableHead>
                     <TableHead className="hidden md:table-cell">Items</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="hidden lg:table-cell">Branch / Route</TableHead>
                     <TableHead className="hidden sm:table-cell">Payment</TableHead>
                     <TableHead className="hidden sm:table-cell">Price</TableHead>
                     <TableHead className="hidden lg:table-cell">Timer</TableHead>
@@ -555,6 +556,19 @@ export default function Orders() {
                           }
                         </TableCell>
                         <TableCell><OrderStatusBadge status={order.status} /></TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="min-w-[190px] text-xs">
+                            <div className="font-medium text-foreground">
+                              At: {order.currentBranchName ?? "Unassigned branch"}
+                            </div>
+                            <div className="text-muted-foreground mt-0.5">
+                              {order.collectionBranchName ?? "Collection"} → {order.processingBranchName ?? "Processing"}
+                              {order.returnBranchName && order.returnBranchName !== order.processingBranchName
+                                ? " → " + order.returnBranchName
+                                : ""}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell className="hidden sm:table-cell"><PaymentStatusBadge status={order.paymentStatus} /></TableCell>
                         <TableCell className="hidden sm:table-cell">{formatCurrency(order.price as any)}</TableCell>
                         <TableCell className="hidden lg:table-cell">
@@ -583,7 +597,7 @@ export default function Orders() {
                   })}
                   {!sorted.length && !pendingOrders.length && (
                     <TableRow>
-                      <TableCell colSpan={11}>
+                      <TableCell colSpan={12}>
                         {orders.length === 0 ? (
                           <div className="text-center py-14 space-y-3">
                             <ShoppingCart className="h-10 w-10 mx-auto text-muted-foreground/40" />
