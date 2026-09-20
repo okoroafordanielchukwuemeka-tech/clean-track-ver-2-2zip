@@ -177,7 +177,7 @@ function UrgencySection({
                       Mark Ready
                     </Button>
                   )}
-                  {order.status === "processing" && order.isVerified && onSendToProcessing && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && order.assignedWorkerId === userId && (
+                  {["pending", "processing"].includes(order.status) && order.isVerified && onSendToProcessing && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && order.assignedWorkerId === userId && (
                     <Button size="sm" onClick={() => onSendToProcessing(order.id)} disabled={isPending}>
                       <ArrowRight className="h-3.5 w-3.5 mr-1" />
                       Send to {order.processingBranchName ?? "Processing"}
