@@ -17,6 +17,11 @@ import { fireAutomation } from "../lib/automation-service.js";
 
 export const ordersRouter = Router();
 
+const orderCollectionBranch = alias(branches, "order_collection_branch");
+const orderProcessingBranch = alias(branches, "order_processing_branch");
+const orderReturnBranch = alias(branches, "order_return_branch");
+const orderCurrentBranch = alias(branches, "order_current_branch");
+
 const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
 
 /**
@@ -206,14 +211,33 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
     if (effectiveBranchId) conditions.push(eq(orders.currentBranchId, effectiveBranchId));
 
-    const [orderList, [{ total }]] = await Promise.all([
-      db.select().from(orders)
+    const [orderRows, [{ total }]] = await Promise.all([
+      db.select({
+        order: orders,
+        collectionBranchName: orderCollectionBranch.name,
+        processingBranchName: orderProcessingBranch.name,
+        returnBranchName: orderReturnBranch.name,
+        currentBranchName: orderCurrentBranch.name,
+      })
+        .from(orders)
+        .leftJoin(orderCollectionBranch, eq(orderCollectionBranch.id, orders.collectionBranchId))
+        .leftJoin(orderProcessingBranch, eq(orderProcessingBranch.id, orders.processingBranchId))
+        .leftJoin(orderReturnBranch, eq(orderReturnBranch.id, orders.returnBranchId))
+        .leftJoin(orderCurrentBranch, eq(orderCurrentBranch.id, orders.currentBranchId))
         .where(and(...conditions))
         .orderBy(desc(orders.createdAt))
         .limit(parseInt(limit as string))
         .offset(parseInt(offset as string)),
       db.select({ total: count() }).from(orders).where(and(...conditions)),
     ]);
+
+    const orderList = orderRows.map(row => ({
+      ...row.order,
+      collectionBranchName: row.collectionBranchName,
+      processingBranchName: row.processingBranchName,
+      returnBranchName: row.returnBranchName,
+      currentBranchName: row.currentBranchName,
+    }));
 
     res.json(orderList);
   } catch {
@@ -274,8 +298,28 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     const workerBranchId = req.auth!.branchId;
     const idConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
     if (workerBranchId) idConditions.push(eq(orders.currentBranchId, workerBranchId));
-    const [order] = await db.select().from(orders).where(and(...idConditions));
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    const [orderRow] = await db.select({
+      order: orders,
+      collectionBranchName: orderCollectionBranch.name,
+      processingBranchName: orderProcessingBranch.name,
+      returnBranchName: orderReturnBranch.name,
+      currentBranchName: orderCurrentBranch.name,
+    })
+      .from(orders)
+      .leftJoin(orderCollectionBranch, eq(orderCollectionBranch.id, orders.collectionBranchId))
+      .leftJoin(orderProcessingBranch, eq(orderProcessingBranch.id, orders.processingBranchId))
+      .leftJoin(orderReturnBranch, eq(orderReturnBranch.id, orders.returnBranchId))
+      .leftJoin(orderCurrentBranch, eq(orderCurrentBranch.id, orders.currentBranchId))
+      .where(and(...idConditions));
+    if (!orderRow) return res.status(404).json({ error: "Order not found" });
+
+    const order = {
+      ...orderRow.order,
+      collectionBranchName: orderRow.collectionBranchName,
+      processingBranchName: orderRow.processingBranchName,
+      returnBranchName: orderRow.returnBranchName,
+      currentBranchName: orderRow.currentBranchName,
+    };
 
     const [items, adjustments] = await Promise.all([
       db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
@@ -609,7 +653,11 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
       if (target.id === order.currentBranchId) return { unchanged: true, order } as const;
 
       const [updated] = await tx.update(orders)
-        .set({ currentBranchId: target.id, updatedAt: new Date() })
+        .set({
+          currentBranchId: target.id,
+          assignedWorkerId: null,
+          updatedAt: new Date(),
+        })
         .where(and(eq(orders.id, order.id), eq(orders.laundryId, laundryId)))
         .returning();
 
@@ -638,6 +686,24 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
     if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
     if ("badSource" in result) return res.status(409).json({ error: "The order is not currently at the branch that should send it" });
     if ("badStatus" in result) return res.status(409).json({ error: "The order is not ready for this handoff" });
+
+    if ("movement" in result && result.movement) {
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: "order_branch_moved",
+        orderId,
+        metadata: {
+          movementId: result.movement.id,
+          movementType: result.movement.movementType,
+          fromBranchId: result.movement.fromBranchId,
+          toBranchId: result.movement.toBranchId,
+          reason: result.movement.reason,
+          movedBy: result.movement.movedByName,
+        },
+      }).catch(() => {});
+    }
+
     res.json(result);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
