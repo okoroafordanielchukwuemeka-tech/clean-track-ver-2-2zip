@@ -15,6 +15,6 @@
  *                 a warning (but does NOT block — graceful degradation).
  */
 
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.1.1";
 export const SCHEMA_VERSION = 2;
 export const MIN_SUPPORTED_SERVER_VERSION = "1.0.0";
