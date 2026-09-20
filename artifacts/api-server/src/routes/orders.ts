@@ -2,7 +2,7 @@ import { Router } from "express";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, orderMovements, notificationMessages, notificationEvents } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, workerPermissions, orderMovements, notificationMessages, notificationEvents, notifications } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
 import { computeOrderPricing } from "../lib/order-financials.js";
 import { z } from "zod";
@@ -706,6 +706,63 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
     if ("localProcessing" in result || "localReturn" in result) return res.status(409).json({ error: "This order is already at its configured operating branch; no handoff is required" });
 
     if ("movement" in result && result.movement) {
+      // The movement record is the source of truth. These notifications are
+      // only an operational signal for the owner and receiving workers.
+      try {
+        const movement = result.movement;
+        const [fromBranch, toBranch] = await Promise.all([
+          movement.fromBranchId
+            ? db.select({ id: branches.id, name: branches.name }).from(branches).where(eq(branches.id, movement.fromBranchId))
+            : Promise.resolve([]),
+          db.select({ id: branches.id, name: branches.name }).from(branches).where(eq(branches.id, movement.toBranchId)),
+        ]);
+        const fromName = fromBranch[0]?.name ?? "Previous branch";
+        const toName = toBranch[0]?.name ?? "Destination branch";
+        const workerPermissionField = movement.movementType === "PROCESSING_TRANSFER"
+          ? workerPermissions.canProcessOrders
+          : workerPermissions.canRecordPickups;
+
+        const receivingWorkers = await db
+          .select({ workerId: workers.id })
+          .from(workers)
+          .innerJoin(workerPermissions, eq(workerPermissions.workerId, workers.id))
+          .where(and(
+            eq(workers.laundryId, laundryId),
+            eq(workers.branchId, movement.toBranchId),
+            eq(workers.isActive, true),
+            isNull(workers.deletedAt),
+            eq(workerPermissionField, true),
+          ));
+
+        const notificationRows = [
+          {
+            laundryId,
+            targetType: "owner" as const,
+            eventType: "branch_handoff" as const,
+            title: movement.movementType === "PROCESSING_TRANSFER" ? "Order Sent for Processing" : "Order Returned to Branch",
+            message: `Order #${result.order.orderId} moved ${fromName} → ${toName}.`,
+            severity: "info" as const,
+            relatedOrderId: orderId,
+          },
+          ...receivingWorkers.map(({ workerId }) => ({
+            laundryId,
+            targetType: "worker" as const,
+            targetWorkerId: workerId,
+            eventType: "branch_handoff" as const,
+            title: movement.movementType === "PROCESSING_TRANSFER" ? "Incoming Order for Processing" : "Order Returned to Your Branch",
+            message: movement.movementType === "PROCESSING_TRANSFER"
+              ? `Order #${result.order.orderId} has arrived from ${fromName} for processing.`
+              : `Order #${result.order.orderId} has returned from ${fromName} and is ready for pickup handling.`,
+            severity: "info" as const,
+            relatedOrderId: orderId,
+          })),
+        ];
+
+        await db.insert(notifications).values(notificationRows);
+      } catch (notificationErr) {
+        console.error("[order-move] Failed to create branch handoff notifications:", notificationErr);
+      }
+
       logAction({
         auth: req.auth!,
         laundryId,
