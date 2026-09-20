@@ -292,14 +292,25 @@ export default function WorkerStation() {
   const activeOrders = orders.filter(o => !["completed", "ready"].includes(o.status));
 
   const myOrders = activeOrders.filter(o => o.assignedWorkerId === user?.id);
-  // Only processing-capable destinations enter the claim queue. Pickup collection
-  // orders have their own handoff queue and never get turned into "processing"
-  // merely because a Pickup worker clicked Claim.
-  const sharedQueue = orders.filter(o =>
+  // Orders physically at a processing-capable branch are deliberately
+  // separated into two workstreams:
+  // 1) incoming orders whose collection happened at another branch;
+  // 2) local orders collected and processed at the same Hybrid branch.
+  // This prevents a Hybrid branch from mixing incoming Pickup work with its
+  // own local laundry workload.
+  const incomingQueue = orders.filter(o =>
     ["pending", "processing"].includes(o.status) &&
     !o.assignedWorkerId &&
-    o.currentBranchId === o.processingBranchId
+    o.currentBranchId === o.processingBranchId &&
+    o.collectionBranchId !== o.processingBranchId
   );
+  const localProcessingQueue = orders.filter(o =>
+    ["pending", "processing"].includes(o.status) &&
+    !o.assignedWorkerId &&
+    o.currentBranchId === o.processingBranchId &&
+    o.collectionBranchId === o.processingBranchId
+  );
+  const sharedQueue = [...incomingQueue, ...localProcessingQueue];
   const handoffQueue = orders.filter(o =>
     ["pending", "processing"].includes(o.status) &&
     o.currentBranchId === o.collectionBranchId &&
@@ -318,9 +329,13 @@ export default function WorkerStation() {
   const myAttention = sortByUrgency(myOrders.filter(o => o._urgency.level === "attention"));
   const mySafe = sortByUrgency(myOrders.filter(o => o._urgency.level === "safe"));
 
-  const queueOverdue = sortByUrgency(sharedQueue.filter(o => o._urgency.level === "overdue"));
-  const queueUrgent = sortByUrgency(sharedQueue.filter(o => o._urgency.level === "urgent"));
-  const queueNormal = sortByUrgency(sharedQueue.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
+  const incomingOverdue = sortByUrgency(incomingQueue.filter(o => o._urgency.level === "overdue"));
+  const incomingUrgent = sortByUrgency(incomingQueue.filter(o => o._urgency.level === "urgent"));
+  const incomingNormal = sortByUrgency(incomingQueue.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
+
+  const localQueueOverdue = sortByUrgency(localProcessingQueue.filter(o => o._urgency.level === "overdue"));
+  const localQueueUrgent = sortByUrgency(localProcessingQueue.filter(o => o._urgency.level === "urgent"));
+  const localQueueNormal = sortByUrgency(localProcessingQueue.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
 
   const applyOrderUpdate = async (id: number, changes: Record<string, unknown>) => {
     if (getIsOnline()) {
@@ -578,16 +593,19 @@ export default function WorkerStation() {
         </div>
       )}
 
-      {sharedQueue.length > 0 && (
+      {incomingQueue.length > 0 && (
         <div className="space-y-3">
           <h2 className="font-semibold text-base flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            Shared Queue ({sharedQueue.length})
+            <ArrowRight className="h-4 w-4 text-blue-600" />
+            Incoming from Other Branches ({incomingQueue.length})
           </h2>
+          <p className="text-xs text-muted-foreground">
+            These clothes were collected at another branch. Receive them here, verify the physical count, then they enter this branch's processing work.
+          </p>
           <div className="space-y-2">
             <UrgencySection
-              title="Overdue — claim immediately"
-              orders={queueOverdue}
+              title="Overdue — receive immediately"
+              orders={incomingOverdue}
               icon={AlertTriangle}
               iconClass="text-red-700"
               headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
@@ -600,21 +618,77 @@ export default function WorkerStation() {
             />
             <UrgencySection
               title="Urgent"
-              orders={queueUrgent}
+              orders={incomingUrgent}
               icon={Zap}
               iconClass="text-red-500"
               headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
               onClaim={claimOrder}
+              onVerify={markVerified}
+              onMarkReady={markReady}
+              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
+              sla={sla}
+              isPending={updateMutation.isPending || moveMutation.isPending}
+            />
+            <UrgencySection
+              title="Waiting to be received"
+              orders={incomingNormal}
+              icon={Clock}
+              iconClass="text-blue-600"
+              headerClass="bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/30"
+              onClaim={claimOrder}
+              onVerify={markVerified}
+              onMarkReady={markReady}
+              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
+              sla={sla}
+              isPending={updateMutation.isPending || moveMutation.isPending}
+            />
+          </div>
+        </div>
+      )}
+
+      {localProcessingQueue.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-semibold text-base flex items-center gap-2">
+            <WashingMachine className="h-4 w-4 text-primary" />
+            Local Processing Queue ({localProcessingQueue.length})
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            These orders were collected at this Hybrid branch and are not incoming from another branch.
+          </p>
+          <div className="space-y-2">
+            <UrgencySection
+              title="Overdue — claim immediately"
+              orders={localQueueOverdue}
+              icon={AlertTriangle}
+              iconClass="text-red-700"
+              headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
+              onClaim={claimOrder}
+              onVerify={markVerified}
+              onMarkReady={markReady}
+              sla={sla}
+              isPending={updateMutation.isPending}
+            />
+            <UrgencySection
+              title="Urgent"
+              orders={localQueueUrgent}
+              icon={Zap}
+              iconClass="text-red-500"
+              headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
+              onClaim={claimOrder}
+              onVerify={markVerified}
+              onMarkReady={markReady}
               sla={sla}
               isPending={updateMutation.isPending}
             />
             <UrgencySection
               title="Queue"
-              orders={queueNormal}
+              orders={localQueueNormal}
               icon={Clock}
               iconClass="text-muted-foreground"
               headerClass="bg-muted/50 hover:bg-muted/80 text-foreground"
               onClaim={claimOrder}
+              onVerify={markVerified}
+              onMarkReady={markReady}
               sla={sla}
               isPending={updateMutation.isPending}
             />
