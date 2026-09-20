@@ -1,6 +1,6 @@
 # CleanTrack — Real SaaS Master Completion Plan
 
-Last updated: 2026-09-19
+Last updated: 2026-09-20
 
 ## Mission
 
@@ -112,19 +112,28 @@ Legacy branchId remains temporarily as a compatibility bridge.
 - [x] Explicit order location columns added.
 - [x] Existing branch data safely backfilled.
 - [x] Cross-tenant location verification passed.
+- [x] Pickup processing destination field added.
+- [x] Pickup destination restricted to same-laundry active Processing/Hybrid branches.
+- [x] Pickup cannot point to itself.
+- [x] Branch deletion/type changes are guarded against active routing dependencies.
+- [x] Order creation uses branch configuration as the routing source of truth.
+- [x] Hybrid orders process locally without a transfer.
+- [x] Pickup orders require an explicit processing destination.
+- [x] One order remains the source of truth across all branch handoffs.
+- [x] currentBranchId tracks the physical location of the order.
+- [x] Movement history records collection, processing transfer, return transfer, actor and timestamp.
+- [x] Guided worker handoffs infer configured destinations; workers do not choose arbitrary destinations per order.
+- [x] Pickup workers can receive/verify/send without being granted processing capability.
+- [x] Processing/Hybrid workers can process and mark ready only at the configured processing branch.
+- [x] Worker queues distinguish processing work, branch handoffs, incoming work and returned ready work.
+- [x] Owner All Branches view uses current operational location while order detail exposes the complete route/history.
 - [ ] Investigate the one legacy-unassigned order.
-- [ ] Complete backend branchId usage audit.
-- [ ] Replace order workflow authorization with operation-specific authorization.
-- [ ] Add explicit movement/transfer history.
-- [ ] Update batch logic.
-- [ ] Update analytics.
-- [ ] Update search.
-- [ ] Update notifications.
-- [ ] Update receipts.
-- [ ] Update customer/order views.
-- [ ] Update frontend branch selectors.
-- [ ] Verify offline/PWA synchronization with the new location model.
-- [ ] Only remove legacy branchId after every dependent workflow is migrated and verified.
+- [ ] Complete remaining backend branchId consumer audit.
+- [ ] Update batch transfer/receiving workflow for multi-order handoffs.
+- [ ] Update analytics definitions and branch workload reporting for collection/processing/return/current dimensions.
+- [ ] Update search/receipts/notifications for lifecycle-specific branch context where still required.
+- [ ] Verify offline/PWA synchronization for branch handoffs.
+- [ ] Only remove legacy branchId after every dependent workflow is migrated and production data has been verified.
 
 ## Branch audit findings on 2026-09-19
 
@@ -219,10 +228,10 @@ The core lifecycle must be reliable under normal use, duplicate requests, concur
 
 ## Still required
 
-- [ ] Explicit branch/location lifecycle.
-- [ ] Transfer/movement history.
+- [x] Explicit branch/location lifecycle.
+- [x] Transfer/movement history.
 - [ ] Payment correction/refund workflow.
-- [ ] Block unsafe deletion of payments on terminal orders.
+- [x] Block unsafe deletion of payments on terminal orders.
 - [ ] Validate payment amount: positive, finite, valid decimal.
 - [ ] Decide and enforce overpayment policy.
 - [ ] Decide whether completed/cancelled orders permit non-financial edits.
@@ -873,6 +882,30 @@ After the first real users:
 
 # Current execution board
 
+## 2026-09-20 branch-routing certification snapshot
+
+### Recently solved
+- [x] Pickup branch can be linked explicitly to a Hybrid or Processing destination.
+- [x] No arbitrary processing-branch fallback remains for Pickup orders.
+- [x] Hybrid branch can act as the processing branch.
+- [x] One order is retained through collection → processing → return.
+- [x] Handoffs update currentBranchId and append movement records.
+- [x] Pickup workers do not turn orders into processing merely by claiming them.
+- [x] Processing/Hybrid workers cannot process an order while it is physically at a Pickup branch.
+- [x] Verified intake is required before a cross-branch processing transfer.
+- [x] Returned ready orders do not show a false “Mark Ready” processing action at Pickup.
+- [x] Worker UI exposes route, current branch, incoming/returned context and next handoff.
+- [x] Owner All Branches can follow current operational location; order detail exposes movement history.
+- [x] Latest routing deployment succeeded: 2ac3dfe0-1562-4c48-a5d6-fe3d6ca61a84.
+
+### Current certification gate
+- [ ] Production scenario: Pickup → Hybrid → Pickup.
+- [ ] Production scenario: Pickup → Processing → Pickup.
+- [ ] Production scenario: two Pickup branches linked to different processing-capable branches.
+- [ ] Production scenario: multiple Hybrid branches process locally.
+- [ ] Production scenario: owner and workers see the same single order moving between branches without duplicate records.
+- [ ] Production scenario: movement history and branch queues remain correct after refresh/reload.
+- [ ] Production scenario: batch transfer and discrepancy handling.
 ## Phase 0 — Production foundation
 STATUS: Mostly complete; hardening remains.
 
@@ -889,17 +922,30 @@ Production verification:
 - 1 unassigned legacy order requires investigation.
 
 ## Phase 2.2 — Branch-aware order workflow
-STATUS: AUDIT IN PROGRESS / route migration not yet complete.
+STATUS: IMPLEMENTATION COMPLETE / PRODUCTION CERTIFICATION IN PROGRESS.
 
-Next sequence:
-1. Investigate the one unassigned production order.
-2. Replace order branch authorization with operation-specific authorization.
-3. Update batches.
-4. Add movement/history.
-5. Update analytics/search/receipts/notifications.
-6. Update frontend.
-7. Certify branch scenarios.
-8. Deprecate legacy order.branchId only after certification.
+Completed in the current realignment:
+1. Owner-configured branch capabilities: HYBRID, PICKUP, PROCESSING.
+2. Explicit Pickup → Processing/Hybrid destination links.
+3. One-order routing with collection/processing/return/current locations.
+4. Guided processing and return handoffs with movement history.
+5. Operation-specific worker capability enforcement.
+6. Worker receiving/handoff queues and route visibility.
+7. Owner All Branches/current-location visibility.
+8. Production migration 0006 for Pickup processing destinations.
+9. Frontend/PWA update handling improved so deployed routing UI activates promptly.
+
+Certification sequence now:
+1. Verify Pickup → Hybrid end-to-end.
+2. Verify Pickup → Processing → Pickup end-to-end.
+3. Verify multiple Pickup branches can route to different processing-capable branches.
+4. Verify Hybrid → Hybrid/local processing does not create a false transfer.
+5. Verify worker permission boundaries: Pickup cannot process; Processing/Hybrid can process.
+6. Verify movement history has correct from/to/actor/time for every handoff.
+7. Verify owner All Branches and per-branch views never mix current locations.
+8. Verify batch transfer/receiving behavior.
+9. Verify offline/PWA handoff behavior.
+10. Deprecate legacy order.branchId only after all consumers are migrated and production data is verified.
 
 ## Phase 3 — Complete order/customer/worker operations
 STATUS: Pending Phase 2.2.
