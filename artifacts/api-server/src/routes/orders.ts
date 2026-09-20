@@ -639,8 +639,19 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
         return { manualForbidden: true } as const;
       }
 
-      const targetBranchId = data.toBranchId
-        ?? (data.movementType === "PROCESSING_TRANSFER" ? order.processingBranchId : data.movementType === "RETURN_TRANSFER" ? order.returnBranchId : null);
+      // Guided worker handoffs never accept a caller-chosen destination.
+      // CleanTrack derives the destination from the order's immutable route.
+      // Owners may still supply a target for MANUAL_TRANSFER.
+      if (!isOwner && data.toBranchId !== undefined) {
+        return { workerTargetForbidden: true } as const;
+      }
+      const targetBranchId = isOwner && data.movementType === "MANUAL_TRANSFER"
+        ? data.toBranchId
+        : data.movementType === "PROCESSING_TRANSFER"
+          ? order.processingBranchId
+          : data.movementType === "RETURN_TRANSFER"
+            ? order.returnBranchId
+            : null;
       if (targetBranchId == null) return { missingTarget: true } as const;
 
       const [target] = await tx.select({ id: branches.id, type: branches.type, name: branches.name })
@@ -695,7 +706,7 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
     if ("notFound" in result) return res.status(404).json({ error: "Order not found" });
     if ("terminal" in result) return res.status(409).json({ error: "Completed or cancelled orders cannot be moved" });
     if ("forbidden" in result) return res.status(403).json({ error: "You can only move orders currently at your assigned branch" });
-    if ("manualForbidden" in result) return res.status(403).json({ error: "Workers can only use the guided branch handoff actions" });
+    if ("manualForbidden" in result || "workerTargetForbidden" in result) return res.status(403).json({ error: "Workers can only use the guided branch handoff actions; the destination is controlled by the order route" });
     if ("missingTarget" in result) return res.status(400).json({ error: "This order has no destination branch configured" });
     if ("badBranch" in result) return res.status(400).json({ error: "Target branch not found" });
     if ("wrongTarget" in result) return res.status(400).json({ error: "Target branch does not match the order lifecycle location" });
@@ -896,6 +907,18 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
     }
 
     if ("assignedWorkerId" in req.body && data.assignedWorkerId !== null && data.assignedWorkerId !== undefined) {
+      // A worker may claim/receive an order for themselves without the broader
+      // assign:orders permission. That permission is only required when they
+      // assign an order to someone else.
+      const isSelfAssignment = !isOwner && data.assignedWorkerId === req.auth!.workerId;
+      if (!isSelfAssignment && !req.auth!.permissions?.canAssignOrders) {
+        return res.status(403).json({
+          error: "Permission denied",
+          required: "assign:orders",
+          hint: "You can claim/receive orders for yourself, but assigning them to another worker requires assignment permission.",
+        });
+      }
+
       const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
       if (!targetWorker || targetWorker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
       const workerAssignmentBranch = beforeOrder.currentBranchId ?? beforeOrder.processingBranchId ?? beforeOrder.collectionBranchId;
