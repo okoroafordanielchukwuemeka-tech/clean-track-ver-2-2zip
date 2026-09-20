@@ -573,29 +573,6 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
     const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    // Record physical receipt only after the custody assignment was persisted.
-    if (
-      !isOwner &&
-      data.assignedWorkerId === req.auth!.workerId &&
-      beforeOrder.currentBranchId === beforeOrder.processingBranchId &&
-      beforeOrder.collectionBranchId !== beforeOrder.processingBranchId &&
-      beforeOrder.assignedWorkerId !== req.auth!.workerId
-    ) {
-      logAction({
-        auth: req.auth!,
-        laundryId,
-        action: "order_branch_received",
-        orderId: order.id,
-        metadata: {
-          branchId: order.currentBranchId,
-          processingBranchId: order.processingBranchId,
-          collectionBranchId: order.collectionBranchId,
-          receivedByWorkerId: req.auth!.workerId,
-          receivedByName: req.auth!.name,
-        },
-      }).catch(() => {});
-    }
-
     const fromBranch = alias(branches, "from_branch");
     const toBranch = alias(branches, "to_branch");
 
@@ -975,6 +952,29 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
       .where(and(...patchConditions))
       .returning();
     if (!order) return res.status(404).json({ error: "Order not found" });
+
+    // Record physical receipt only after the custody assignment was persisted.
+    if (
+      !isOwner &&
+      data.assignedWorkerId === req.auth!.workerId &&
+      beforeOrder.currentBranchId === beforeOrder.processingBranchId &&
+      beforeOrder.collectionBranchId !== beforeOrder.processingBranchId &&
+      beforeOrder.assignedWorkerId !== req.auth!.workerId
+    ) {
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: "order_branch_received",
+        orderId: order.id,
+        metadata: {
+          branchId: order.currentBranchId,
+          processingBranchId: order.processingBranchId,
+          collectionBranchId: order.collectionBranchId,
+          receivedByWorkerId: req.auth!.workerId,
+          receivedByName: req.auth!.name,
+        },
+      }).catch(() => {});
+    }
 
     if (beforeOrder) {
       if (data.status === "processing" && beforeOrder.status !== "processing") {
