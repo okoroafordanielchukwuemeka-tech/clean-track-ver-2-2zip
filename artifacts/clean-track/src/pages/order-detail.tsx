@@ -676,13 +676,18 @@ export default function OrderDetail() {
           <CardContent className="pt-0 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-sm">
               {[
-                ["Collection", order.collectionBranchId],
-                ["Processing", order.processingBranchId],
-                ["Return", order.returnBranchId],
-                ["Current", order.currentBranchId],
-              ].map(([label, id]) => {
+                ["Collection", order.collectionBranchId, order.collectionBranchName],
+                ["Processing", order.processingBranchId, order.processingBranchName],
+                ["Return", order.returnBranchId, order.returnBranchName],
+                ["Current", order.currentBranchId, order.currentBranchName],
+              ].map(([label, id, apiName]) => {
                 const branch = branchList.find(b => b.id === id);
-                return <div key={String(label)} className="rounded-lg border p-2.5"><p className="text-xs text-muted-foreground">{label}</p><p className="font-medium mt-0.5 truncate">{branch?.name ?? (id ? "Branch #" + id : "Not assigned")}</p></div>;
+                return (
+                  <div key={String(label)} className="rounded-lg border p-2.5">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="font-medium mt-0.5 truncate">{apiName ?? branch?.name ?? (id ? "Branch #" + id : "Not assigned")}</p>
+                  </div>
+                );
               })}
             </div>
             {order.status !== "completed" && (order.status as string) !== "cancelled" && (
