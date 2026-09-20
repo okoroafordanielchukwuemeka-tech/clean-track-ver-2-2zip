@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard, Users, ArrowRight } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard, Users, ArrowRight, WashingMachine } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PaymentStatusBadge } from "@/lib/order-status";
 import { toast } from "sonner";
