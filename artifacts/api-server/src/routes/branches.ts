@@ -223,6 +223,60 @@ branchesRouter.delete("/:id", requireOwner, async (req: AuthRequest, res) => {
   }
 });
 
+branchesRouter.get("/network-summary", requireOwner, async (req: AuthRequest, res) => {
+  try {
+    const laundryId = req.auth!.laundryId;
+    const activeBranches = await db
+      .select()
+      .from(branches)
+      .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt)))
+      .orderBy(desc(branches.createdAt));
+
+    const branchOrders = await db
+      .select()
+      .from(orders)
+      .where(and(eq(orders.laundryId, laundryId), isNull(orders.deletedAt)));
+
+    const summary = activeBranches.map(branch => {
+      const current = branchOrders.filter(o => o.currentBranchId === branch.id && !["completed", "cancelled"].includes(o.status));
+      const incoming = current.filter(o =>
+        o.collectionBranchId !== branch.id &&
+        o.processingBranchId === branch.id &&
+        o.status === "pending"
+      );
+      const local = current.filter(o =>
+        o.collectionBranchId === branch.id &&
+        o.processingBranchId === branch.id
+      );
+      const processing = current.filter(o => o.currentBranchId === branch.id && o.processingBranchId === branch.id && o.status === "processing");
+      const ready = current.filter(o => o.currentBranchId === branch.id && o.status === "ready");
+      const awaitingTransfer = branch.type !== "PROCESSING"
+        ? current.filter(o => o.currentBranchId === branch.id && o.collectionBranchId === branch.id && o.processingBranchId !== branch.id)
+        : [];
+
+      return {
+        id: branch.id,
+        name: branch.name,
+        type: branch.type,
+        processingDestinationBranchId: branch.processingDestinationBranchId,
+        counts: {
+          active: current.length,
+          incoming: incoming.length,
+          local: local.length,
+          processing: processing.length,
+          ready: ready.length,
+          awaitingTransfer: awaitingTransfer.length,
+        },
+      };
+    });
+
+    res.json(summary);
+  } catch (err) {
+    console.error("[branches] Failed to build network summary:", err);
+    res.status(500).json({ error: "Failed to load branch network summary" });
+  }
+});
+
 branchesRouter.get("/:id/stats", requireOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
