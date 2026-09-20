@@ -926,6 +926,31 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
       }
     }
 
+    // Receiving an incoming order is a custody event, not a processing status change.
+    // Keep it in the audit trail so the owner can see who physically accepted custody
+    // at the configured processing branch before verification/processing begins.
+    if (
+      !isOwner &&
+      data.assignedWorkerId === req.auth!.workerId &&
+      beforeOrder.currentBranchId === beforeOrder.processingBranchId &&
+      beforeOrder.collectionBranchId !== beforeOrder.processingBranchId &&
+      beforeOrder.assignedWorkerId !== req.auth!.workerId
+    ) {
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: "order_branch_received",
+        orderId: beforeOrder.id,
+        metadata: {
+          branchId: beforeOrder.currentBranchId,
+          processingBranchId: beforeOrder.processingBranchId,
+          collectionBranchId: beforeOrder.collectionBranchId,
+          receivedByWorkerId: req.auth!.workerId,
+          receivedByName: req.auth!.name,
+        },
+      }).catch(() => {});
+    }
+
     if ("assignedWorkerId" in req.body && data.assignedWorkerId !== null && data.assignedWorkerId !== undefined) {
       // A worker may claim/receive an order for themselves without the broader
       // assign:orders permission. That permission is only required when they
