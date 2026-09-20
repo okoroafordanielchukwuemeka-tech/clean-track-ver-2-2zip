@@ -670,9 +670,9 @@ export default function OrderDetail() {
         </div>
       </div>
       
-      {isOwner && (
+      {order && (
         <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><GitBranch className="h-4 w-4" /> Order Locations</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><GitBranch className="h-4 w-4" /> Order Route & Location</CardTitle></CardHeader>
           <CardContent className="pt-0 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-sm">
               {[
@@ -690,7 +690,7 @@ export default function OrderDetail() {
                 );
               })}
             </div>
-            {order.status !== "completed" && (order.status as string) !== "cancelled" && (
+            {isOwner && order.status !== "completed" && (order.status as string) !== "cancelled" && (
               <Button size="sm" variant="outline" onClick={() => setShowMove(true)}><ArrowRight className="h-4 w-4 mr-1" />Move Order</Button>
             )}
             {movements.length > 0 && (
