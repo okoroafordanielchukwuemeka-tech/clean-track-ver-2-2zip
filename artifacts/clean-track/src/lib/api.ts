@@ -1151,7 +1151,7 @@ export interface WorkerInput {
 }
 
 export type NotificationEventType =
-  | "new_order" | "order_assigned" | "due_soon" | "overdue"
+  | "new_order" | "order_assigned" | "branch_handoff" | "due_soon" | "overdue"
   | "payment_received" | "unpaid_balance" | "order_ready"
   | "partial_pickup" | "pickup_completed" | "high_expense" | "low_profit_warning";
 
