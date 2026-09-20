@@ -818,13 +818,21 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
           hint: `Workers cannot modify pricing fields: ${forbidden.join(", ")}. Use the discount request system instead.`,
         });
       }
-      // Workers need canAssignOrders to change the assigned worker
-      if ("assignedWorkerId" in req.body && !req.auth!.permissions?.canAssignOrders) {
-        return res.status(403).json({
-          error: "Permission denied",
-          required: "assign:orders",
-          hint: "You don't have permission to assign orders. Contact your manager.",
-        });
+      // A worker may receive/claim an order for themselves without assign:orders.
+      // assign:orders is only required when assigning the order to another worker.
+      if ("assignedWorkerId" in req.body) {
+        const requestedWorkerId = req.body.assignedWorkerId;
+        const isSelfAssignment =
+          requestedWorkerId !== null &&
+          requestedWorkerId !== undefined &&
+          requestedWorkerId === req.auth!.workerId;
+        if (!isSelfAssignment && !req.auth!.permissions?.canAssignOrders) {
+          return res.status(403).json({
+            error: "Permission denied",
+            required: "assign:orders",
+            hint: "You can receive/claim orders for yourself. Assigning them to another worker requires assignment permission.",
+          });
+        }
       }
     }
 
