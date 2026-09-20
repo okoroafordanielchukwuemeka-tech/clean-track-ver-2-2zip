@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "prompt",
+      registerType: "autoUpdate",
       includeAssets: ["icons/*.svg"],
       manifest: {
         name: "CleanTrack",
@@ -40,6 +40,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         globPatterns: ["**/*.{js,css,html,svg,woff2}"],
         navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/api\//],
