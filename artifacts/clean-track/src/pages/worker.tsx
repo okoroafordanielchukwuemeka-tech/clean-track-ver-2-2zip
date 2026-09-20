@@ -169,7 +169,13 @@ function UrgencySection({
                       Claim
                     </Button>
                   )}
-                  {order.status === "processing" && !order.isVerified && onVerify && (
+                  {["pending", "processing"].includes(order.status) &&
+                    !order.isVerified &&
+                    onVerify &&
+                    (
+                      order.currentBranchId === order.collectionBranchId ||
+                      order.currentBranchId === order.processingBranchId
+                    ) && (
                     <Button size="sm" variant="outline" onClick={() => onVerify(order.id, order)} disabled={isPending}>
                       <CheckCircle className="h-3.5 w-3.5 mr-1" />
                       Verify
