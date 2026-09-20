@@ -639,13 +639,16 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
         if (order.processingBranchId !== target.id) return { wrongTarget: "processing" } as const;
         if (!["PROCESSING", "HYBRID"].includes(target.type)) return { badCapability: "processing" } as const;
         if (order.currentBranchId !== order.collectionBranchId) return { badSource: "processing" } as const;
+        if (order.collectionBranchId === order.processingBranchId) return { localProcessing: true } as const;
         if (!["pending", "processing"].includes(order.status)) return { badStatus: "processing" } as const;
+        if (!order.isVerified) return { notVerified: true } as const;
       }
 
       if (data.movementType === "RETURN_TRANSFER") {
         if (order.returnBranchId !== target.id) return { wrongTarget: "return" } as const;
         if (!["PICKUP", "HYBRID"].includes(target.type)) return { badCapability: "return" } as const;
         if (order.currentBranchId !== order.processingBranchId) return { badSource: "return" } as const;
+        if (order.returnBranchId === order.processingBranchId) return { localReturn: true } as const;
         if (!["ready", "partial_pickup"].includes(order.status)) return { badStatus: "return" } as const;
       }
 
@@ -686,6 +689,8 @@ ordersRouter.post("/:id/move", checkPermission("process:orders"), async (req: Au
     if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
     if ("badSource" in result) return res.status(409).json({ error: "The order is not currently at the branch that should send it" });
     if ("badStatus" in result) return res.status(409).json({ error: "The order is not ready for this handoff" });
+    if ("notVerified" in result) return res.status(409).json({ error: "Verify the clothes/count before sending the order to another branch", code: "ORDER_NOT_VERIFIED" });
+    if ("localProcessing" in result || "localReturn" in result) return res.status(409).json({ error: "This order is already at its configured operating branch; no handoff is required" });
 
     if ("movement" in result && result.movement) {
       logAction({
