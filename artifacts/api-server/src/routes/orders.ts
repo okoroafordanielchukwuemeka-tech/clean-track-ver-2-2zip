@@ -772,6 +772,22 @@ ordersRouter.patch("/:id", checkPermission("process:orders"), idempotencyMiddlew
       });
     }
 
+    // Processing state can only be changed while the physical order is at
+    // its configured processing branch. A Pickup branch may receive/verify/send,
+    // but it can never turn an order into "processing" or "ready".
+    if (data.status === "processing" || data.status === "ready") {
+      const [currentBranch] = await db.select({ id: branches.id, type: branches.type })
+        .from(branches)
+        .where(and(eq(branches.id, beforeOrder.currentBranchId ?? -1), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+      const canProcessHere = !!currentBranch && ["PROCESSING", "HYBRID"].includes(currentBranch.type);
+      if (!canProcessHere || beforeOrder.currentBranchId !== beforeOrder.processingBranchId) {
+        return res.status(409).json({
+          error: "This order is not at a processing-capable branch",
+          code: "PROCESSING_BRANCH_REQUIRED",
+        });
+      }
+    }
+
     if (isOwner) {
       const nextPrice = (data as any).price !== undefined ? (data as any).price : parseFloat(beforeOrder.price || "0");
       const nextExtra = (data as any).extraCharge !== undefined ? (data as any).extraCharge : parseFloat(beforeOrder.extraCharge || "0");
