@@ -573,6 +573,29 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
     const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
+    // Record physical receipt only after the custody assignment was persisted.
+    if (
+      !isOwner &&
+      data.assignedWorkerId === req.auth!.workerId &&
+      beforeOrder.currentBranchId === beforeOrder.processingBranchId &&
+      beforeOrder.collectionBranchId !== beforeOrder.processingBranchId &&
+      beforeOrder.assignedWorkerId !== req.auth!.workerId
+    ) {
+      logAction({
+        auth: req.auth!,
+        laundryId,
+        action: "order_branch_received",
+        orderId: order.id,
+        metadata: {
+          branchId: order.currentBranchId,
+          processingBranchId: order.processingBranchId,
+          collectionBranchId: order.collectionBranchId,
+          receivedByWorkerId: req.auth!.workerId,
+          receivedByName: req.auth!.name,
+        },
+      }).catch(() => {});
+    }
+
     const fromBranch = alias(branches, "from_branch");
     const toBranch = alias(branches, "to_branch");
 
@@ -924,31 +947,6 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
           allowed: allowedNext,
         });
       }
-    }
-
-    // Receiving an incoming order is a custody event, not a processing status change.
-    // Keep it in the audit trail so the owner can see who physically accepted custody
-    // at the configured processing branch before verification/processing begins.
-    if (
-      !isOwner &&
-      data.assignedWorkerId === req.auth!.workerId &&
-      beforeOrder.currentBranchId === beforeOrder.processingBranchId &&
-      beforeOrder.collectionBranchId !== beforeOrder.processingBranchId &&
-      beforeOrder.assignedWorkerId !== req.auth!.workerId
-    ) {
-      logAction({
-        auth: req.auth!,
-        laundryId,
-        action: "order_branch_received",
-        orderId: beforeOrder.id,
-        metadata: {
-          branchId: beforeOrder.currentBranchId,
-          processingBranchId: beforeOrder.processingBranchId,
-          collectionBranchId: beforeOrder.collectionBranchId,
-          receivedByWorkerId: req.auth!.workerId,
-          receivedByName: req.auth!.name,
-        },
-      }).catch(() => {});
     }
 
     if ("assignedWorkerId" in req.body && data.assignedWorkerId !== null && data.assignedWorkerId !== undefined) {
