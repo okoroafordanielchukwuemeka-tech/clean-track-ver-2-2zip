@@ -166,7 +166,7 @@ function UrgencySection({
                   )}
                   {["pending", "processing"].includes(order.status) && onClaim && order.currentBranchId === order.processingBranchId && !order.assignedWorkerId && (
                     <Button size="sm" variant="outline" onClick={() => onClaim(order.id)} disabled={isPending}>
-                      Claim
+                      Receive
                     </Button>
                   )}
                   {["pending", "processing"].includes(order.status) &&
@@ -174,11 +174,16 @@ function UrgencySection({
                     onVerify &&
                     (
                       order.currentBranchId === order.collectionBranchId ||
-                      order.currentBranchId === order.processingBranchId
+                      (
+                        order.currentBranchId === order.processingBranchId &&
+                        order.assignedWorkerId === userId
+                      )
                     ) && (
                     <Button size="sm" variant="outline" onClick={() => onVerify(order.id, order)} disabled={isPending}>
                       <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                      Verify
+                      {order.currentBranchId === order.processingBranchId && order.collectionBranchId !== order.processingBranchId
+                        ? "Verify & Accept"
+                        : "Verify"}
                     </Button>
                   )}
                   {order.status === "processing" && order.isVerified && onMarkReady && order.currentBranchId === order.processingBranchId && (
@@ -338,11 +343,11 @@ export default function WorkerStation() {
   const claimOrder = (id: number) => {
     const order = orders.find(o => o.id === id);
     if (!order) return;
-    if (order.currentBranchId !== order.processingBranchId) {
-      applyOrderUpdate(id, { assignedWorkerId: user?.id });
-      return;
-    }
-    applyOrderUpdate(id, { assignedWorkerId: user?.id, status: "processing" });
+
+    // Receiving custody and starting processing are separate steps.
+    // At a processing branch, the worker first claims/receives the physical
+    // order; verification is what moves it into the processing state.
+    applyOrderUpdate(id, { assignedWorkerId: user?.id });
   };
 
   const moveOrder = (id: number, movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER") => {
@@ -356,10 +361,23 @@ export default function WorkerStation() {
   const markVerified = (id: number, o: any) => {
     const isItemBased = (o.itemCount ?? 0) > 0;
     const verifyData: Record<string, unknown> = { isVerified: true };
+
     if (!isItemBased) {
       verifyData.verifiedShirts = o.shirts;
       verifyData.verifiedTrousers = o.trousers;
     }
+
+    // A non-local order has just been physically received at its processing
+    // branch. Verification is the acceptance gate that starts processing.
+    if (
+      o.currentBranchId === o.processingBranchId &&
+      o.collectionBranchId !== o.processingBranchId &&
+      o.assignedWorkerId === user?.id &&
+      o.status === "pending"
+    ) {
+      verifyData.status = "processing";
+    }
+
     applyOrderUpdate(id, verifyData);
   };
 
