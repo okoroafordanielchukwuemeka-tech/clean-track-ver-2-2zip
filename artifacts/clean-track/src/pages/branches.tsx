@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { GitBranch, Plus, Pencil, Trash2, MapPin, Users, Calendar } from "lucide-react";
+import { GitBranch, Plus, Pencil, Trash2, MapPin, Users, Calendar, Link2 } from "lucide-react";
 import type { BranchType } from "@/context/branch-context";
 
 const BRANCH_TYPES: Array<{ value: BranchType; label: string; description: string }> = [
@@ -145,27 +145,62 @@ export default function BranchesPage() {
             <div className="space-y-1.5"><Label htmlFor="name">Branch Name *</Label><Input id="name" placeholder="e.g. Ikeja Location" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></div>
             <div className="space-y-1.5"><Label htmlFor="address">Address <span className="text-muted-foreground text-xs">(optional)</span></Label><Input id="address" placeholder="e.g. 12 Allen Avenue, Ikeja" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Branch Type *</Label><Select value={form.type} onValueChange={value => setForm(f => ({ ...f, type: value as BranchType, processingDestinationBranchId: value === "PICKUP" ? f.processingDestinationBranchId : null }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{BRANCH_TYPES.map(t => <SelectItem key={t.value} value={t.value}><div><div>{t.label}</div><div className="text-xs text-muted-foreground">{t.description}</div></div></SelectItem>)}</SelectContent></Select></div>
-            {form.type === "PICKUP" && (
-              <div className="space-y-1.5">
-                <Label>Processing Destination *</Label>
-                <Select
-                  value={form.processingDestinationBranchId != null ? String(form.processingDestinationBranchId) : ""}
-                  onValueChange={value => setForm(f => ({ ...f, processingDestinationBranchId: Number(value) }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Choose the branch that processes these clothes" /></SelectTrigger>
-                  <SelectContent>
-                    {branches
-                      .filter(b => b.id !== editing?.id && (b.type === "PROCESSING" || b.type === "HYBRID"))
-                      .map(b => (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          <div><div>{b.name}</div><div className="text-xs text-muted-foreground">{b.type === "HYBRID" ? "Hybrid — processes locally" : "Processing — processing only"}</div></div>
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">CleanTrack will route orders from this Pickup branch here automatically. Workers will not choose the destination for each order.</p>
-              </div>
-            )}
+            {form.type === "PICKUP" && (() => {
+              const processingBranches = branches.filter(
+                b => b.id !== editing?.id && (b.type === "HYBRID" || b.type === "PROCESSING")
+              );
+              return (
+                <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <Link2 className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Link this Pickup branch</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Choose the branch that will receive and process clothes from this location.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Send clothes to *</Label>
+                    <Select
+                      value={form.processingDestinationBranchId != null ? String(form.processingDestinationBranchId) : ""}
+                      onValueChange={value => setForm(f => ({ ...f, processingDestinationBranchId: Number(value) }))}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select a Hybrid or Processing branch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {processingBranches.map(b => (
+                          <SelectItem key={b.id} value={String(b.id)}>
+                            <div className="py-0.5">
+                              <div className="font-medium">{b.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {b.type === "HYBRID"
+                                  ? "Hybrid — receives, processes & returns clothes"
+                                  : "Processing — receives & processes clothes"}
+                              </div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {processingBranches.length === 0 ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                        <strong>No processing destination available yet.</strong> Create a Hybrid or Processing branch first, then come back and link this Pickup branch to it.
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        You can link each Pickup branch to a different Hybrid or Processing branch. CleanTrack will use this link automatically for every order collected here.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground"><strong className="text-foreground">Routing:</strong> Hybrid branches process their own orders. Pickup branches send orders to the processing destination you choose above, then receive the finished clothes back. Processing branches only receive work from other branches.</div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={createMut.isPending || updateMut.isPending}>{editing ? "Save Changes" : "Create Branch"}</Button></DialogFooter>
           </form>
