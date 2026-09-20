@@ -499,9 +499,11 @@ export default function WorkerStation() {
               headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
               onVerify={markVerified}
               onMarkReady={markReady}
+              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
+              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
               userId={user?.id}
-              isPending={updateMutation.isPending}
+              isPending={updateMutation.isPending || moveMutation.isPending}
             />
             <UrgencySection
               title="Attention"
@@ -511,9 +513,11 @@ export default function WorkerStation() {
               headerClass="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50"
               onVerify={markVerified}
               onMarkReady={markReady}
+              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
+              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
               userId={user?.id}
-              isPending={updateMutation.isPending}
+              isPending={updateMutation.isPending || moveMutation.isPending}
             />
             <UrgencySection
               title="On Track"
