@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
-import { useBranch } from "@/context/branch-context";
 import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PaymentStatusBadge } from "@/lib/order-status";
