@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { PaymentStatusBadge } from "@/lib/order-status";
 import { toast } from "sonner";
 import { CreateOrderDialog } from "@/components/create-order-dialog";
+import { VerifyOrderDialog } from "@/components/verify-order-dialog";
 import { CountdownTimer } from "@/components/countdown-timer";
 import { computeDueAt, getUrgency, type UrgencyInfo } from "@/lib/urgency";
 import { cn } from "@/lib/utils";
@@ -231,6 +232,7 @@ export default function WorkerStation() {
   const qc = useQueryClient();
   const [, setTick] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+  const [verificationOrder, setVerificationOrder] = useState<any | null>(null);
 
   // Show onboarding screen if worker has no permissions assigned
   const hasAnyPermission =
@@ -367,26 +369,7 @@ export default function WorkerStation() {
   };
 
   const markVerified = (id: number, o: any) => {
-    const isItemBased = (o.itemCount ?? 0) > 0;
-    const verifyData: Record<string, unknown> = { isVerified: true };
-
-    if (!isItemBased) {
-      verifyData.verifiedShirts = o.shirts;
-      verifyData.verifiedTrousers = o.trousers;
-    }
-
-    // A non-local order has just been physically received at its processing
-    // branch. Verification is the acceptance gate that starts processing.
-    if (
-      o.currentBranchId === o.processingBranchId &&
-      o.collectionBranchId !== o.processingBranchId &&
-      o.assignedWorkerId === user?.id &&
-      o.status === "pending"
-    ) {
-      verifyData.status = "processing";
-    }
-
-    applyOrderUpdate(id, verifyData);
+    setVerificationOrder(o);
   };
 
   const markReady = (id: number) =>
@@ -757,6 +740,17 @@ export default function WorkerStation() {
       )}
 
       <CreateOrderDialog open={showCreate} onOpenChange={setShowCreate} />
+      <VerifyOrderDialog
+        order={verificationOrder}
+        open={!!verificationOrder}
+        onOpenChange={(open) => { if (!open) setVerificationOrder(null); }}
+        onConfirm={(data) => {
+          const next = { ...data, ...(verificationOrder?.status === "pending" ? { status: "processing" } : {}) };
+          applyOrderUpdate(verificationOrder.id, next);
+          setVerificationOrder(null);
+        }}
+        isPending={updateMutation.isPending}
+      />
     </div>
   );
 }

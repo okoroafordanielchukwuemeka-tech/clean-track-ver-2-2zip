@@ -30,6 +30,7 @@ import {
   ChevronDown, ChevronUp, Zap, AlertTriangle, GitBranch, ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { VerifyOrderDialog } from "@/components/verify-order-dialog";
 import { cn } from "@/lib/utils";
 
 // ── Action config for timeline ───────────────────────────────────────────────
@@ -155,6 +156,7 @@ export default function OrderDetail() {
   const [showPaymentHistory, setShowPaymentHistory] = useState(true);
   const [showFullTimeline, setShowFullTimeline]   = useState(false);
   const [showMove, setShowMove]                   = useState(false);
+  const [showVerification, setShowVerification]   = useState(false);
   const [moveType, setMoveType]                   = useState<"PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER">("MANUAL_TRANSFER");
   const [moveTarget, setMoveTarget]               = useState("");
   const [moveReason, setMoveReason]               = useState("");
@@ -936,6 +938,17 @@ export default function OrderDetail() {
           </CardContent>
         </Card>
       )}
+
+      <VerifyOrderDialog
+        order={order}
+        open={showVerification}
+        onOpenChange={setShowVerification}
+        onConfirm={(data) => {
+          updateMutation.mutate({ ...data, ...(order.status === "pending" ? { status: "processing" } : {}) });
+          setShowVerification(false);
+        }}
+        isPending={updateMutation.isPending}
+      />
 
       {/* ── Sync conflict warning ─────────────────────────────────────────── */}
       {(conflictPayments.length > 0 || conflictPickups.length > 0 || conflictStatusUpdates.length > 0) && (

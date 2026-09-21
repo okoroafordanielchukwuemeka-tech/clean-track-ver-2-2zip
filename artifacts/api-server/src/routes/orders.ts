@@ -191,6 +191,7 @@ const workerOrderUpdateSchema = z.object({
   isVerified: z.boolean().optional(),
   additionalNotes: z.string().optional(),
   assignedWorkerId: z.number().int().nullable().optional(),
+  verificationDetails: z.record(z.string(), z.number().int().min(0)).optional(),
 });
 
 const ownerOrderUpdateSchema = workerOrderUpdateSchema.extend({

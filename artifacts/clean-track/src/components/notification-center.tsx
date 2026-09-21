@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Notification } from "@/lib/api";
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, Zap, CheckCircle2 } from "lucide-react";
@@ -39,14 +39,17 @@ function NotificationItem({
   onRead,
   onDelete,
   onOpen,
+  onNavigate,
 }: {
   n: Notification;
   onRead: (id: number) => void;
   onDelete: (id: number) => void;
   onOpen: (notification: Notification) => void;
+  onNavigate: () => void;
 }) {
   const cfg = SEVERITY_CONFIG[n.severity];
   const Icon = cfg.icon;
+  const destination = n.relatedOrderId ? `/orders/${n.relatedOrderId}` : n.relatedConversationId ? `/customer-hub?conversationId=${n.relatedConversationId}` : null;
   return (
     <div
       className={cn(
@@ -80,9 +83,10 @@ function NotificationItem({
           </button>
         </div>
         <p className="text-muted-foreground text-xs mt-0.5 leading-relaxed">{n.message}</p>
-        <p className="text-muted-foreground/60 text-xs mt-1">
-          {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
-        </p>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <p className="text-muted-foreground/60 text-xs">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</p>
+          {destination && <Link to={destination} onClick={(e) => { e.stopPropagation(); onNavigate(); }} className="text-xs font-semibold text-primary hover:underline">Open</Link>}
+        </div>
       </div>
       {!n.isRead && <div className={cn("h-2 w-2 rounded-full shrink-0 mt-1.5", cfg.dot)} />}
     </div>
@@ -155,6 +159,8 @@ export function NotificationCenter() {
     }
   };
 
+  const closeAndMarkRead = (n: Notification) => { if (!n.isRead) markRead.mutate(n.id); setOpen(false); };
+
   const unreadCount = countData?.count ?? 0;
   const unread = notifications.filter(n => !n.isRead);
   const read = notifications.filter(n => n.isRead);
@@ -217,6 +223,7 @@ export function NotificationCenter() {
                         onRead={id => markRead.mutate(id)}
                         onDelete={id => deleteNotif.mutate(id)}
                         onOpen={handleOpen}
+                        onNavigate={() => closeAndMarkRead(n)}
                       />
                     ))}
                   </>
@@ -231,6 +238,7 @@ export function NotificationCenter() {
                         onRead={id => markRead.mutate(id)}
                         onDelete={id => deleteNotif.mutate(id)}
                         onOpen={handleOpen}
+                        onNavigate={() => closeAndMarkRead(n)}
                       />
                     ))}
                   </>

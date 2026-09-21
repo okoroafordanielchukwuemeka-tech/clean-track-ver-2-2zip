@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, boolean, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, timestamp, index, jsonb } from "drizzle-orm/pg-core";
 import { batches } from "./batches.js";
 import { workers } from "./workers.js";
 import { laundries } from "./laundries.js";
@@ -38,6 +38,7 @@ export const orders = pgTable("orders", {
   amountPaid: numeric("amount_paid", { precision: 10, scale: 2 }).notNull().default("0"),
   verifiedShirts: integer("verified_shirts"),
   verifiedTrousers: integer("verified_trousers"),
+  verificationDetails: jsonb("verification_details").$type<Record<string, number> | null>(),
   isVerified: boolean("is_verified").notNull().default(false),
   batchId: integer("batch_id").references(() => batches.id),
   assignedWorkerId: integer("assigned_worker_id").references(() => workers.id),
