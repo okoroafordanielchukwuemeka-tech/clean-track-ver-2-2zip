@@ -176,6 +176,7 @@ export const api = {
     priceAdjustments: (id: number) => request<PriceAdjustment[]>("GET", `/orders/${id}/price-adjustments`),
     addPriceAdjustment: (id: number, data: PriceAdjustmentInput) => request<PriceAdjustment>("POST", `/orders/${id}/price-adjustments`, data),
     auditLog: (id: number) => request<AuditLogEntry[]>("GET", `/orders/${id}/audit-log`),
+    movements: (id: number) => request<OrderMovement[]>("GET", `/orders/${id}/movements`),
     sendNotification: (id: number, type: "ready" | "reminder") =>
       request<{ queued: boolean; message: string }>("POST", `/orders/${id}/send-notification`, { type }),
     getMessages: (id: number) =>
