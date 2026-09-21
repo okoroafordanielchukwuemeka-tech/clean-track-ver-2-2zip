@@ -557,15 +557,9 @@ export default function Orders() {
                         </TableCell>
                         <TableCell><OrderStatusBadge status={order.status} /></TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          <div className="min-w-[190px] text-xs">
+                          <div className="min-w-[120px] text-xs">
                             <div className="font-medium text-foreground">
-                              At: {order.currentBranchName ?? "Unassigned branch"}
-                            </div>
-                            <div className="text-muted-foreground mt-0.5">
-                              {order.collectionBranchName ?? "Collection"} → {order.processingBranchName ?? "Processing"}
-                              {order.returnBranchName && order.returnBranchName !== order.processingBranchName
-                                ? " → " + order.returnBranchName
-                                : ""}
+                              {order.branchName ?? order.currentBranchName ?? "Unassigned branch"}
                             </div>
                           </div>
                         </TableCell>
