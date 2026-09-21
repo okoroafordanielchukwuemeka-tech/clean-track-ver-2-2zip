@@ -632,6 +632,7 @@ const PERMISSION_GROUPS: { heading: string; keys: { key: keyof WorkerPermission;
     heading: "Orders & Customers",
     keys: [
       { key: "canViewOrders", label: "View Orders" },
+      { key: "canViewAllBranches", label: "View orders from all branches" },
       { key: "canProcessOrders", label: "Process Orders" },
       { key: "canAssignOrders", label: "Assign Orders" },
       { key: "canViewCustomers", label: "View Customers" },
