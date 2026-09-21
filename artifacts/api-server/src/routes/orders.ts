@@ -213,7 +213,7 @@ ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthReq
     const { branchId: branchParam } = req.query;
         const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
-      : (workerCanViewAllBranches ? null : req.auth!.branchId ?? null);
+      : (req.auth!.branchId ?? null);
     const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
     const result = await db.select().from(orders).where(and(...summaryConditions));
@@ -245,7 +245,7 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
     const { branchId: branchParam } = req.query;
         const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
-      : (workerCanViewAllBranches ? null : req.auth!.branchId ?? null);
+      : (req.auth!.branchId ?? null);
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
     const recentOrders = await db.select().from(orders)
@@ -263,7 +263,7 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
         const idConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId && !workerCanViewAllBranches) idConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) idConditions.push(eq(orders.branchId, workerBranchId));
     const [orderRow] = await db.select({ order: orders, branchName: branches.name, branchAddress: branches.address })
       .from(orders).leftJoin(branches, eq(branches.id, orders.branchId)).where(and(...idConditions));
     if (!orderRow) return res.status(404).json({ error: "Order not found" });
@@ -475,8 +475,7 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
       ? ownerOrderUpdateSchema.parse(req.body)
       : workerOrderUpdateSchema.parse(req.body);
 
-    // Workers may operate orders from their own branch, or from every branch when
-    // the owner has granted the explicit cross-branch access permission.
+    // Workers operate orders only within their assigned branch.
     if (!isOwner && !req.auth!.permissions?.canRecordPickups && !req.auth!.permissions?.canProcessOrders) {
       return res.status(403).json({ error: "You do not have permission to operate orders" });
     }
@@ -490,7 +489,7 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
     }
 
     const patchConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId && !workerCanViewAllBranches) patchConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) patchConditions.push(eq(orders.branchId, workerBranchId));
 
     const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
     if (!beforeOrder) return res.status(404).json({ error: "Order not found" });
@@ -549,8 +548,8 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
 
       const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
       if (!targetWorker || targetWorker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
-      if (workerBranchId && !workerCanViewAllBranches && targetWorker.branchId !== workerBranchId) {
-        return res.status(403).json({ error: "Cross-branch assignment requires View orders from all branches permission" });
+      if (workerBranchId && targetWorker.branchId !== workerBranchId) {
+        return res.status(403).json({ error: "Workers can only assign orders to workers in their branch" });
       }
     }
 
@@ -637,7 +636,7 @@ ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRe
     const workerBranchId = req.auth!.branchId;
         const orderId = parseInt(req.params.id);
     const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId && !workerCanViewAllBranches) conditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) conditions.push(eq(orders.branchId, workerBranchId));
 
     const [existing] = await db.select().from(orders).where(and(...conditions));
     if (!existing) return res.status(404).json({ error: "Order not found" });
