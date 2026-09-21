@@ -27,10 +27,9 @@ import {
   ArrowLeft, Trash2, Plus, CheckCircle, ShoppingBag, Package, Minus,
   TrendingDown, TrendingUp, Activity, User, CreditCard, Percent, Clock,
   Receipt, Printer, Eye, MessageSquare, Send, RotateCcw, RefreshCw,
-  ChevronDown, ChevronUp, Zap, AlertTriangle, GitBranch, ArrowRight,
+  ChevronDown, ChevronUp, Zap, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { VerifyOrderDialog } from "@/components/verify-order-dialog";
 import { cn } from "@/lib/utils";
 
 // ── Action config for timeline ───────────────────────────────────────────────
@@ -133,7 +132,7 @@ export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isOwner, laundryId: authLaundryId, hasPermission, user } = useAuth();
+  const { isOwner, laundryId: authLaundryId, hasPermission } = useAuth();
 
   // Dialog / form state
   const [showPayment, setShowPayment]             = useState(false);
@@ -155,11 +154,6 @@ export default function OrderDetail() {
   const [showMessages, setShowMessages]           = useState(false);
   const [showPaymentHistory, setShowPaymentHistory] = useState(true);
   const [showFullTimeline, setShowFullTimeline]   = useState(false);
-  const [showMove, setShowMove]                   = useState(false);
-  const [showVerification, setShowVerification]   = useState(false);
-  const [moveType, setMoveType]                   = useState<"PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER">("MANUAL_TRANSFER");
-  const [moveTarget, setMoveTarget]               = useState("");
-  const [moveReason, setMoveReason]               = useState("");
 
   const orderId = parseInt(id!);
 
@@ -168,17 +162,6 @@ export default function OrderDetail() {
   const { data: order, isLoading } = useQuery({
     queryKey: ["orders", orderId],
     queryFn: () => api.orders.get(orderId),
-  });
-  
-  const { data: branchList = [] } = useQuery({
-    queryKey: ["branches"],
-    queryFn: () => api.branches.list(),
-    enabled: isOwner,
-  });
-  const { data: movements = [] } = useQuery({
-    queryKey: ["orders", orderId, "movements"],
-    queryFn: () => api.orders.movements(orderId),
-    enabled: !!orderId,
   });
 
   usePageTitle(order ? `Order #${order.orderId}` : "Order");
@@ -247,21 +230,6 @@ export default function OrderDetail() {
   }, [orderId, qc]);
 
   // ── Mutations ────────────────────────────────────────────────────────────
-
-  const moveMutation = useMutation({
-    mutationFn: (data: { toBranchId?: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
-      api.orders.move(orderId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["orders", orderId] });
-      qc.invalidateQueries({ queryKey: ["orders", orderId, "movements"] });
-      qc.invalidateQueries({ queryKey: ["orders"] });
-      setShowMove(false);
-      setMoveTarget("");
-      setMoveReason("");
-      toast.success("Order moved successfully");
-    },
-    onError: (e: Error) => toast.error("Could not move order — " + (e.message || "please try again.")),
-  });
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, any>) => api.orders.update(orderId, data),
@@ -495,26 +463,7 @@ export default function OrderDetail() {
     processing: { value: "ready",      label: "Mark as Ready"    },
   };
   const nextStatus = NEXT_STATUS[order.status];
-  const currentBranchConfig = branchList.find(b => b.id === order.currentBranchId);
-  const processingBranchConfig = branchList.find(b => b.id === order.processingBranchId);
-  const currentBranchType = currentBranchConfig?.type ?? order.currentBranchType ?? null;
-  const processingBranchType = processingBranchConfig?.type ?? order.processingBranchType ?? null;
-  const currentBranchCanProcess =
-    !!currentBranchType &&
-    ["PROCESSING", "HYBRID"].includes(currentBranchType);
-  const processingRouteIsValid =
-    !!processingBranchType &&
-    ["PROCESSING", "HYBRID"].includes(processingBranchType);
-  const canProcessAtCurrentBranch =
-    !!order.currentBranchId &&
-    order.currentBranchId === order.processingBranchId &&
-    currentBranchCanProcess &&
-    processingRouteIsValid &&
-    !!order.processingBranchId;
-  const canAdvanceStatus =
-    !!nextStatus &&
-    canProcessAtCurrentBranch &&
-    (isOwner || hasPermission("canProcessOrders"));
+  const canAdvanceStatus = !!nextStatus && (isOwner || hasPermission("canProcessOrders"));
 
   function setItemQty(itemId: number, qty: number, max: number) {
     const map = new Map(itemPickupQtys);
@@ -690,143 +639,6 @@ export default function OrderDetail() {
           )}
         </div>
       </div>
-      
-      {order && (
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><GitBranch className="h-4 w-4" /> Order Route & Location</CardTitle></CardHeader>
-          <CardContent className="pt-0 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-sm">
-              {[
-                ["Collection", order.collectionBranchId, order.collectionBranchName],
-                ["Processing", order.processingBranchId, order.processingBranchName],
-                ["Return", order.returnBranchId, order.returnBranchName],
-                ["Current", order.currentBranchId, order.currentBranchName],
-              ].map(([label, id, apiName]) => {
-                const branch = branchList.find(b => b.id === id);
-                return (
-                  <div key={String(label)} className="rounded-lg border p-2.5">
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="font-medium mt-0.5 truncate">{apiName ?? branch?.name ?? (id ? "Branch #" + id : "Not assigned")}</p>
-                  </div>
-                );
-              })}
-            </div>
-            {isOwner && order.status !== "completed" && (order.status as string) !== "cancelled" && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const routeBroken = !processingRouteIsValid;
-                  const atCollection = order.currentBranchId === order.collectionBranchId;
-                  const atProcessing = order.currentBranchId === order.processingBranchId && processingRouteIsValid;
-                  setMoveType(
-                    routeBroken && atCollection
-                      ? "PROCESSING_TRANSFER"
-                      : atProcessing && ["ready", "partial_pickup"].includes(order.status)
-                        ? "RETURN_TRANSFER"
-                        : "MANUAL_TRANSFER"
-                  );
-                  setMoveTarget("");
-                  setMoveReason("");
-                  setShowMove(true);
-                }}
-              >
-                <ArrowRight className="h-4 w-4 mr-1" />
-                Move Order
-              </Button>
-            )}
-            {movements.length > 0 && (
-              <div className="pt-2 border-t space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Movement history</p>
-                {movements.map(m => (
-                  <div key={m.id} className="flex items-start gap-2 text-xs">
-                    <ArrowRight className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <p><span className="font-medium">{m.fromBranchName ?? "Unknown"}</span> → <span className="font-medium">{m.toBranchName ?? "Unknown"}</span></p>
-                      <p className="text-muted-foreground">{m.movementType.replace(/_/g, " ")} · {m.movedByName ?? "Unknown"} · {new Date(m.createdAt).toLocaleString("en-NG")}</p>
-                      {m.reason && <p className="text-muted-foreground mt-0.5">“{m.reason}”</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Guided branch handoff ─────────────────────────────────────────── */}
-      {(!isCancelled && order) && (
-        (() => {
-          const isWorker = user?.type === "worker";
-          const isAssignedWorker = !isWorker || order.assignedWorkerId === user?.id;
-          const canSendToProcessing =
-            hasPermission("canRecordPickups") &&
-            isAssignedWorker &&
-            order.currentBranchId === order.collectionBranchId &&
-            order.collectionBranchId !== order.processingBranchId &&
-            !!order.processingBranchId &&
-            ["pending", "processing"].includes(order.status);
-
-          const canSendBack =
-            hasPermission("canProcessOrders") &&
-            isAssignedWorker &&
-            order.currentBranchId === order.processingBranchId &&
-            order.returnBranchId !== order.processingBranchId &&
-            !!order.returnBranchId &&
-            ["ready", "partial_pickup"].includes(order.status);
-
-          if (!canSendToProcessing && !canSendBack) return null;
-
-          return (
-            <Card className="border-2 border-primary/20 bg-primary/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <GitBranch className="h-4 w-4 text-primary" />
-                  Branch Handoff
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  CleanTrack keeps one order and routes it between the branches automatically.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {canSendToProcessing && (
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">Ready to send for processing</p>
-                      <p className="text-xs text-muted-foreground">Send this order to its assigned processing branch.</p>
-                    </div>
-                    <Button
-                      className="gap-2"
-                      disabled={moveMutation.isPending}
-                      onClick={() => moveMutation.mutate({ movementType: "PROCESSING_TRANSFER" })}
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      {moveMutation.isPending ? "Sending..." : "Send to Processing"}
-                    </Button>
-                  </div>
-                )}
-
-                {canSendBack && (
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">Processing complete</p>
-                      <p className="text-xs text-muted-foreground">Send the finished clothes back to the order's return branch.</p>
-                    </div>
-                    <Button
-                      className="gap-2"
-                      disabled={moveMutation.isPending}
-                      onClick={() => moveMutation.mutate({ movementType: "RETURN_TRANSFER" })}
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      {moveMutation.isPending ? "Sending..." : "Send Back to Pickup"}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })()
-      )}
 
       {/* ── Status Pipeline ───────────────────────────────────────────────── */}
       {!isCancelled && (
@@ -938,17 +750,6 @@ export default function OrderDetail() {
           </CardContent>
         </Card>
       )}
-
-      <VerifyOrderDialog
-        order={order}
-        open={showVerification}
-        onOpenChange={setShowVerification}
-        onConfirm={(data) => {
-          updateMutation.mutate({ ...data, ...(order.status === "pending" ? { status: "processing" } : {}) });
-          setShowVerification(false);
-        }}
-        isPending={updateMutation.isPending}
-      />
 
       {/* ── Sync conflict warning ─────────────────────────────────────────── */}
       {(conflictPayments.length > 0 || conflictPickups.length > 0 || conflictStatusUpdates.length > 0) && (
@@ -1989,142 +1790,6 @@ export default function OrderDetail() {
               disabled={paymentMutation.isPending || isPaymentSubmitting}
             >
               {paymentMutation.isPending || isPaymentSubmitting ? "Recording…" : duplicateWarning ? "Record Anyway" : "Record Payment"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Branch movement dialog */}
-      <Dialog open={showMove} onOpenChange={setShowMove}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <GitBranch className="h-5 w-5" />
-              Move Order
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {order && !processingRouteIsValid && order.currentBranchId === order.collectionBranchId && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm">
-                <p className="font-semibold">Processing route needs repair</p>
-                <p className="text-muted-foreground mt-1">
-                  This order was created with a processing branch that is no longer processing-capable.
-                  Select a valid Processing or Hybrid branch below. CleanTrack will repair this order's
-                  processing route and move it there in one operation.
-                </p>
-              </div>
-            )}
-
-            <div>
-              <Label>Movement</Label>
-              <Select value={moveType} onValueChange={(v) => {
-                const next = v as typeof moveType;
-                setMoveType(next);
-                setMoveTarget("");
-              }}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {order.currentBranchId === order.collectionBranchId &&
-                    order.collectionBranchId !== order.processingBranchId && (
-                    <SelectItem value="PROCESSING_TRANSFER">
-                      {processingRouteIsValid ? "Send to configured processing branch" : "Repair route & send to processing"}
-                    </SelectItem>
-                  )}
-                  {order.currentBranchId === order.processingBranchId &&
-                    order.returnBranchId !== order.processingBranchId &&
-                    ["ready", "partial_pickup"].includes(order.status) && (
-                    <SelectItem value="RETURN_TRANSFER">Send back to pickup branch</SelectItem>
-                  )}
-                  <SelectItem value="MANUAL_TRANSFER">Owner manual transfer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {moveType === "PROCESSING_TRANSFER" && !processingRouteIsValid && (
-              <div>
-                <Label>New processing branch</Label>
-                <Select value={moveTarget} onValueChange={setMoveTarget}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Choose a Processing or Hybrid branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branchList
-                      .filter(b =>
-                        b.id !== order.currentBranchId &&
-                        ["PROCESSING", "HYBRID"].includes(b.type)
-                      )
-                      .map(b => (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          {b.name} · {b.type === "HYBRID" ? "Hybrid" : "Processing"}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {moveType === "MANUAL_TRANSFER" && (
-              <div>
-                <Label>Destination branch</Label>
-                <Select value={moveTarget} onValueChange={setMoveTarget}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Choose destination branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branchList
-                      .filter(b => b.id !== order.currentBranchId)
-                      .map(b => (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          {b.name} · {b.type}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div>
-              <Label>Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Input
-                className="mt-1"
-                value={moveReason}
-                onChange={(e) => setMoveReason(e.target.value)}
-                placeholder="e.g. sent to processing branch"
-              />
-            </div>
-
-            <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-              Workers follow the configured route automatically. This owner control is for moving an order
-              and, when necessary, repairing a legacy/broken processing route.
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMove(false)}>Cancel</Button>
-            <Button
-              disabled={
-                moveMutation.isPending ||
-                ((moveType === "MANUAL_TRANSFER" || (moveType === "PROCESSING_TRANSFER" && !processingRouteIsValid)) && !moveTarget)
-              }
-              onClick={() => {
-                const payload: {
-                  toBranchId?: number;
-                  movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER";
-                  reason?: string;
-                } = {
-                  movementType: moveType,
-                  reason: moveReason.trim() || undefined,
-                };
-                if (moveType === "MANUAL_TRANSFER" || (moveType === "PROCESSING_TRANSFER" && !processingRouteIsValid)) {
-                  payload.toBranchId = Number(moveTarget);
-                }
-                moveMutation.mutate(payload);
-              }}
-            >
-              {moveMutation.isPending ? "Moving…" : "Move Order"}
             </Button>
           </DialogFooter>
         </DialogContent>
