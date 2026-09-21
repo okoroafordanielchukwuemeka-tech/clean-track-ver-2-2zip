@@ -803,7 +803,7 @@ ordersRouter.get("/:id/payments", checkPermission("view:orders"), async (req: Au
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const pmtConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) pmtConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) pmtConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...pmtConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const payments = await db.select().from(paymentRecords)
@@ -1062,7 +1062,7 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
 
     const txResult = await db.transaction(async (tx) => {
       const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-      if (workerBranchId) conditions.push(eq(orders.currentBranchId, workerBranchId));
+      if (workerBranchId && !canViewAllBranches(req)) conditions.push(eq(orders.branchId, workerBranchId));
 
       const [order] = await tx.select().from(orders).where(and(...conditions)).for("update");
       if (!order) return { notFound: true } as const;
@@ -1137,7 +1137,7 @@ ordersRouter.get("/:id/items", checkPermission("view:orders"), async (req: AuthR
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const itemsGetConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) itemsGetConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) itemsGetConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...itemsGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
@@ -1162,7 +1162,7 @@ ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (re
     });
     const data = itemsSchema.parse(req.body);
     const itemsPostConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) itemsPostConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) itemsPostConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...itemsPostConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -1207,7 +1207,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const receiptConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) receiptConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) receiptConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...receiptConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -1315,7 +1315,7 @@ ordersRouter.get("/:id/audit-log", checkPermission("view:orders"), async (req: A
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const auditConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) auditConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) auditConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...auditConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const entries = await db.select().from(auditLog)
@@ -1332,7 +1332,7 @@ ordersRouter.get("/:id/price-adjustments", checkPermission("view:orders"), async
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
     const paGetConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) paGetConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) paGetConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...paGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const adjustments = await db.select().from(priceAdjustments)
@@ -1366,7 +1366,7 @@ ordersRouter.post("/:id/price-adjustments", checkPermission("process:orders"), a
     }
 
     const paPostConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) paPostConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) paPostConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...paPostConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
