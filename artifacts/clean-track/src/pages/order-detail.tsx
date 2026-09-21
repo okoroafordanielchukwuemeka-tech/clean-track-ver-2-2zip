@@ -657,6 +657,10 @@ export default function OrderDetail() {
             <span className="text-xs text-muted-foreground font-mono">{order.phone}</span>
           )}
         </div>
+        <div className="flex items-center gap-2 mt-2 pl-12 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Branch:</span>
+          <span>{order.branchName ?? "Unassigned branch"}</span>
+        </div>
       </div>
       
 

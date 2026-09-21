@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useCallback } from "react";
 
 export interface WorkerPermissions {
   canViewOrders: boolean;
-  canViewAllBranches: boolean;
   canProcessOrders: boolean;
   canRecordPayments: boolean;
   canRecordPickups: boolean;

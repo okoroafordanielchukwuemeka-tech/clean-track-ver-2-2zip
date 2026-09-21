@@ -235,7 +235,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         : (orderBranchId ?? activeBranchId ?? branchList[0]?.id);
 
       if (isOwner && !requestedBranchId) {
-        throw new Error("Create a branch first, then select where this order was collected.");
+        throw new Error("Create a branch first, then select the branch for this order.");
       }
 
       const itemsArray = Array.from(selectedItems.entries())
