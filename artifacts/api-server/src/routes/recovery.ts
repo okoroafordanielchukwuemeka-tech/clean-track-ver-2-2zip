@@ -24,10 +24,16 @@ function getBackupsDir(): string {
 }
 
 function getScriptsDir(): string {
-  const fromRoot = path.join("/home/runner/workspace/scripts");
-  const fromCwd = path.join(process.cwd(), "../../scripts");
-  if (fs.existsSync(fromRoot)) return fromRoot;
-  return fromCwd;
+  const candidates = [
+    path.join(process.cwd(), "scripts"),
+    path.join("/app", "scripts"),
+    path.join("/home/runner/workspace/scripts"),
+    path.join(process.cwd(), "../../scripts"),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
 }
 
 function readLatestBackupManifest(): Record<string, unknown> | null {
