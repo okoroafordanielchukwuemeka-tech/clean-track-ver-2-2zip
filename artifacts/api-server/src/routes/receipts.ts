@@ -128,7 +128,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     if (!payment) return res.status(404).json({ error: "Receipt not found" });
 
     const orderConditions: any[] = [eq(orders.id, payment.orderId)];
-    if (workerBranchId) orderConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -143,12 +143,9 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)).orderBy(paymentRecords.recordedAt),
     ]);
 
-    // A receipt belongs to the physical location where the order/payment
-    // is currently being handled. The legacy order.branchId is only the
-    // collection branch and must not be used as the operational location.
     const [branch, cashierWorker] = await Promise.all([
-      order.currentBranchId
-        ? db.select().from(branches).where(eq(branches.id, order.currentBranchId)).then(r => r[0] ?? null)
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
       payment.workerId
         ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, payment.workerId)).then(r => r[0] ?? null)
