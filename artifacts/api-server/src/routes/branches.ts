@@ -17,10 +17,8 @@ const branchInputSchema = z.object({
 /**
  * Branches are organizational locations only.
  *
- * CleanTrack no longer models Pickup/Processing/Hybrid capabilities or
- * automatic branch-to-branch routing. An order belongs to the branch where
- * it was created. Owners can give a worker cross-branch order access through
- * Worker Permissions when that worker needs to operate orders from elsewhere.
+ * An order belongs to the branch where it was created. Workers operate
+ * within the branch assigned to them; owners can work across their laundry.
  */
 branchesRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
   try {
@@ -160,8 +158,6 @@ branchesRouter.get("/network-summary", requireOwner, async (req: AuthRequest, re
       return {
         id: branch.id,
         name: branch.name,
-        // Legacy response fields are retained for old clients but no longer
-        // drive any operational behavior.
         counts: {
           active: current.length,
           pending: current.filter(o => o.status === "pending").length,
