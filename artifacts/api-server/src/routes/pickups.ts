@@ -29,7 +29,7 @@ pickupsRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, 
     const orderId = parseInt(req.params.orderId);
     const workerBranchId = req.auth!.branchId;
     const pickupGetConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) pickupGetConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) pickupGetConditions.push(eq(orders.branchId, workerBranchId));
 
     const [order] = await db.select().from(orders).where(and(...pickupGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -55,7 +55,7 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
     const pickupId = parseInt(req.params.pickupId);
 
     const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) orderConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) orderConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -167,8 +167,8 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
      * always based on the true current state.
      */
     const txResult = await db.transaction(async (tx) => {
-      const branchClause = workerBranchId
-        ? sql` AND current_branch_id = ${workerBranchId}`
+      const branchClause = workerBranchId && !canViewAllBranches(req)
+        ? sql` AND branch_id = ${workerBranchId}`
         : sql``;
 
       const lockResult = await tx.execute(
@@ -183,14 +183,6 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
       const raw = (lockResult as any).rows?.[0];
       if (!raw) return { notFound: true } as const;
 
-      const [currentBranch] = raw.current_branch_id
-        ? await tx.select({ id: branches.id, type: branches.type })
-            .from(branches)
-            .where(and(eq(branches.id, raw.current_branch_id), eq(branches.laundryId, laundryId)))
-        : [];
-      if (!currentBranch || !["PICKUP", "HYBRID"].includes(currentBranch.type as string)) {
-        return { invalidReturnBranch: true } as const;
-      }
 
       // Re-map snake_case raw row to camelCase for the logic below
       const order = {
