@@ -145,10 +145,6 @@ export default function WorkerStation() {
     user?.type === "owner" ||
     (user?.permissions != null && Object.values(user.permissions as WorkerPermissions).some(Boolean));
 
-  if (user?.type === "worker" && !hasAnyPermission) {
-    return <NoPermissionsScreen name={user.name} />;
-  }
-
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 60_000);
     return () => clearInterval(id);
@@ -218,6 +214,10 @@ export default function WorkerStation() {
   const overdueTotal = orders.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
   const urgentTotal = orders.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;
   const unpaidTotal = orders.filter(o => ["unpaid", "partial"].includes(o.paymentStatus) && !["completed"].includes(o.status)).length;
+
+  if (user?.type === "worker" && !hasAnyPermission) {
+    return <NoPermissionsScreen name={user.name} />;
+  }
 
   return (
     <div className="space-y-6">
