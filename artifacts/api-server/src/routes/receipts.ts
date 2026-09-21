@@ -144,9 +144,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)).orderBy(paymentRecords.recordedAt),
     ]);
 
-    // A receipt belongs to the physical location where the order/payment
-    // is currently being handled. The legacy order.branchId is only the
-    // collection branch and must not be used as the operational location.
+    // A receipt belongs to the branch responsible for the order.
     const [branch, cashierWorker] = await Promise.all([
       order.branchId
         ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
