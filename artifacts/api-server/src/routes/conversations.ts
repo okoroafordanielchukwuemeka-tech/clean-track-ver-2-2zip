@@ -25,6 +25,10 @@ import { providerRegistry } from "../lib/providers/registry.js";
 
 export const conversationsRouter = Router();
 
+function canViewAllBranches(req: AuthRequest): boolean {
+  return req.auth?.type === "owner" || req.auth?.permissions?.canViewAllBranches === true;
+}
+
 // ── Audit log helper ──────────────────────────────────────────────────────────
 // Fire-and-forget — never throws, never blocks the primary response.
 
@@ -68,7 +72,7 @@ conversationsRouter.get("/", requireAuth, checkPermission("view:whatsapp"), asyn
     const conditions = [eq(conversations.laundryId, laundryId)];
     // Branch isolation: workers only see conversations for their assigned branch
     const workerBranchId = req.auth!.branchId;
-    if (workerBranchId) {
+    if (workerBranchId && !canViewAllBranches(req)) {
       conditions.push(eq(conversations.branchId, workerBranchId));
     }
     if (statusFilter && ["open", "resolved", "archived"].includes(statusFilter)) {
@@ -146,7 +150,7 @@ conversationsRouter.get("/unread-count", requireAuth, checkPermission("view:what
     ];
     // Branch isolation: workers only count unread for their branch
     const workerBranchId = req.auth!.branchId;
-    if (workerBranchId) {
+    if (workerBranchId && !canViewAllBranches(req)) {
       unreadConditions.push(eq(conversations.branchId, workerBranchId));
     }
     const [{ totalUnread }] = await db
