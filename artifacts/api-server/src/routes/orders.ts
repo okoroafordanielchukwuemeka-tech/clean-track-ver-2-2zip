@@ -203,20 +203,10 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     const [orderRows, [{ total }]] = await Promise.all([
       db.select({
         order: orders,
-        collectionBranchName: orderCollectionBranch.name,
-        collectionBranchType: orderCollectionBranch.type,
-        processingBranchName: orderProcessingBranch.name,
-        processingBranchType: orderProcessingBranch.type,
-        returnBranchName: orderReturnBranch.name,
-        returnBranchType: orderReturnBranch.type,
-        currentBranchName: orderCurrentBranch.name,
-        currentBranchType: orderCurrentBranch.type,
+        branchName: branches.name,
       })
         .from(orders)
-        .leftJoin(orderCollectionBranch, eq(orderCollectionBranch.id, orders.collectionBranchId))
-        .leftJoin(orderProcessingBranch, eq(orderProcessingBranch.id, orders.processingBranchId))
-        .leftJoin(orderReturnBranch, eq(orderReturnBranch.id, orders.returnBranchId))
-        .leftJoin(orderCurrentBranch, eq(orderCurrentBranch.id, orders.currentBranchId))
+        .leftJoin(branches, eq(branches.id, orders.branchId))
         .where(and(...conditions))
         .orderBy(desc(orders.createdAt))
         .limit(parseInt(limit as string))
@@ -226,14 +216,7 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
 
     const orderList = orderRows.map(row => ({
       ...row.order,
-      collectionBranchName: row.collectionBranchName,
-      collectionBranchType: row.collectionBranchType,
-      processingBranchName: row.processingBranchName,
-      processingBranchType: row.processingBranchType,
-      returnBranchName: row.returnBranchName,
-      returnBranchType: row.returnBranchType,
-      currentBranchName: row.currentBranchName,
-      currentBranchType: row.currentBranchType,
+      branchName: row.branchName,
     }));
 
     res.json(orderList);
@@ -304,33 +287,16 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     if (workerBranchId && !workerCanViewAllBranches) idConditions.push(eq(orders.branchId, workerBranchId));
     const [orderRow] = await db.select({
       order: orders,
-      collectionBranchName: orderCollectionBranch.name,
-      collectionBranchType: orderCollectionBranch.type,
-      processingBranchName: orderProcessingBranch.name,
-      processingBranchType: orderProcessingBranch.type,
-      returnBranchName: orderReturnBranch.name,
-      returnBranchType: orderReturnBranch.type,
-      currentBranchName: orderCurrentBranch.name,
-      currentBranchType: orderCurrentBranch.type,
+      branchName: branches.name,
     })
       .from(orders)
-      .leftJoin(orderCollectionBranch, eq(orderCollectionBranch.id, orders.collectionBranchId))
-      .leftJoin(orderProcessingBranch, eq(orderProcessingBranch.id, orders.processingBranchId))
-      .leftJoin(orderReturnBranch, eq(orderReturnBranch.id, orders.returnBranchId))
-      .leftJoin(orderCurrentBranch, eq(orderCurrentBranch.id, orders.currentBranchId))
+      .leftJoin(branches, eq(branches.id, orders.branchId))
       .where(and(...idConditions));
     if (!orderRow) return res.status(404).json({ error: "Order not found" });
 
     const order = {
       ...orderRow.order,
-      collectionBranchName: orderRow.collectionBranchName,
-      collectionBranchType: orderRow.collectionBranchType,
-      processingBranchName: orderRow.processingBranchName,
-      processingBranchType: orderRow.processingBranchType,
-      returnBranchName: orderRow.returnBranchName,
-      returnBranchType: orderRow.returnBranchType,
-      currentBranchName: orderRow.currentBranchName,
-      currentBranchType: orderRow.currentBranchType,
+      branchName: orderRow.branchName,
     };
 
     const [items, adjustments] = await Promise.all([
