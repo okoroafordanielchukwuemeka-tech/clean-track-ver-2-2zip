@@ -124,6 +124,12 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     const batch = await db.transaction(async (tx) => {
       const conditions:any[]=[inArray(orders.id,data.orderIds),eq(orders.laundryId,laundryId)];
       if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
+      const targets = await tx.select({
+        id: orders.id,
+        status: orders.status,
+        batchId: orders.batchId,
+        isVerified: orders.isVerified,
+      }).from(orders).where(and(...conditions)).for("update");
       if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
       if(targets.some(o => !o.isVerified)) throw new Error("BATCH_ORDER_NOT_VERIFIED");
       if(targets.some(o=>o.status==="cancelled"||o.status==="completed"||o.batchId!==null)) throw new Error("BATCH_ORDER_STATE");
@@ -207,7 +213,6 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
     if (err instanceof Error && err.message === "BATCH_SCOPE_CHANGED") return res.status(409).json({ error: "The batch changed while you were working. Refresh and review all orders before completing it." });
     if (err instanceof Error && err.message === "BATCH_INCOMPLETE") return res.status(409).json({ error: "Not all orders in this batch are currently available for completion." });
     if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "Every order in the batch must still be processing before the batch can be completed." });
-    if (err instanceof Error && err.message === "BATCH_LOCATION_CHANGED") return res.status(409).json({ error: "One or more orders are no longer at their assigned processing branch." });
     res.status(500).json({ error: "Failed to update batch" });
   }
 });
