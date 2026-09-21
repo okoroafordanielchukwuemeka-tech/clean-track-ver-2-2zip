@@ -481,7 +481,7 @@ export default function Orders() {
                     <TableHead className="hidden sm:table-cell">Type</TableHead>
                     <TableHead className="hidden md:table-cell">Items</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Branch / Route</TableHead>
+                    <TableHead className="hidden lg:table-cell">Branch</TableHead>
                     <TableHead className="hidden sm:table-cell">Payment</TableHead>
                     <TableHead className="hidden sm:table-cell">Price</TableHead>
                     <TableHead className="hidden lg:table-cell">Timer</TableHead>
