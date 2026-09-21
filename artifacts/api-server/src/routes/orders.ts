@@ -215,9 +215,13 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
       db.select({
         order: orders,
         collectionBranchName: orderCollectionBranch.name,
+        collectionBranchType: orderCollectionBranch.type,
         processingBranchName: orderProcessingBranch.name,
+        processingBranchType: orderProcessingBranch.type,
         returnBranchName: orderReturnBranch.name,
+        returnBranchType: orderReturnBranch.type,
         currentBranchName: orderCurrentBranch.name,
+        currentBranchType: orderCurrentBranch.type,
       })
         .from(orders)
         .leftJoin(orderCollectionBranch, eq(orderCollectionBranch.id, orders.collectionBranchId))
@@ -234,9 +238,13 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     const orderList = orderRows.map(row => ({
       ...row.order,
       collectionBranchName: row.collectionBranchName,
+      collectionBranchType: row.collectionBranchType,
       processingBranchName: row.processingBranchName,
+      processingBranchType: row.processingBranchType,
       returnBranchName: row.returnBranchName,
+      returnBranchType: row.returnBranchType,
       currentBranchName: row.currentBranchName,
+      currentBranchType: row.currentBranchType,
     }));
 
     res.json(orderList);
@@ -301,9 +309,13 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     const [orderRow] = await db.select({
       order: orders,
       collectionBranchName: orderCollectionBranch.name,
+      collectionBranchType: orderCollectionBranch.type,
       processingBranchName: orderProcessingBranch.name,
+      processingBranchType: orderProcessingBranch.type,
       returnBranchName: orderReturnBranch.name,
+      returnBranchType: orderReturnBranch.type,
       currentBranchName: orderCurrentBranch.name,
+      currentBranchType: orderCurrentBranch.type,
     })
       .from(orders)
       .leftJoin(orderCollectionBranch, eq(orderCollectionBranch.id, orders.collectionBranchId))
@@ -316,9 +328,13 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     const order = {
       ...orderRow.order,
       collectionBranchName: orderRow.collectionBranchName,
+      collectionBranchType: orderRow.collectionBranchType,
       processingBranchName: orderRow.processingBranchName,
+      processingBranchType: orderRow.processingBranchType,
       returnBranchName: orderRow.returnBranchName,
+      returnBranchType: orderRow.returnBranchType,
       currentBranchName: orderRow.currentBranchName,
+      currentBranchType: orderRow.currentBranchType,
     };
 
     const [items, adjustments] = await Promise.all([
@@ -905,6 +921,27 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
         error: "Completed or cancelled orders are read-only. Use the audited correction/refund workflow for exceptional changes.",
         code: "TERMINAL_ORDER_READ_ONLY",
       });
+    }
+
+    // Cross-branch verification belongs to the receiving processing branch.
+    // Pickup intake is the customer's declared/collection count; the processing
+    // branch establishes the physical receiving count before processing begins.
+    if (data.isVerified === true && beforeOrder.collectionBranchId !== beforeOrder.processingBranchId) {
+      const [verificationBranch] = await db.select({ id: branches.id, type: branches.type })
+        .from(branches)
+        .where(and(
+          eq(branches.id, beforeOrder.currentBranchId ?? -1),
+          eq(branches.laundryId, laundryId),
+          isNull(branches.deletedAt),
+        ));
+      const canVerifyHere = !!verificationBranch && ["PROCESSING", "HYBRID"].includes(verificationBranch.type)
+        && beforeOrder.currentBranchId === beforeOrder.processingBranchId;
+      if (!canVerifyHere) {
+        return res.status(409).json({
+          error: "Cross-branch orders must be received and verified at the configured processing branch",
+          code: "PROCESSING_RECEIPT_VERIFICATION_REQUIRED",
+        });
+      }
     }
 
     // Processing state can only be changed while the physical order is at

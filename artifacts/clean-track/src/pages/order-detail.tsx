@@ -495,12 +495,14 @@ export default function OrderDetail() {
   const nextStatus = NEXT_STATUS[order.status];
   const currentBranchConfig = branchList.find(b => b.id === order.currentBranchId);
   const processingBranchConfig = branchList.find(b => b.id === order.processingBranchId);
+  const currentBranchType = currentBranchConfig?.type ?? order.currentBranchType ?? null;
+  const processingBranchType = processingBranchConfig?.type ?? order.processingBranchType ?? null;
   const currentBranchCanProcess =
-    !!currentBranchConfig &&
-    ["PROCESSING", "HYBRID"].includes(currentBranchConfig.type);
+    !!currentBranchType &&
+    ["PROCESSING", "HYBRID"].includes(currentBranchType);
   const processingRouteIsValid =
-    !!processingBranchConfig &&
-    ["PROCESSING", "HYBRID"].includes(processingBranchConfig.type);
+    !!processingBranchType &&
+    ["PROCESSING", "HYBRID"].includes(processingBranchType);
   const canProcessAtCurrentBranch =
     !!order.currentBranchId &&
     order.currentBranchId === order.processingBranchId &&

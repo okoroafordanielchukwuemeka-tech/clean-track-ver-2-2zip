@@ -715,9 +715,13 @@ export interface Order {
   returnBranchId?: number | null;
   currentBranchId?: number | null;
   collectionBranchName?: string | null;
+  collectionBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
   processingBranchName?: string | null;
+  processingBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
   returnBranchName?: string | null;
+  returnBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
   currentBranchName?: string | null;
+  currentBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
 }
 
 export interface OrderMovement {
