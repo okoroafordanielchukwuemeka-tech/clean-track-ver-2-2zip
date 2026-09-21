@@ -208,9 +208,11 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
 
-    // Branch scoping: workers are locked to their branch; owners can filter by ?branchId
-    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
-    if (effectiveBranchId) conditions.push(eq(orders.currentBranchId, effectiveBranchId));
+    const workerCanViewAllBranches = req.auth!.type === "owner" || req.auth!.permissions?.canViewAllBranches === true;
+    const effectiveBranchId = req.auth!.type === "owner"
+      ? (branchParam ? parseInt(branchParam as string) : null)
+      : (workerCanViewAllBranches ? null : req.auth!.branchId ?? null);
+    if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
 
     const [orderRows, [{ total }]] = await Promise.all([
       db.select({
@@ -258,9 +260,12 @@ ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthReq
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
-    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
+    const workerCanViewAllBranches = req.auth!.type === "owner" || req.auth!.permissions?.canViewAllBranches === true;
+    const effectiveBranchId = req.auth!.type === "owner"
+      ? (branchParam ? parseInt(branchParam as string) : null)
+      : (workerCanViewAllBranches ? null : req.auth!.branchId ?? null);
     const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) summaryConditions.push(eq(orders.currentBranchId, effectiveBranchId));
+    if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
     const result = await db.select().from(orders).where(and(...summaryConditions));
     res.json({
       total: result.length,
@@ -288,9 +293,12 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
-    const effectiveBranchId = req.auth!.branchId ?? (branchParam ? parseInt(branchParam as string) : null);
+    const workerCanViewAllBranches = req.auth!.type === "owner" || req.auth!.permissions?.canViewAllBranches === true;
+    const effectiveBranchId = req.auth!.type === "owner"
+      ? (branchParam ? parseInt(branchParam as string) : null)
+      : (workerCanViewAllBranches ? null : req.auth!.branchId ?? null);
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) conditions.push(eq(orders.currentBranchId, effectiveBranchId));
+    if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
     const recentOrders = await db.select().from(orders)
       .where(and(...conditions))
       .orderBy(desc(orders.createdAt))
@@ -305,8 +313,9 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
+    const workerCanViewAllBranches = req.auth!.type === "owner" || req.auth!.permissions?.canViewAllBranches === true;
     const idConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) idConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !workerCanViewAllBranches) idConditions.push(eq(orders.branchId, workerBranchId));
     const [orderRow] = await db.select({
       order: orders,
       collectionBranchName: orderCollectionBranch.name,
@@ -351,7 +360,7 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
   }
 });
 
-ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
+ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPermission("record:pickups"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
@@ -367,82 +376,23 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       discountReason: undefined,
     };
 
-    const requestedCollectionBranchId = data.collectionBranchId ?? data.branchId;
+    const requestedBranchId = data.branchId ?? data.collectionBranchId;
     const workerBranchId = req.auth!.branchId ?? null;
-    const collectionBranchId = workerBranchId ?? requestedCollectionBranchId ?? null;
-    if (workerBranchId && requestedCollectionBranchId !== undefined && requestedCollectionBranchId !== workerBranchId) {
+    const branchId = workerBranchId ?? requestedBranchId ?? null;
+
+    if (workerBranchId && requestedBranchId !== undefined && requestedBranchId !== workerBranchId) {
       return res.status(403).json({ error: "Workers can only create orders at their assigned branch" });
     }
-
-    if (collectionBranchId == null) {
-      return res.status(400).json({ error: "A collection branch is required to create an order" });
+    if (branchId == null) {
+      return res.status(400).json({ error: "Select a branch before creating an order" });
     }
 
-    const activeBranches = await db.select({
-      id: branches.id,
-      type: branches.type,
-      name: branches.name,
-      processingDestinationBranchId: branches.processingDestinationBranchId,
-    })
+    const [ownedBranch] = await db
+      .select({ id: branches.id, name: branches.name })
       .from(branches)
-      .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+      .where(and(eq(branches.id, branchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
+    if (!ownedBranch) return res.status(403).json({ error: "Branch not found" });
 
-    const collectionBranch = activeBranches.find(b => b.id === collectionBranchId);
-    if (!collectionBranch) return res.status(403).json({ error: "Collection branch not found" });
-    if (!["PICKUP", "HYBRID"].includes(collectionBranch.type)) {
-      return res.status(400).json({ error: "This branch cannot receive customer orders" });
-    }
-
-    // Branch configuration is the routing source of truth. Workers do not
-    // choose a processing destination for each order.
-    const processingBranchId = collectionBranch.type === "HYBRID"
-      ? collectionBranchId
-      : collectionBranch.processingDestinationBranchId ?? null;
-
-    if (collectionBranch.type === "PICKUP" && processingBranchId == null) {
-      return res.status(409).json({
-        error: "This Pickup branch has no processing destination configured. Ask the owner to configure it in Branches.",
-        code: "PROCESSING_DESTINATION_NOT_CONFIGURED",
-      });
-    }
-
-    // Return to the same branch where the customer handed the clothes in.
-    const returnBranchId = collectionBranchId;
-
-    if (data.processingBranchId != null && data.processingBranchId !== processingBranchId) {
-      return res.status(400).json({
-        error: "Processing destination is controlled by the collection branch configuration. Update the branch settings instead.",
-        code: "PROCESSING_DESTINATION_CONFIGURED_AT_BRANCH",
-      });
-    }
-    if (data.returnBranchId != null && data.returnBranchId !== returnBranchId) {
-      return res.status(400).json({
-        error: "Return branch is automatically the collection branch.",
-        code: "RETURN_BRANCH_FOLLOWS_COLLECTION",
-      });
-    }
-
-    const requestedBranches = [
-      ["processing", processingBranchId],
-      ["return", returnBranchId],
-    ] as const;
-
-    for (const [operation, branchId] of requestedBranches) {
-      if (branchId == null) continue;
-      const ownedBranch = activeBranches.find(b => b.id === branchId);
-      if (!ownedBranch) return res.status(403).json({ error: operation + " branch not found" });
-      const allowed = operation === "processing"
-        ? ["PROCESSING", "HYBRID"].includes(ownedBranch.type)
-        : ["PICKUP", "HYBRID"].includes(ownedBranch.type);
-      if (!allowed) return res.status(400).json({ error: operation + " operation is not supported by the selected branch" });
-    }
-
-    if (processingBranchId == null) {
-      return res.status(400).json({
-        error: "No processing branch is configured. Add a Processing or Hybrid branch before creating orders.",
-        code: "NO_PROCESSING_BRANCH",
-      });
-    }
     const sla = await getLaundrySla(laundryId);
     const createdAt = new Date();
     const processingDueAt = computeProcessingDueAt(createdAt, data.serviceType, sla);
@@ -489,12 +439,11 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       const placeholder = `GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const [inserted] = await tx.insert(orders).values({
         laundryId,
-        // Legacy bridge: branchId remains the collection branch until all consumers migrate.
-        branchId: collectionBranchId,
-        collectionBranchId,
-        processingBranchId,
-        returnBranchId,
-        currentBranchId: collectionBranchId,
+        branchId,
+        collectionBranchId: branchId,
+        processingBranchId: branchId,
+        returnBranchId: branchId,
+        currentBranchId: branchId,
         customerId, orderId: placeholder, customerName: data.customerName, phone: phoneNorm,
         address: data.address, serviceType: data.serviceType, shirts: data.shirts ?? 0, trousers: data.trousers ?? 0, additionalNotes: data.additionalNotes,
         price: computedPrice?.toString(), extraCharge: data.extraCharge?.toString(), discount: data.discount?.toString(), processingDueAt,
@@ -509,19 +458,6 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
           unitPrice: item.unitPrice.toString(), totalPrice: item.lineTotal.toString(),
         }))).returning();
       }
-
-      // One order, one source of truth. Record its first handoff location without
-      // cloning the order into another branch.
-      await tx.insert(orderMovements).values({
-        laundryId,
-        orderId: inserted.id,
-        fromBranchId: null,
-        toBranchId: collectionBranchId!,
-        movementType: "COLLECTION",
-        reason: "Order received at collection branch",
-        movedByType: req.auth!.type,
-        movedByName: actorName(req.auth!),
-      });
 
       const adjustmentRows: typeof priceAdjustments.$inferInsert[] = [];
       const appliedBy = actorName(req.auth!);
@@ -620,243 +556,12 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
   }
 });
 
-ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
-  try {
-    const orderId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
-    const data = orderMovementSchema.parse(req.body);
-    const laundryId = req.auth!.laundryId;
-    const isOwner = req.auth!.type === "owner";
-    const workerBranchId = req.auth!.branchId ?? null;
-
-    // Handoffs are operation-specific: Pickup workers need the pickup/collection
-    // permission to send an order onward; processing workers need processing
-    // permission to send finished work back. Neither operation grants processing
-    // capability to a Pickup worker.
-    if (!isOwner) {
-      const allowed = data.movementType === "PROCESSING_TRANSFER"
-        ? !!req.auth!.permissions?.canRecordPickups
-        : data.movementType === "RETURN_TRANSFER"
-          ? !!req.auth!.permissions?.canProcessOrders
-          : false;
-      if (!allowed) return res.status(403).json({ error: "You do not have permission to perform this branch handoff" });
-    }
-
-    const result = await db.transaction(async (tx) => {
-      const [order] = await tx.select().from(orders)
-        .where(and(eq(orders.id, orderId), eq(orders.laundryId, laundryId)))
-        .for("update");
-      if (!order) return { notFound: true } as const;
-      if (["completed", "cancelled"].includes(order.status)) return { terminal: true } as const;
-
-      if (!isOwner && (!workerBranchId || order.currentBranchId !== workerBranchId)) {
-        return { forbidden: true } as const;
-      }
-      if (!isOwner && data.movementType === "MANUAL_TRANSFER") {
-        return { manualForbidden: true } as const;
-      }
-
-      // Guided worker handoffs never accept a caller-chosen destination.
-      // CleanTrack derives the destination from the order's immutable route.
-      // Owners may still supply a target for MANUAL_TRANSFER.
-      if (!isOwner && data.toBranchId !== undefined) {
-        return { workerTargetForbidden: true } as const;
-      }
-      const targetBranchId = isOwner && data.movementType === "MANUAL_TRANSFER"
-        ? data.toBranchId
-        : isOwner && data.movementType === "PROCESSING_TRANSFER" && data.toBranchId !== undefined
-          ? data.toBranchId
-          : data.movementType === "PROCESSING_TRANSFER"
-            ? order.processingBranchId
-            : data.movementType === "RETURN_TRANSFER"
-              ? order.returnBranchId
-              : null;
-      if (targetBranchId == null) return { missingTarget: true } as const;
-
-      const [target] = await tx.select({ id: branches.id, type: branches.type, name: branches.name })
-        .from(branches)
-        .where(and(eq(branches.id, targetBranchId), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
-      if (!target) return { badBranch: true } as const;
-
-      if (data.movementType === "PROCESSING_TRANSFER") {
-        if (!["PROCESSING", "HYBRID"].includes(target.type)) return { badCapability: "processing" } as const;
-        if (order.currentBranchId !== order.collectionBranchId) return { badSource: "processing" } as const;
-        if (!["pending", "processing"].includes(order.status)) return { badStatus: "processing" } as const;
-        // Collection verification belongs to the receiving processing branch.
-        // The Pickup branch records the customer's intake count when the order is
-        // created; it must not be blocked from handing the physical order off.
-
-        // Owners may repair a legacy/broken processing route while moving the
-        // order. Workers never choose destinations. A route repair is only
-        // allowed when the stored processing branch is missing or no longer
-        // processing-capable; valid configured routes remain immutable.
-        if (data.toBranchId !== undefined) {
-          if (!isOwner) return { workerTargetForbidden: true } as const;
-          if (order.processingBranchId !== null) {
-            const [configuredProcessingBranch] = await tx.select({ id: branches.id, type: branches.type })
-              .from(branches)
-              .where(and(
-                eq(branches.id, order.processingBranchId),
-                eq(branches.laundryId, laundryId),
-                isNull(branches.deletedAt),
-              ));
-            if (configuredProcessingBranch && ["PROCESSING", "HYBRID"].includes(configuredProcessingBranch.type)) {
-              return { routeOverrideForbidden: true } as const;
-            }
-          }
-        } else {
-          if (order.processingBranchId !== target.id) return { wrongTarget: "processing" } as const;
-          if (order.collectionBranchId === order.processingBranchId) return { localProcessing: true } as const;
-        }
-      }
-
-      if (data.movementType === "RETURN_TRANSFER") {
-        if (order.returnBranchId !== target.id) return { wrongTarget: "return" } as const;
-        if (!["PICKUP", "HYBRID"].includes(target.type)) return { badCapability: "return" } as const;
-        if (order.currentBranchId !== order.processingBranchId) return { badSource: "return" } as const;
-        if (order.returnBranchId === order.processingBranchId) return { localReturn: true } as const;
-        if (!["ready", "partial_pickup"].includes(order.status)) return { badStatus: "return" } as const;
-      }
-
-      if (data.movementType === "MANUAL_TRANSFER" && !isOwner) return { manualForbidden: true } as const;
-      if (target.id === order.currentBranchId) return { unchanged: true, order } as const;
-
-      const routeRepair =
-        isOwner &&
-        data.movementType === "PROCESSING_TRANSFER" &&
-        data.toBranchId !== undefined &&
-        order.processingBranchId !== target.id;
-
-      const [updated] = await tx.update(orders)
-        .set({
-          ...(routeRepair ? { processingBranchId: target.id } : {}),
-          currentBranchId: target.id,
-          assignedWorkerId: null,
-          // Verification belongs to the branch currently holding the clothes.
-          // The receiving branch must verify its own physical count.
-          isVerified: false,
-          verifiedShirts: null,
-          verifiedTrousers: null,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(orders.id, order.id), eq(orders.laundryId, laundryId)))
-        .returning();
-
-      const [movement] = await tx.insert(orderMovements).values({
-        laundryId,
-        orderId: order.id,
-        fromBranchId: order.currentBranchId,
-        toBranchId: target.id,
-        movementType: data.movementType,
-        reason: data.reason ?? null,
-        movedByWorkerId: req.auth!.workerId ?? null,
-        movedByType: req.auth!.type,
-        movedByName: actorName(req.auth!),
-      }).returning();
-
-      return { order: updated, movement, routeRepaired: routeRepair } as const;
-    });
-
-    if ("notFound" in result) return res.status(404).json({ error: "Order not found" });
-    if ("terminal" in result) return res.status(409).json({ error: "Completed or cancelled orders cannot be moved" });
-    if ("forbidden" in result) return res.status(403).json({ error: "You can only move orders currently at your assigned branch" });
-    if ("manualForbidden" in result || "workerTargetForbidden" in result) return res.status(403).json({ error: "Workers can only use the guided branch handoff actions; the destination is controlled by the order route" });
-    if ("missingTarget" in result) return res.status(400).json({ error: "This order has no destination branch configured" });
-    if ("badBranch" in result) return res.status(400).json({ error: "Target branch not found" });
-    if ("wrongTarget" in result) return res.status(400).json({ error: "Target branch does not match the order lifecycle location" });
-    if ("routeOverrideForbidden" in result) return res.status(409).json({ error: "The configured processing branch is valid. Reconfigure the branch network instead of overriding this order route." });
-    if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
-    if ("badSource" in result) return res.status(409).json({ error: "The order is not currently at the branch that should send it" });
-    if ("badStatus" in result) return res.status(409).json({ error: "The order is not ready for this handoff" });
-    if ("notVerified" in result) return res.status(409).json({ error: "Verify the clothes/count before sending the order to another branch", code: "ORDER_NOT_VERIFIED" });
-    if ("localProcessing" in result || "localReturn" in result) return res.status(409).json({ error: "This order is already at its configured operating branch; no handoff is required" });
-
-    if ("movement" in result && result.movement) {
-      // The movement record is the source of truth. These notifications are
-      // only an operational signal for the owner and receiving workers.
-      try {
-        const movement = result.movement;
-        const [fromBranch, toBranch] = await Promise.all([
-          movement.fromBranchId
-            ? db.select({ id: branches.id, name: branches.name }).from(branches).where(eq(branches.id, movement.fromBranchId))
-            : Promise.resolve([]),
-          db.select({ id: branches.id, name: branches.name }).from(branches).where(eq(branches.id, movement.toBranchId)),
-        ]);
-        const fromName = fromBranch[0]?.name ?? "Previous branch";
-        const toName = toBranch[0]?.name ?? "Destination branch";
-        const workerPermissionField = movement.movementType === "PROCESSING_TRANSFER"
-          ? workerPermissions.canProcessOrders
-          : workerPermissions.canRecordPickups;
-
-        const receivingWorkers = await db
-          .select({ workerId: workers.id })
-          .from(workers)
-          .innerJoin(workerPermissions, eq(workerPermissions.workerId, workers.id))
-          .where(and(
-            eq(workers.laundryId, laundryId),
-            eq(workers.branchId, movement.toBranchId),
-            eq(workers.isActive, true),
-            isNull(workers.deletedAt),
-            eq(workerPermissionField, true),
-          ));
-
-        const notificationRows = [
-          {
-            laundryId,
-            targetType: "owner" as const,
-            eventType: "branch_handoff" as const,
-            title: movement.movementType === "PROCESSING_TRANSFER" ? "Order Sent for Processing" : "Order Returned to Branch",
-            message: `Order #${result.order.orderId} moved ${fromName} → ${toName}.`,
-            severity: "info" as const,
-            relatedOrderId: orderId,
-          },
-          ...receivingWorkers.map(({ workerId }) => ({
-            laundryId,
-            targetType: "worker" as const,
-            targetWorkerId: workerId,
-            eventType: "branch_handoff" as const,
-            title: movement.movementType === "PROCESSING_TRANSFER" ? "Incoming Order for Processing" : "Order Returned to Your Branch",
-            message: movement.movementType === "PROCESSING_TRANSFER"
-              ? `Order #${result.order.orderId} has arrived from ${fromName} for processing.`
-              : `Order #${result.order.orderId} has returned from ${fromName} and is ready for pickup handling.`,
-            severity: "info" as const,
-            relatedOrderId: orderId,
-          })),
-        ];
-
-        await db.insert(notifications).values(notificationRows);
-      } catch (notificationErr) {
-        console.error("[order-move] Failed to create branch handoff notifications:", notificationErr);
-      }
-
-      logAction({
-        auth: req.auth!,
-        laundryId,
-        action: "order_branch_moved",
-        orderId,
-        metadata: {
-          movementId: result.movement.id,
-          movementType: result.movement.movementType,
-          fromBranchId: result.movement.fromBranchId,
-          toBranchId: result.movement.toBranchId,
-          reason: result.movement.reason,
-          movedBy: result.movement.movedByName,
-        },
-      }).catch(() => {});
-    }
-
-    res.json(result);
-  } catch (err) {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
-    console.error("[order-move]", err);
-    res.status(500).json({ error: "Failed to move order" });
-  }
-});
 ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
     const workerBranchId = req.auth!.branchId;
+    const workerCanViewAllBranches = isOwner || req.auth!.permissions?.canViewAllBranches === true;
 
     // Workers cannot touch any pricing fields — check before Zod strips them
     if (!isOwner) {
@@ -910,7 +615,7 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
     }
 
     const patchConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) patchConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !workerCanViewAllBranches) patchConditions.push(eq(orders.branchId, workerBranchId));
 
     const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
     if (!beforeOrder) return res.status(404).json({ error: "Order not found" });
@@ -924,51 +629,8 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
       });
     }
 
-    // Cross-branch verification belongs to the receiving processing branch.
-    // Pickup intake is the customer's declared/collection count; the processing
-    // branch establishes the physical receiving count before processing begins.
-    if (data.isVerified === true && beforeOrder.collectionBranchId !== beforeOrder.processingBranchId) {
-      const [verificationBranch] = await db.select({ id: branches.id, type: branches.type })
-        .from(branches)
-        .where(and(
-          eq(branches.id, beforeOrder.currentBranchId ?? -1),
-          eq(branches.laundryId, laundryId),
-          isNull(branches.deletedAt),
-        ));
-      const canVerifyHere = !!verificationBranch && ["PROCESSING", "HYBRID"].includes(verificationBranch.type)
-        && beforeOrder.currentBranchId === beforeOrder.processingBranchId;
-      if (!canVerifyHere) {
-        return res.status(409).json({
-          error: "Cross-branch orders must be received and verified at the configured processing branch",
-          code: "PROCESSING_RECEIPT_VERIFICATION_REQUIRED",
-        });
-      }
-    }
-
-    // Processing state can only be changed while the physical order is at
-    // its configured processing branch. A Pickup branch may receive/verify/send,
-    // but it can never turn an order into "processing" or "ready".
-    if (data.status === "processing" || data.status === "ready") {
-      if (!isOwner && !req.auth!.permissions?.canProcessOrders) {
-        return res.status(403).json({ error: "Processing permission is required to process or mark an order ready" });
-      }
-      const [currentBranch] = await db.select({ id: branches.id, type: branches.type })
-        .from(branches)
-        .where(and(eq(branches.id, beforeOrder.currentBranchId ?? -1), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
-      const canProcessHere = !!currentBranch && ["PROCESSING", "HYBRID"].includes(currentBranch.type);
-      if (!canProcessHere || beforeOrder.currentBranchId !== beforeOrder.processingBranchId) {
-        return res.status(409).json({
-          error: "This order is not at a processing-capable branch",
-          code: "PROCESSING_BRANCH_REQUIRED",
-        });
-      }
-      if (data.status === "processing" && data.isVerified !== true && beforeOrder.isVerified !== true) {
-        return res.status(409).json({
-          error: "Receive and verify the order at the processing branch before processing it",
-          code: "PROCESSING_RECEIPT_VERIFICATION_REQUIRED",
-        });
-      }
-    }
+    // Processing is an order status, not a branch capability.
+    // Workers with process permission can advance orders they are allowed to access.
 
     if (isOwner) {
       const nextPrice = (data as any).price !== undefined ? (data as any).price : parseFloat(beforeOrder.price || "0");
@@ -1012,11 +674,9 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
 
       const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
       if (!targetWorker || targetWorker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
-      const workerAssignmentBranch = beforeOrder.currentBranchId ?? beforeOrder.processingBranchId ?? beforeOrder.collectionBranchId;
-      if (workerAssignmentBranch !== null && targetWorker.branchId !== workerAssignmentBranch) {
-        return res.status(400).json({ error: "Assigned worker must belong to the order's current operating branch" });
+      if (workerBranchId && !workerCanViewAllBranches && targetWorker.branchId !== workerBranchId) {
+        return res.status(403).json({ error: "Cross-branch assignment requires View orders from all branches permission" });
       }
-      if (workerBranchId && targetWorker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign orders to workers in their branch" });
     }
 
     const [order] = await db.update(orders).set(updateData)
@@ -1123,9 +783,10 @@ ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRe
   try {
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
+    const workerCanViewAllBranches = req.auth!.type === "owner" || req.auth!.permissions?.canViewAllBranches === true;
     const orderId = parseInt(req.params.id);
     const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) conditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !workerCanViewAllBranches) conditions.push(eq(orders.branchId, workerBranchId));
 
     const [existing] = await db.select().from(orders).where(and(...conditions));
     if (!existing) return res.status(404).json({ error: "Order not found" });
