@@ -50,6 +50,7 @@ export const WORKER_DEFAULT_PERMISSIONS = {
   canRecordPayments: true,
   canRecordPickups: true,
   canViewOrders: true,
+  canViewAllBranches: false,
   canProcessOrders: true,
   canAssignOrders: false,
   // WhatsApp access: opt-in — owner enables per-worker
