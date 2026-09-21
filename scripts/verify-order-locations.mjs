@@ -261,11 +261,38 @@ try {
     orderMovementsRows: movementRows,
     migrationHashes: migrations.map(m => ({ id: m.id, hash: m.hash, created_at: m.created_at })),
   }));
-  for (const row of anomalies) {
-    console.error("[order-location-verification] INCONSISTENT_ORDER", JSON.stringify(row));
-  }
   if (anomalies.length > 0) {
+    const anomalyIds = anomalies.map(row => row.id);
+    const context = await q(`
+      SELECT
+        o.id,
+        o.order_id,
+        o.laundry_id,
+        o.branch_id,
+        o.customer_id,
+        o.assigned_worker_id,
+        c.branch_id AS customer_branch_id,
+        w.branch_id AS assigned_worker_branch_id,
+        COALESCE((
+          SELECT json_agg(DISTINCT pr.branch_id) FILTER (WHERE pr.branch_id IS NOT NULL)
+          FROM public.payment_records pr
+          WHERE pr.order_id = o.id
+        ), '[]'::json) AS payment_branch_ids,
+        COALESCE((
+          SELECT json_agg(json_build_object('branch_id', b.id, 'name', b.name) ORDER BY b.id)
+          FROM public.branches b
+          WHERE b.laundry_id = o.laundry_id AND b.deleted_at IS NULL
+        ), '[]'::json) AS laundry_branches
+      FROM public.orders o
+      LEFT JOIN public.customers c ON c.id = o.customer_id
+      LEFT JOIN public.workers w ON w.id = o.assigned_worker_id
+      WHERE o.id = ANY($1::int[])
+      ORDER BY o.id
+    `, [anomalyIds]);
     console.error("[order-location-verification] AUDIT_FOUND_INCONSISTENCIES", JSON.stringify(anomalies));
+    for (const row of context) {
+      console.error("[order-location-verification] INCONSISTENT_ORDER_CONTEXT", JSON.stringify(row));
+    }
     process.exit(2);
   }
   console.log("[order-location-verification] Verification complete. No data was changed.");
