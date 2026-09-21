@@ -183,7 +183,9 @@ export const api = {
       request<{ messages: OrderMessage[]; total: number }>("GET", `/orders/${id}/messages`),
     retryMessage: (id: number, msgId: number) =>
       request<{ success: boolean; status: string; error?: string }>("POST", `/orders/${id}/messages/${msgId}/retry`),
-    list: (status?: "pending" | "approved" | "rejected") => {
+  },
+  discountApprovals: {
+list: (status?: "pending" | "approved" | "rejected") => {
       const qs = status ? `?status=${status}` : "";
       return request<DiscountApproval[]>("GET", `/discount-approvals${qs}`);
     },
