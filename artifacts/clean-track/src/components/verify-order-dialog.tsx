@@ -30,7 +30,7 @@ export function VerifyOrderDialog({ order, open, onOpenChange, onConfirm, isPend
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader><DialogTitle>Verify clothes received</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">Count the physical clothes at this processing branch. The pickup branch count remains the collection record; these values become the processing branch receiving record.</p>
+        <p className="text-sm text-muted-foreground">Count the physical clothes for this order. These values become the order's verification record before processing.</p>
         <div className="space-y-3 py-2">
           {itemBased ? order.items!.map(item => (
             <div key={item.id} className="grid grid-cols-[1fr_110px] items-center gap-3">
