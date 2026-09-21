@@ -647,11 +647,13 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
       }
       const targetBranchId = isOwner && data.movementType === "MANUAL_TRANSFER"
         ? data.toBranchId
-        : data.movementType === "PROCESSING_TRANSFER"
-          ? order.processingBranchId
-          : data.movementType === "RETURN_TRANSFER"
-            ? order.returnBranchId
-            : null;
+        : isOwner && data.movementType === "PROCESSING_TRANSFER" && data.toBranchId !== undefined
+          ? data.toBranchId
+          : data.movementType === "PROCESSING_TRANSFER"
+            ? order.processingBranchId
+            : data.movementType === "RETURN_TRANSFER"
+              ? order.returnBranchId
+              : null;
       if (targetBranchId == null) return { missingTarget: true } as const;
 
       const [target] = await tx.select({ id: branches.id, type: branches.type, name: branches.name })
@@ -660,12 +662,33 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
       if (!target) return { badBranch: true } as const;
 
       if (data.movementType === "PROCESSING_TRANSFER") {
-        if (order.processingBranchId !== target.id) return { wrongTarget: "processing" } as const;
         if (!["PROCESSING", "HYBRID"].includes(target.type)) return { badCapability: "processing" } as const;
         if (order.currentBranchId !== order.collectionBranchId) return { badSource: "processing" } as const;
-        if (order.collectionBranchId === order.processingBranchId) return { localProcessing: true } as const;
         if (!["pending", "processing"].includes(order.status)) return { badStatus: "processing" } as const;
         if (!order.isVerified) return { notVerified: true } as const;
+
+        // Owners may repair a legacy/broken processing route while moving the
+        // order. Workers never choose destinations. A route repair is only
+        // allowed when the stored processing branch is missing or no longer
+        // processing-capable; valid configured routes remain immutable.
+        if (data.toBranchId !== undefined) {
+          if (!isOwner) return { workerTargetForbidden: true } as const;
+          if (order.processingBranchId !== null) {
+            const [configuredProcessingBranch] = await tx.select({ id: branches.id, type: branches.type })
+              .from(branches)
+              .where(and(
+                eq(branches.id, order.processingBranchId),
+                eq(branches.laundryId, laundryId),
+                isNull(branches.deletedAt),
+              ));
+            if (configuredProcessingBranch && ["PROCESSING", "HYBRID"].includes(configuredProcessingBranch.type)) {
+              return { routeOverrideForbidden: true } as const;
+            }
+          }
+        } else {
+          if (order.processingBranchId !== target.id) return { wrongTarget: "processing" } as const;
+          if (order.collectionBranchId === order.processingBranchId) return { localProcessing: true } as const;
+        }
       }
 
       if (data.movementType === "RETURN_TRANSFER") {
@@ -679,8 +702,15 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
       if (data.movementType === "MANUAL_TRANSFER" && !isOwner) return { manualForbidden: true } as const;
       if (target.id === order.currentBranchId) return { unchanged: true, order } as const;
 
+      const routeRepair =
+        isOwner &&
+        data.movementType === "PROCESSING_TRANSFER" &&
+        data.toBranchId !== undefined &&
+        order.processingBranchId !== target.id;
+
       const [updated] = await tx.update(orders)
         .set({
+          ...(routeRepair ? { processingBranchId: target.id } : {}),
           currentBranchId: target.id,
           assignedWorkerId: null,
           // Verification belongs to the branch currently holding the clothes.
@@ -705,7 +735,7 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
         movedByName: actorName(req.auth!),
       }).returning();
 
-      return { order: updated, movement } as const;
+      return { order: updated, movement, routeRepaired: routeRepair } as const;
     });
 
     if ("notFound" in result) return res.status(404).json({ error: "Order not found" });
@@ -715,6 +745,7 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
     if ("missingTarget" in result) return res.status(400).json({ error: "This order has no destination branch configured" });
     if ("badBranch" in result) return res.status(400).json({ error: "Target branch not found" });
     if ("wrongTarget" in result) return res.status(400).json({ error: "Target branch does not match the order lifecycle location" });
+    if ("routeOverrideForbidden" in result) return res.status(409).json({ error: "The configured processing branch is valid. Reconfigure the branch network instead of overriding this order route." });
     if ("badCapability" in result) return res.status(400).json({ error: "Target branch does not support this operation" });
     if ("badSource" in result) return res.status(409).json({ error: "The order is not currently at the branch that should send it" });
     if ("badStatus" in result) return res.status(409).json({ error: "The order is not ready for this handoff" });
