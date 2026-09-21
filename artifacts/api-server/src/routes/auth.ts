@@ -325,7 +325,6 @@ authRouter.post("/demo-worker-login", async (_req, res) => {
 
     const permissions = {
       canViewOrders: permsRow.canViewOrders,
-      canViewAllBranches: permsRow.canViewAllBranches,
       canProcessOrders: permsRow.canProcessOrders,
       canRecordPayments: permsRow.canRecordPayments,
       canRecordPickups: permsRow.canRecordPickups,

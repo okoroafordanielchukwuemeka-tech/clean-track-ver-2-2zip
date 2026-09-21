@@ -52,7 +52,6 @@ const WORKER_PERM_FIELD: Partial<Record<Permission, keyof WorkerPermissions>> = 
 
 const PERM_HINT: Partial<Record<keyof WorkerPermissions, string>> = {
   canViewOrders: "view orders",
-  canViewAllBranches: "view orders from all branches",
   canProcessOrders: "process orders",
   canRecordPayments: "record payments",
   canRecordPickups: "record pickups",

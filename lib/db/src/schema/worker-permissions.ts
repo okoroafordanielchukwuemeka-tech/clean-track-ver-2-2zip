@@ -12,8 +12,6 @@ export const workerPermissions = pgTable("worker_permissions", {
   canRecordPayments: boolean("can_record_payments").notNull().default(false),
   canRecordPickups: boolean("can_record_pickups").notNull().default(true),
   canViewOrders: boolean("can_view_orders").notNull().default(true),
-  // Owner-controlled permission: allows a worker to see and operate orders from every branch.
-  canViewAllBranches: boolean("can_view_all_branches").notNull().default(false),
   canProcessOrders: boolean("can_process_orders").notNull().default(true),
   canAssignOrders: boolean("can_assign_orders").notNull().default(false),
   canViewWhatsApp: boolean("can_view_whatsapp").notNull().default(false),
@@ -33,7 +31,6 @@ export const ADMIN_DEFAULT_PERMISSIONS = {
   canRecordPayments: true,
   canRecordPickups: true,
   canViewOrders: true,
-  canViewAllBranches: true,
   canProcessOrders: true,
   canAssignOrders: true,
   canViewWhatsApp: false,
@@ -50,7 +47,6 @@ export const WORKER_DEFAULT_PERMISSIONS = {
   canRecordPayments: true,
   canRecordPickups: true,
   canViewOrders: true,
-  canViewAllBranches: false,
   canProcessOrders: true,
   canAssignOrders: false,
   // WhatsApp access: opt-in — owner enables per-worker

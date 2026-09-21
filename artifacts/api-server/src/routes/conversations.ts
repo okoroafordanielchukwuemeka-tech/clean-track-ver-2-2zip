@@ -266,7 +266,7 @@ conversationsRouter.get("/:id", requireAuth, checkPermission("view:whatsapp"), a
             serviceType: orders.serviceType,
             // Current operational location is what workers/owners need in the
             // customer context; legacy branchId is collection-only.
-            branchId: orders.currentBranchId,
+            branchId: orders.branchId,
             customerName: orders.customerName,
           })
           .from(orders)
