@@ -559,7 +559,7 @@ export default function Orders() {
                         <TableCell className="hidden lg:table-cell">
                           <div className="min-w-[120px] text-xs">
                             <div className="font-medium text-foreground">
-                              {order.currentBranchName ?? "Unassigned branch"}
+                              {order.branchName ?? "Unassigned branch"}
                             </div>
                           </div>
                         </TableCell>
