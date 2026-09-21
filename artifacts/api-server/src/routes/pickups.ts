@@ -73,8 +73,8 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)),
       // Pickup receipts must identify the branch physically handling the
       // pickup, not the legacy collection-only order.branchId.
-      order.currentBranchId
-        ? db.select().from(branches).where(eq(branches.id, order.currentBranchId)).then(r => r[0] ?? null)
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
       pickup.processedBy
         ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, pickup.processedBy)).then(r => r[0] ?? null)
@@ -175,7 +175,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
         sql`SELECT id, laundry_id, order_id, customer_id, customer_name, status, price,
                    extra_charge, discount, amount_paid, shirts, trousers,
                    shirts_picked_up, trousers_picked_up,
-                   collection_branch_id, processing_branch_id, return_branch_id, current_branch_id
+                   collection_branch_id, processing_branch_id, return_branch_id, branch_id
             FROM orders
             WHERE id = ${orderId} AND laundry_id = ${laundryId}${branchClause}
             FOR UPDATE`
