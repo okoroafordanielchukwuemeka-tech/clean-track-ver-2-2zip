@@ -28,8 +28,6 @@ const ACTIVE_BRANCH_KEY = "ct_active_branch";
 
 export function BranchProvider({ children }: { children: React.ReactNode }) {
   const [branches, setBranches] = useState<Branch[]>([]);
-  const { user } = require("@/context/auth-context") as never;
-  void user;
   const [activeBranch, setActiveBranchState] = useState<Branch | null>(() => {
     try {
       const saved = localStorage.getItem(ACTIVE_BRANCH_KEY);
