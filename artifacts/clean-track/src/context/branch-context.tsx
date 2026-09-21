@@ -1,15 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { useAuth } from "./auth-context";
-
-export type BranchType = "PROCESSING" | "PICKUP" | "HYBRID";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 
 export interface Branch {
   id: number;
   laundryId: number;
   name: string;
   address?: string | null;
-  type: BranchType;
-  processingDestinationBranchId?: number | null;
   createdAt: string;
 }
 
@@ -32,52 +27,43 @@ const BranchContext = createContext<BranchContextType>({
 const ACTIVE_BRANCH_KEY = "ct_active_branch";
 
 export function BranchProvider({ children }: { children: React.ReactNode }) {
-  const { isOwner, user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
+  const { user } = require("@/context/auth-context") as never;
+  void user;
   const [activeBranch, setActiveBranchState] = useState<Branch | null>(() => {
-    if (typeof window === "undefined") return null;
-    const saved = localStorage.getItem(ACTIVE_BRANCH_KEY);
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem(ACTIVE_BRANCH_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const setActiveBranch = useCallback((branch: Branch | null) => {
     setActiveBranchState(branch);
-    if (branch) {
-      localStorage.setItem(ACTIVE_BRANCH_KEY, JSON.stringify(branch));
-    } else {
-      localStorage.removeItem(ACTIVE_BRANCH_KEY);
-    }
+    if (branch) localStorage.setItem(ACTIVE_BRANCH_KEY, JSON.stringify(branch));
+    else localStorage.removeItem(ACTIVE_BRANCH_KEY);
   }, []);
 
   useEffect(() => {
-    if (!isOwner) {
-      setActiveBranchState(null);
-    }
-  }, [isOwner, user?.id]);
-
-  // If a branch was renamed, deleted, or its capabilities changed in another tab,
-  // never keep a stale branch object as the owner's active filter.
-  useEffect(() => {
-    if (!isOwner || !activeBranch) return;
+    if (!activeBranch) return;
     const fresh = branches.find(b => b.id === activeBranch.id);
     if (!fresh) {
       setActiveBranchState(null);
       localStorage.removeItem(ACTIVE_BRANCH_KEY);
       return;
     }
-    if (fresh.name !== activeBranch.name || fresh.type !== activeBranch.type) {
+    if (fresh.name !== activeBranch.name || fresh.address !== activeBranch.address) {
       setActiveBranchState(fresh);
       localStorage.setItem(ACTIVE_BRANCH_KEY, JSON.stringify(fresh));
     }
-  }, [isOwner, activeBranch, branches]);
-
-  const activeBranchId = activeBranch?.id ?? null;
+  }, [activeBranch, branches]);
 
   return (
     <BranchContext.Provider value={{
       branches,
       activeBranch,
-      activeBranchId,
+      activeBranchId: activeBranch?.id ?? null,
       setBranches,
       setActiveBranch,
     }}>
