@@ -493,9 +493,19 @@ export default function OrderDetail() {
     processing: { value: "ready",      label: "Mark as Ready"    },
   };
   const nextStatus = NEXT_STATUS[order.status];
+  const currentBranchConfig = branchList.find(b => b.id === order.currentBranchId);
+  const processingBranchConfig = branchList.find(b => b.id === order.processingBranchId);
+  const currentBranchCanProcess =
+    !!currentBranchConfig &&
+    ["PROCESSING", "HYBRID"].includes(currentBranchConfig.type);
+  const processingRouteIsValid =
+    !!processingBranchConfig &&
+    ["PROCESSING", "HYBRID"].includes(processingBranchConfig.type);
   const canProcessAtCurrentBranch =
     !!order.currentBranchId &&
     order.currentBranchId === order.processingBranchId &&
+    currentBranchCanProcess &&
+    processingRouteIsValid &&
     !!order.processingBranchId;
   const canAdvanceStatus =
     !!nextStatus &&
@@ -698,7 +708,28 @@ export default function OrderDetail() {
               })}
             </div>
             {isOwner && order.status !== "completed" && (order.status as string) !== "cancelled" && (
-              <Button size="sm" variant="outline" onClick={() => setShowMove(true)}><ArrowRight className="h-4 w-4 mr-1" />Move Order</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const routeBroken = !processingRouteIsValid;
+                  const atCollection = order.currentBranchId === order.collectionBranchId;
+                  const atProcessing = order.currentBranchId === order.processingBranchId && processingRouteIsValid;
+                  setMoveType(
+                    routeBroken && atCollection
+                      ? "PROCESSING_TRANSFER"
+                      : atProcessing && ["ready", "partial_pickup"].includes(order.status)
+                        ? "RETURN_TRANSFER"
+                        : "MANUAL_TRANSFER"
+                  );
+                  setMoveTarget("");
+                  setMoveReason("");
+                  setShowMove(true);
+                }}
+              >
+                <ArrowRight className="h-4 w-4 mr-1" />
+                Move Order
+              </Button>
             )}
             {movements.length > 0 && (
               <div className="pt-2 border-t space-y-2">
@@ -1944,6 +1975,142 @@ export default function OrderDetail() {
               disabled={paymentMutation.isPending || isPaymentSubmitting}
             >
               {paymentMutation.isPending || isPaymentSubmitting ? "Recording…" : duplicateWarning ? "Record Anyway" : "Record Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Branch movement dialog */}
+      <Dialog open={showMove} onOpenChange={setShowMove}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              Move Order
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {order && !processingRouteIsValid && order.currentBranchId === order.collectionBranchId && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm">
+                <p className="font-semibold">Processing route needs repair</p>
+                <p className="text-muted-foreground mt-1">
+                  This order was created with a processing branch that is no longer processing-capable.
+                  Select a valid Processing or Hybrid branch below. CleanTrack will repair this order's
+                  processing route and move it there in one operation.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <Label>Movement</Label>
+              <Select value={moveType} onValueChange={(v) => {
+                const next = v as typeof moveType;
+                setMoveType(next);
+                setMoveTarget("");
+              }}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {order.currentBranchId === order.collectionBranchId &&
+                    order.collectionBranchId !== order.processingBranchId && (
+                    <SelectItem value="PROCESSING_TRANSFER">
+                      {processingRouteIsValid ? "Send to configured processing branch" : "Repair route & send to processing"}
+                    </SelectItem>
+                  )}
+                  {order.currentBranchId === order.processingBranchId &&
+                    order.returnBranchId !== order.processingBranchId &&
+                    ["ready", "partial_pickup"].includes(order.status) && (
+                    <SelectItem value="RETURN_TRANSFER">Send back to pickup branch</SelectItem>
+                  )}
+                  <SelectItem value="MANUAL_TRANSFER">Owner manual transfer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {moveType === "PROCESSING_TRANSFER" && !processingRouteIsValid && (
+              <div>
+                <Label>New processing branch</Label>
+                <Select value={moveTarget} onValueChange={setMoveTarget}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose a Processing or Hybrid branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branchList
+                      .filter(b =>
+                        b.id !== order.currentBranchId &&
+                        ["PROCESSING", "HYBRID"].includes(b.type)
+                      )
+                      .map(b => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.name} · {b.type === "HYBRID" ? "Hybrid" : "Processing"}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {moveType === "MANUAL_TRANSFER" && (
+              <div>
+                <Label>Destination branch</Label>
+                <Select value={moveTarget} onValueChange={setMoveTarget}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose destination branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branchList
+                      .filter(b => b.id !== order.currentBranchId)
+                      .map(b => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.name} · {b.type}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <Label>Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input
+                className="mt-1"
+                value={moveReason}
+                onChange={(e) => setMoveReason(e.target.value)}
+                placeholder="e.g. sent to processing branch"
+              />
+            </div>
+
+            <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+              Workers follow the configured route automatically. This owner control is for moving an order
+              and, when necessary, repairing a legacy/broken processing route.
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMove(false)}>Cancel</Button>
+            <Button
+              disabled={
+                moveMutation.isPending ||
+                ((moveType === "MANUAL_TRANSFER" || (moveType === "PROCESSING_TRANSFER" && !processingRouteIsValid)) && !moveTarget)
+              }
+              onClick={() => {
+                const payload: {
+                  toBranchId?: number;
+                  movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER";
+                  reason?: string;
+                } = {
+                  movementType: moveType,
+                  reason: moveReason.trim() || undefined,
+                };
+                if (moveType === "MANUAL_TRANSFER" || (moveType === "PROCESSING_TRANSFER" && !processingRouteIsValid)) {
+                  payload.toBranchId = Number(moveTarget);
+                }
+                moveMutation.mutate(payload);
+              }}
+            >
+              {moveMutation.isPending ? "Moving…" : "Move Order"}
             </Button>
           </DialogFooter>
         </DialogContent>
