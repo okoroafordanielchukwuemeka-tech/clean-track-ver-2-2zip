@@ -271,6 +271,12 @@ try {
         o.branch_id,
         o.customer_id,
         o.assigned_worker_id,
+        o.address AS order_address,
+        o.created_at,
+        o.status,
+        c.full_name AS customer_name,
+        c.phone AS customer_phone,
+        c.address AS customer_address,
         c.branch_id AS customer_branch_id,
         w.branch_id AS assigned_worker_branch_id,
         COALESCE((
