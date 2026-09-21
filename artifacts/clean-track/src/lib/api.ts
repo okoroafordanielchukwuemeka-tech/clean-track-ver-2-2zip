@@ -139,8 +139,6 @@ export const api = {
     networkSummary: () => request<Array<{
       id: number;
       name: string;
-      type: import("@/context/branch-context").BranchType;
-      processingDestinationBranchId?: number | null;
       counts: {
         active: number;
         incoming: number;
@@ -150,9 +148,9 @@ export const api = {
         awaitingTransfer: number;
       };
     }>>("GET", "/branches/network-summary"),
-    create: (data: { name: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
+    create: (data: { name: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("POST", "/branches", data),
-    update: (id: number, data: { name?: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
+    update: (id: number, data: { name?: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("PATCH", `/branches/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/branches/${id}`),
   },
