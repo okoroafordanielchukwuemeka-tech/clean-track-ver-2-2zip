@@ -17,6 +17,10 @@ import { fireAutomation } from "../lib/automation-service.js";
 
 export const ordersRouter = Router();
 
+function canViewAllBranches(req: AuthRequest): boolean {
+  return req.auth?.type === "owner" || req.auth?.permissions?.canViewAllBranches === true;
+}
+
 const orderCollectionBranch = alias(branches, "order_collection_branch");
 const orderProcessingBranch = alias(branches, "order_processing_branch");
 const orderReturnBranch = alias(branches, "order_return_branch");
@@ -521,7 +525,7 @@ ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: A
     if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
 
     const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (req.auth!.branchId) conditions.push(eq(orders.currentBranchId, req.auth!.branchId));
+    if (req.auth!.branchId && !canViewAllBranches(req)) conditions.push(eq(orders.branchId, req.auth!.branchId));
 
     const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -599,9 +603,8 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
       ? ownerOrderUpdateSchema.parse(req.body)
       : workerOrderUpdateSchema.parse(req.body);
 
-    // Pickup workers may receive/verify/handoff without gaining processing
-    // permission. Processing state changes remain restricted to processing-capable
-    // workers and are additionally checked against the order's current branch.
+    // Workers may operate orders from their own branch, or from every branch when
+    // the owner has granted the explicit cross-branch access permission.
     if (!isOwner && !req.auth!.permissions?.canRecordPickups && !req.auth!.permissions?.canProcessOrders) {
       return res.status(403).json({ error: "You do not have permission to operate orders" });
     }
@@ -683,29 +686,6 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
       .where(and(...patchConditions))
       .returning();
     if (!order) return res.status(404).json({ error: "Order not found" });
-
-    // Record physical receipt only after the custody assignment was persisted.
-    if (
-      !isOwner &&
-      data.assignedWorkerId === req.auth!.workerId &&
-      beforeOrder.currentBranchId === beforeOrder.processingBranchId &&
-      beforeOrder.collectionBranchId !== beforeOrder.processingBranchId &&
-      beforeOrder.assignedWorkerId !== req.auth!.workerId
-    ) {
-      logAction({
-        auth: req.auth!,
-        laundryId,
-        action: "order_branch_received",
-        orderId: order.id,
-        metadata: {
-          branchId: order.currentBranchId,
-          processingBranchId: order.processingBranchId,
-          collectionBranchId: order.collectionBranchId,
-          receivedByWorkerId: req.auth!.workerId,
-          receivedByName: req.auth!.name,
-        },
-      }).catch(() => {});
-    }
 
     if (beforeOrder) {
       if (data.status === "processing" && beforeOrder.status !== "processing") {
