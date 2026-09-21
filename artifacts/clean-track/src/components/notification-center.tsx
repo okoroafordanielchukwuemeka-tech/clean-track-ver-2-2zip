@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Notification } from "@/lib/api";
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, Zap, CheckCircle2 } from "lucide-react";
@@ -38,66 +38,75 @@ function NotificationItem({
   n,
   onRead,
   onDelete,
-  onOpen,
-  onNavigate,
 }: {
   n: Notification;
   onRead: (id: number) => void;
   onDelete: (id: number) => void;
-  onOpen: (notification: Notification) => void;
-  onNavigate: () => void;
 }) {
   const cfg = SEVERITY_CONFIG[n.severity];
   const Icon = cfg.icon;
-  const destination = n.relatedOrderId ? `/orders/${n.relatedOrderId}` : n.relatedConversationId ? `/customer-hub?conversationId=${n.relatedConversationId}` : null;
-  return (
-    <div
-      className={cn(
-        "flex gap-3 p-3 rounded-lg border text-sm transition-colors",
-        n.isRead ? "bg-background border-border opacity-70" : cn(cfg.bg, "border"),
-        "cursor-pointer hover:bg-muted/30"
-      )}
-      onClick={() => onOpen(n)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen(n);
-        }
-      }}
-    >
+  const destination = n.relatedOrderId
+    ? `/orders/${n.relatedOrderId}`
+    : n.relatedConversationId
+      ? `/customer-hub?conversationId=${n.relatedConversationId}`
+      : null;
+
+  const body = (
+    <>
       <div className={cn("mt-0.5 h-4 w-4 shrink-0", cfg.iconClass)}>
         <Icon className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <p className={cn("font-medium leading-tight", n.isRead ? "text-muted-foreground" : "text-foreground")}>
-            {n.title}
-          </p>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(n.id); }}
-            className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <p className={cn("font-medium leading-tight", n.isRead ? "text-muted-foreground" : "text-foreground")}>
+          {n.title}
+        </p>
         <p className="text-muted-foreground text-xs mt-0.5 leading-relaxed">{n.message}</p>
-        <div className="flex items-center justify-between gap-2 mt-1">
+        <div className="flex items-center gap-2 mt-1">
           <p className="text-muted-foreground/60 text-xs">{formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}</p>
-          {destination && <Link to={destination} onClick={(e) => { e.stopPropagation(); onNavigate(); }} className="text-xs font-semibold text-primary hover:underline">Open</Link>}
+          {destination && <span className="text-xs font-semibold text-primary">Open</span>}
         </div>
       </div>
       {!n.isRead && <div className={cn("h-2 w-2 rounded-full shrink-0 mt-1.5", cfg.dot)} />}
+    </>
+  );
+
+  const rowClass = cn(
+    "flex gap-3 p-3 rounded-lg border text-sm transition-colors",
+    n.isRead ? "bg-background border-border opacity-70" : cn(cfg.bg, "border"),
+    destination ? "cursor-pointer hover:bg-muted/30" : "cursor-default"
+  );
+
+  return (
+    <div className="flex items-start gap-1">
+      {destination ? (
+        <Link
+          to={destination}
+          className={cn(rowClass, "flex-1 min-w-0")}
+          aria-label={`Open notification: ${n.title}`}
+          onClick={() => { if (!n.isRead) onRead(n.id); }}
+        >
+          {body}
+        </Link>
+      ) : (
+        <div className={cn(rowClass, "flex-1 min-w-0")}>
+          {body}
+        </div>
+      )}
+      <button
+        type="button"
+        aria-label="Delete notification"
+        onClick={() => onDelete(n.id)}
+        className="shrink-0 mt-2 p-1 text-muted-foreground hover:text-destructive transition-colors"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
-
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
   const { data: countData } = useQuery({
     queryKey: ["notifications", "count"],
@@ -146,20 +155,6 @@ export function NotificationCenter() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const handleOpen = (notification: Notification) => {
-    if (!notification.isRead) markRead.mutate(notification.id);
-    if (notification.relatedOrderId) {
-      setOpen(false);
-      navigate(`/orders/${notification.relatedOrderId}`);
-      return;
-    }
-    if (notification.relatedConversationId) {
-      setOpen(false);
-      navigate(`/customer-hub?conversationId=${notification.relatedConversationId}`);
-    }
-  };
-
-  const closeAndMarkRead = (n: Notification) => { if (!n.isRead) markRead.mutate(n.id); setOpen(false); };
 
   const unreadCount = countData?.count ?? 0;
   const unread = notifications.filter(n => !n.isRead);
@@ -222,8 +217,6 @@ export function NotificationCenter() {
                         n={n}
                         onRead={id => markRead.mutate(id)}
                         onDelete={id => deleteNotif.mutate(id)}
-                        onOpen={handleOpen}
-                        onNavigate={() => closeAndMarkRead(n)}
                       />
                     ))}
                   </>

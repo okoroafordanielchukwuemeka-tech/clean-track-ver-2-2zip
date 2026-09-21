@@ -387,7 +387,7 @@ export default function WorkerStation() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">Worker Station</h1>
           <p className="text-sm text-muted-foreground">
             {todayCount > 0 && <span>{todayCount} order{todayCount !== 1 ? "s" : ""} today · </span>}
             <strong>{user?.name}</strong>
@@ -483,7 +483,7 @@ export default function WorkerStation() {
         {myOrders.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground text-sm">
-              No orders assigned to you. Pick from the shared queue below.
+              No orders assigned to you. Use the branch queues below to receive, verify, process, and hand off orders.
             </CardContent>
           </Card>
         ) : (
@@ -593,6 +593,7 @@ export default function WorkerStation() {
               onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
               isPending={updateMutation.isPending || moveMutation.isPending}
+              userId={user?.id}
             />
             <UrgencySection
               title="Urgent"
@@ -606,6 +607,7 @@ export default function WorkerStation() {
               onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
               isPending={updateMutation.isPending || moveMutation.isPending}
+              userId={user?.id}
             />
             <UrgencySection
               title="Waiting to be received"
@@ -619,6 +621,7 @@ export default function WorkerStation() {
               onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
               sla={sla}
               isPending={updateMutation.isPending || moveMutation.isPending}
+              userId={user?.id}
             />
           </div>
         </div>
