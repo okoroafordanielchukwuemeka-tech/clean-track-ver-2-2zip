@@ -29,7 +29,7 @@ pickupsRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, 
     const orderId = parseInt(req.params.orderId);
     const workerBranchId = req.auth!.branchId;
     const pickupGetConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId && !canViewAllBranches(req)) pickupGetConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) pickupGetConditions.push(eq(orders.branchId, workerBranchId));
 
     const [order] = await db.select().from(orders).where(and(...pickupGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -55,7 +55,7 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
     const pickupId = parseInt(req.params.pickupId);
 
     const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId && !canViewAllBranches(req)) orderConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -167,7 +167,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
      * always based on the true current state.
      */
     const txResult = await db.transaction(async (tx) => {
-      const branchClause = workerBranchId && !canViewAllBranches(req)
+      const branchClause = workerBranchId && !false
         ? sql` AND branch_id = ${workerBranchId}`
         : sql``;
 

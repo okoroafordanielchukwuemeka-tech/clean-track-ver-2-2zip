@@ -12,9 +12,6 @@ import { trackActivationEvent } from "../lib/activation-tracker.js";
 
 export const customersRouter = Router();
 
-function canViewAllBranches(req: AuthRequest): boolean {
-  return req.auth?.type === "owner" || req.auth?.permissions?.canViewAllBranches === true;
-}
 
 const customerInputSchema = z.object({
   fullName: z.string().min(1),
@@ -168,7 +165,7 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
     const laundryId = req.auth!.laundryId;
     const { search, tag, branchId: branchParam, sort, archived } = req.query;
 
-    const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : (canViewAllBranches(req) ? null : req.auth!.branchId ?? null);
+    const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : (false ? null : req.auth!.branchId ?? null);
 
     const showArchived = archived === "true";
     const baseConditions: any[] = [eq(customers.laundryId, laundryId)];
@@ -260,12 +257,12 @@ customersRouter.get("/:id", checkPermission("view:customers"), async (req: AuthR
     const workerBranchId = req.auth!.branchId;
 
     const custGetConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId), isNull(customers.deletedAt)];
-    if (workerBranchId && !canViewAllBranches(req)) custGetConditions.push(eq(customers.branchId, workerBranchId));
+    if (workerBranchId) custGetConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.select().from(customers).where(and(...custGetConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const custOrderConditions: any[] = [eq(orders.customerId, customerId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId && !canViewAllBranches(req)) custOrderConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchId) custOrderConditions.push(eq(orders.branchId, workerBranchId));
     const customerOrders = await db.select().from(orders)
       .where(and(...custOrderConditions))
       .orderBy(desc(orders.createdAt));
@@ -330,7 +327,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
     }
 
     const custPatchConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId && !canViewAllBranches(req)) custPatchConditions.push(eq(customers.branchId, workerBranchId));
+    if (workerBranchId) custPatchConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.update(customers).set(data)
       .where(and(...custPatchConditions))
       .returning();
@@ -353,7 +350,7 @@ customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), 
     const workerBranchId = req.auth!.branchId;
     const customerId = parseInt(req.params.id);
     const custReceiptConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId && !canViewAllBranches(req)) custReceiptConditions.push(eq(customers.branchId, workerBranchId));
+    if (workerBranchId) custReceiptConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.select({ id: customers.id })
       .from(customers)
       .where(and(...custReceiptConditions));
@@ -394,7 +391,7 @@ customersRouter.get("/:id/statement", checkPermission("view:customer-balances"),
 
     // ── Customer lookup ────────────────────────────────────────────────────
     const custStmtConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId && !canViewAllBranches(req)) custStmtConditions.push(eq(customers.branchId, workerBranchId));
+    if (workerBranchId) custStmtConditions.push(eq(customers.branchId, workerBranchId));
     const [customer] = await db.select().from(customers).where(and(...custStmtConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
