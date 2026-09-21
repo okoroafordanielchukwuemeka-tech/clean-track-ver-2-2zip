@@ -217,7 +217,6 @@ export function NotificationCenter() {
                         onRead={id => markRead.mutate(id)}
                         onDelete={id => deleteNotif.mutate(id)}
                         onOpen={handleOpen}
-                        onOpen={handleOpen}
                       />
                     ))}
                   </>
