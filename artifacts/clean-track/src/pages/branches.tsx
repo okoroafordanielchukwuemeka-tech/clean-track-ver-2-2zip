@@ -109,9 +109,7 @@ export default function BranchesPage() {
         <CardContent className="p-4 text-sm">
           <p className="font-semibold">Branches are locations, not workflow types.</p>
           <p className="text-muted-foreground mt-1">
-            Every branch can create and process orders. Orders stay associated with the branch where they were created.
-            If a worker needs to work on orders from another branch, the owner can enable
-            <strong className="text-foreground"> View orders from all branches</strong> in Worker Permissions.
+            Every branch is a normal workspace for its own orders and workers. Orders stay associated with the branch where they were created.
           </p>
         </CardContent>
       </Card>
