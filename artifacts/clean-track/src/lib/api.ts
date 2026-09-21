@@ -1320,6 +1320,7 @@ export interface WorkerPermission {
   canRecordPayments: boolean;
   canRecordPickups: boolean;
   canViewOrders: boolean;
+  canViewAllBranches: boolean;
   canProcessOrders: boolean;
   canAssignOrders: boolean;
   canViewWhatsApp: boolean;
