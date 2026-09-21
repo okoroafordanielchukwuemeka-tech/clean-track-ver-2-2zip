@@ -244,6 +244,26 @@ try {
     impossible_missing_branch_refs: missingRefs
   }, null, 2));
 
+  console.log("[order-location-verification] SUMMARY", JSON.stringify({
+    totalOrders: stats?.total_orders ?? null,
+    branchIdPresent: stats?.legacy_branch_orders ?? null,
+    noBranchIdAndNoNewLocation: stats?.no_legacy_and_no_new_locations ?? null,
+    newLocationWithoutBranchId: stats?.new_locations_without_legacy_branch ?? null,
+    branchIdWithMissingNewLocation: stats?.legacy_branch_with_missing_new_location ?? null,
+    collectionMismatch: stats?.legacy_collection_mismatch ?? null,
+    processingMismatch: stats?.legacy_processing_mismatch ?? null,
+    returnMismatch: stats?.legacy_return_mismatch ?? null,
+    currentMismatch: stats?.legacy_current_mismatch ?? null,
+    crossTenantLocationOrders: crossTenant,
+    impossibleMissingBranchRefs: missingRefs,
+    branchTypes,
+    orderMovementsExists: Boolean(movementTable[0]?.exists),
+    orderMovementsRows: movementRows,
+    migrationHashes: migrations.map(m => ({ id: m.id, hash: m.hash, created_at: m.created_at })),
+  }));
+  for (const row of anomalies) {
+    console.log("[order-location-verification] INCONSISTENT_ORDER", JSON.stringify(row));
+  }
   console.log("[order-location-verification] Verification complete. No data was changed.");
 } catch (err) {
   console.error("[order-location-verification] FAILED:", err?.message ?? String(err));
