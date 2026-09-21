@@ -328,7 +328,7 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       discountReason: undefined,
     };
 
-    const requestedBranchId = data.branchId ?? data.collectionBranchId;
+    const requestedBranchId = data.branchId;
     const workerBranchId = req.auth!.branchId ?? null;
     const branchId = workerBranchId ?? requestedBranchId ?? null;
 
@@ -392,10 +392,6 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       const [inserted] = await tx.insert(orders).values({
         laundryId,
         branchId,
-        collectionBranchId: branchId,
-        processingBranchId: branchId,
-        returnBranchId: branchId,
-        currentBranchId: branchId,
         customerId, orderId: placeholder, customerName: data.customerName, phone: phoneNorm,
         address: data.address, serviceType: data.serviceType, shirts: data.shirts ?? 0, trousers: data.trousers ?? 0, additionalNotes: data.additionalNotes,
         price: computedPrice?.toString(), extraCharge: data.extraCharge?.toString(), discount: data.discount?.toString(), processingDueAt,
@@ -463,48 +459,6 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: "Failed to create order" });
-  }
-});
-
-ordersRouter.get("/:id/movements", checkPermission("view:orders"), async (req: AuthRequest, res) => {
-  try {
-    const laundryId = req.auth!.laundryId;
-    const orderId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(orderId)) return res.status(400).json({ error: "Invalid order id" });
-
-    const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (req.auth!.branchId && !canViewAllBranches(req)) conditions.push(eq(orders.branchId, req.auth!.branchId));
-
-    const [order] = await db.select({ id: orders.id }).from(orders).where(and(...conditions));
-    if (!order) return res.status(404).json({ error: "Order not found" });
-
-    const fromBranch = alias(branches, "from_branch");
-    const toBranch = alias(branches, "to_branch");
-
-    const movements = await db
-      .select({
-        id: orderMovements.id,
-        orderId: orderMovements.orderId,
-        fromBranchId: orderMovements.fromBranchId,
-        fromBranchName: fromBranch.name,
-        toBranchId: orderMovements.toBranchId,
-        toBranchName: toBranch.name,
-        movementType: orderMovements.movementType,
-        reason: orderMovements.reason,
-        movedByType: orderMovements.movedByType,
-        movedByName: orderMovements.movedByName,
-        createdAt: orderMovements.createdAt,
-      })
-      .from(orderMovements)
-      .leftJoin(fromBranch, eq(fromBranch.id, orderMovements.fromBranchId))
-      .leftJoin(toBranch, eq(toBranch.id, orderMovements.toBranchId))
-      .where(eq(orderMovements.orderId, orderId))
-      .orderBy(desc(orderMovements.createdAt));
-
-    res.json(movements);
-  } catch (err) {
-    console.error("[order-movements]", err);
-    res.status(500).json({ error: "Failed to list order movements" });
   }
 });
 
@@ -840,10 +794,10 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
      */
     const txResult = await db.transaction(async (tx) => {
       const branchClause = workerBranchId
-        ? sql` AND current_branch_id = ${workerBranchId}`
+        ? sql` AND branch_id = ${workerBranchId}`
         : sql``;
       const lockResult = await tx.execute(
-        sql`SELECT id, order_id, customer_name, branch_id, current_branch_id, price, extra_charge,
+        sql`SELECT id, order_id, customer_name, branch_id, branch_id, price, extra_charge,
                    discount, amount_paid, payment_status, status,
                    shirts, trousers, shirts_picked_up, trousers_picked_up
             FROM orders
@@ -1173,8 +1127,8 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
     const latestPayment = allPayments.length > 0 ? allPayments[allPayments.length - 1] : null;
 
     const [orderBranch, cashierWorker] = await Promise.all([
-      order.currentBranchId
-        ? db.select().from(branches).where(eq(branches.id, order.currentBranchId)).then(r => r[0] ?? null)
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
       latestPayment?.workerId
         ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, latestPayment.workerId)).then(r => r[0] ?? null)
@@ -1222,7 +1176,7 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
       order: {
         id: order.id,
         orderId: order.orderId,
-        branchId: order.currentBranchId,
+        branchId: order.branchId,
         serviceType: order.serviceType,
         shirts: order.shirts,
         trousers: order.trousers,
@@ -1486,8 +1440,8 @@ ordersRouter.post(
 
       // Fetch branch + laundry for variable interpolation
       const [laundry] = await db.select().from(laundries).where(eq(laundries.id, laundryId));
-      const branchName = order.currentBranchId
-        ? ((await db.select({ name: branches.name }).from(branches).where(eq(branches.id, order.currentBranchId)))[0]?.name ?? "Main Branch")
+      const branchName = order.branchId
+        ? ((await db.select({ name: branches.name }).from(branches).where(eq(branches.id, order.branchId)))[0]?.name ?? "Main Branch")
         : "Main Branch";
 
       const totalDue = Number(order.price ?? 0) + Number(order.extraCharge ?? 0) - Number(order.discount ?? 0);
@@ -1513,7 +1467,7 @@ ordersRouter.post(
 
       dispatchNotification({
         laundryId,
-        branchId: order.currentBranchId ?? null,
+        branchId: order.branchId ?? null,
         eventType: type === "ready" ? "order_ready" : "overdue",
         orderId: order.id,
         customerId: order.customerId ?? null,
