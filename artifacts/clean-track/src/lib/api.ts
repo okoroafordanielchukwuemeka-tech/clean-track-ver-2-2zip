@@ -136,26 +136,13 @@ export const api = {
   },
   branches: {
     list: () => request<import("@/context/branch-context").Branch[]>("GET", "/branches"),
-    networkSummary: () => request<Array<{
-      id: number;
-      name: string;
-      type: import("@/context/branch-context").BranchType;
-      processingDestinationBranchId?: number | null;
-      counts: {
-        active: number;
-        incoming: number;
-        local: number;
-        processing: number;
-        ready: number;
-        awaitingTransfer: number;
-      };
-    }>>("GET", "/branches/network-summary"),
-    create: (data: { name: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
+    create: (data: { name: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("POST", "/branches", data),
-    update: (id: number, data: { name?: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
+    update: (id: number, data: { name?: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("PATCH", `/branches/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/branches/${id}`),
   },
+  orders: {
   orders: {
     list: (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : "";
@@ -184,9 +171,6 @@ export const api = {
       request<{ messages: OrderMessage[]; total: number }>("GET", `/orders/${id}/messages`),
     retryMessage: (id: number, msgId: number) =>
       request<{ success: boolean; status: string; error?: string }>("POST", `/orders/${id}/messages/${msgId}/retry`),
-    move: (id: number, data: { toBranchId?: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
-      request<{ order: Order; movement: OrderMovement }>("POST", `/orders/${id}/move`, data),
-    movements: (id: number) => request<OrderMovement[]>("GET", `/orders/${id}/movements`),
   },
   discountApprovals: {
     list: (status?: "pending" | "approved" | "rejected") => {
@@ -710,33 +694,6 @@ export interface Order {
   items?: OrderItem[];
   priceAdjustments?: PriceAdjustment[];
   branchId?: number | null;
-  collectionBranchId?: number | null;
-  processingBranchId?: number | null;
-  returnBranchId?: number | null;
-  currentBranchId?: number | null;
-  collectionBranchName?: string | null;
-  collectionBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-  processingBranchName?: string | null;
-  processingBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-  returnBranchName?: string | null;
-  returnBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-  currentBranchName?: string | null;
-  currentBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-}
-
-export interface OrderMovement {
-  id: number;
-  orderId: number;
-  laundryId: number;
-  fromBranchId?: number | null;
-  fromBranchName?: string | null;
-  toBranchId: number;
-  toBranchName?: string | null;
-  movementType: "COLLECTION" | "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER";
-  reason?: string | null;
-  movedByType?: string | null;
-  movedByName?: string | null;
-  createdAt: string;
 }
 
 export interface OrderInput {
@@ -755,9 +712,6 @@ export interface OrderInput {
   discount?: number;
   discountReason?: string;
   branchId?: number;
-  collectionBranchId?: number;
-  processingBranchId?: number;
-  returnBranchId?: number;
 }
 
 export interface OrderUpdate {
