@@ -322,17 +322,13 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* ── Branch network ─────────────────────────────────── */}
+          {/* ── Branch overview ───────────────────────────────────── */}
           {branchNetwork.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
-                    Branch Network
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Where every active order is physically located right now.
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Branches</p>
+                  <p className="text-xs text-muted-foreground mt-1">Order workload by location. Branches do not change the order workflow.</p>
                 </div>
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/branches"><GitBranch className="h-3.5 w-3.5 mr-1.5" />Manage branches</Link>
@@ -345,37 +341,20 @@ export default function Dashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-sm">{branch.name}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{branch.type.toLowerCase()} branch</p>
+                          <p className="text-xs text-muted-foreground">{branch.counts.active} active order{branch.counts.active !== 1 ? "s" : ""}</p>
                         </div>
-                        <Badge variant="outline">{branch.counts.active} active</Badge>
+                        <Badge variant="outline">{branch.counts.ready} ready</Badge>
                       </div>
                       <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-                        {branch.counts.incoming > 0 && (
-                          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 px-3 py-2">
-                            <p className="text-muted-foreground">Incoming</p>
-                            <p className="font-bold text-blue-700 dark:text-blue-400">{branch.counts.incoming}</p>
-                          </div>
-                        )}
+                        <div className="rounded-lg bg-muted/50 px-3 py-2">
+                          <p className="text-muted-foreground">Pending</p>
+                          <p className="font-bold">{branch.counts.active - branch.counts.processing - branch.counts.ready}</p>
+                        </div>
                         <div className="rounded-lg bg-muted/50 px-3 py-2">
                           <p className="text-muted-foreground">Processing</p>
                           <p className="font-bold">{branch.counts.processing}</p>
                         </div>
-                        <div className="rounded-lg bg-muted/50 px-3 py-2">
-                          <p className="text-muted-foreground">Ready</p>
-                          <p className="font-bold">{branch.counts.ready}</p>
-                        </div>
-                        {branch.counts.awaitingTransfer > 0 && (
-                          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
-                            <p className="text-muted-foreground">Awaiting transfer</p>
-                            <p className="font-bold text-amber-700 dark:text-amber-400">{branch.counts.awaitingTransfer}</p>
-                          </div>
-                        )}
                       </div>
-                      {branch.type === "HYBRID" && branch.counts.local > 0 && (
-                        <p className="text-xs text-muted-foreground mt-3">
-                          {branch.counts.local} local order{branch.counts.local !== 1 ? "s" : ""} — collected and processed here.
-                        </p>
-                      )}
                     </CardContent>
                   </Card>
                 ))}
