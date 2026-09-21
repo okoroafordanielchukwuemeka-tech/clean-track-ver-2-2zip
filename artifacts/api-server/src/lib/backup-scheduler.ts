@@ -285,14 +285,29 @@ export function setOffSiteAdapter(adapter: OffSiteStorageAdapter): void {
 
 // ── Path helpers ───────────────────────────────────────────────────────────
 
+function firstExistingDir(candidates: string[]): string {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+
 function getBackupsDir(): string {
-  const p = path.join("/home/runner/workspace/backups");
-  return fs.existsSync(p) ? p : path.join(process.cwd(), "../../backups");
+  return firstExistingDir([
+    path.join(process.cwd(), "backups"),
+    path.join("/app", "backups"),
+    path.join("/home/runner/workspace/backups"),
+    path.join(process.cwd(), "../../backups"),
+  ]);
 }
 
 function getScriptsDir(): string {
-  const p = path.join("/home/runner/workspace/scripts");
-  return fs.existsSync(p) ? p : path.join(process.cwd(), "../../scripts");
+  return firstExistingDir([
+    path.join(process.cwd(), "scripts"),
+    path.join("/app", "scripts"),
+    path.join("/home/runner/workspace/scripts"),
+    path.join(process.cwd(), "../../scripts"),
+  ]);
 }
 
 // ── HMAC manifest signing (BACKUP_SECRET) ─────────────────────────────────
