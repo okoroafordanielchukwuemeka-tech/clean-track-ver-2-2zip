@@ -1124,7 +1124,7 @@ export function InboxTab({ initialConversationId }: { initialConversationId?: nu
 
   // Auto-select first conversation on desktop (initial load)
   useEffect(() => {
-    if (!selectedId && allConversations.length > 0 && window.innerWidth >= 768) {
+    if (!initialConversationId && !selectedId && allConversations.length > 0 && window.innerWidth >= 768) {
       setSelectedId(allConversations[0].id);
     }
   }, [allConversations.length]);
