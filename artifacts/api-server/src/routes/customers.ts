@@ -192,7 +192,7 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
     const allCustomers = await query.orderBy(desc(customers.lastActivityAt));
 
     const ordersConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) ordersConditions.push(eq(orders.currentBranchId, effectiveBranchId));
+    if (effectiveBranchId) ordersConditions.push(eq(orders.branchId, effectiveBranchId));
     const allOrders = await db.select().from(orders).where(and(...ordersConditions));
     const ordersByCustomer = new Map<number, typeof allOrders>();
     for (const o of allOrders) {
@@ -261,7 +261,7 @@ customersRouter.get("/:id", checkPermission("view:customers"), async (req: AuthR
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const custOrderConditions: any[] = [eq(orders.customerId, customerId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) custOrderConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId) custOrderConditions.push(eq(orders.branchId, workerBranchId));
     const customerOrders = await db.select().from(orders)
       .where(and(...custOrderConditions))
       .orderBy(desc(orders.createdAt));
