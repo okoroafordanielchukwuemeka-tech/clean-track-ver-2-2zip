@@ -134,7 +134,6 @@ function OrderSection({
 export default function WorkerStation() {
   usePageTitle("Worker Station");
   const { user } = useAuth();
-  const { activeBranchId } = useBranch();
   const qc = useQueryClient();
   const [, setTick] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
