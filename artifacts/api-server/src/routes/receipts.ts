@@ -151,8 +151,8 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     // is currently being handled. The legacy order.branchId is only the
     // collection branch and must not be used as the operational location.
     const [branch, cashierWorker] = await Promise.all([
-      order.currentBranchId
-        ? db.select().from(branches).where(eq(branches.id, order.currentBranchId)).then(r => r[0] ?? null)
+      order.branchId
+        ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
       payment.workerId
         ? db.select({ name: workers.name }).from(workers).where(eq(workers.id, payment.workerId)).then(r => r[0] ?? null)
