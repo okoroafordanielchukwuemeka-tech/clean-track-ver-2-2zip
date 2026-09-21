@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { alias } from "drizzle-orm/pg-core";
 import { db } from "@workspace/db";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
-import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, workerPermissions, orderMovements, notificationMessages, notificationEvents, notifications } from "@workspace/db/schema";
+import { orders, paymentRecords, orderItems, customers, laundries, services, priceAdjustments, discountApprovals, auditLog, branches, workers, workerPermissions, notificationMessages, notificationEvents, notifications } from "@workspace/db/schema";
 import { eq, desc, and, count, inArray, sql, isNull } from "drizzle-orm";
 import { computeOrderPricing } from "../lib/order-financials.js";
 import { z } from "zod";
@@ -20,11 +19,6 @@ export const ordersRouter = Router();
 function canViewAllBranches(req: AuthRequest): boolean {
   return req.auth?.type === "owner" || req.auth?.permissions?.canViewAllBranches === true;
 }
-
-const orderCollectionBranch = alias(branches, "order_collection_branch");
-const orderProcessingBranch = alias(branches, "order_processing_branch");
-const orderReturnBranch = alias(branches, "order_return_branch");
-const orderCurrentBranch = alias(branches, "order_current_branch");
 
 const DEFAULT_TURNAROUND: Record<string, number> = { express: 24, premium: 48, standard: 72 };
 
@@ -156,11 +150,7 @@ const orderInputSchema = z.object({
   extraChargeReason: z.string().optional(),
   discount: z.number().min(0).optional(),
   discountReason: z.string().optional(),
-  // Legacy compatibility: branchId means collection branch only.
   branchId: z.number().int().positive().optional(),
-  collectionBranchId: z.number().int().positive().optional(),
-  processingBranchId: z.number().int().positive().optional(),
-  returnBranchId: z.number().int().positive().optional(),
 });
 
 /**
@@ -180,14 +170,6 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   cancelled:      [],          // terminal
 };
 
-const orderMovementSchema = z.object({
-  // Guided handoffs may omit the target because CleanTrack already knows the
-  // order's assigned processing/return branch. Owners can still supply it for
-  // manual transfers.
-  toBranchId: z.number().int().positive().optional(),
-  movementType: z.enum(["PROCESSING_TRANSFER", "RETURN_TRANSFER", "MANUAL_TRANSFER"]),
-  reason: z.string().max(500).optional(),
-});
 const workerOrderUpdateSchema = z.object({
   status: z.enum(["pending", "processing", "ready", "partial_pickup", "completed", "cancelled"]).optional(),
   verifiedShirts: z.number().int().min(0).optional(),
