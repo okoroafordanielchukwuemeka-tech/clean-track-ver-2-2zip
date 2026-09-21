@@ -97,7 +97,7 @@ function OrderSection({
                         ? order.itemSummary ?? `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
                         : `${order.shirts}S / ${order.trousers}T`}
                     </span>
-                    {order.currentBranchName && <span className="text-xs text-muted-foreground">· {order.currentBranchName}</span>}
+                    {order.branchName && <span className="text-xs text-muted-foreground">· {order.branchName}</span>}
                     <CountdownTimer createdAt={order.createdAt} serviceType={order.serviceType} processingDueAt={order.processingDueAt} status={order.status} slaSettings={sla} />
                   </div>
 
@@ -270,7 +270,7 @@ export default function WorkerStation() {
               <div key={order.id} className="p-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-semibold text-sm">{order.customerName} <span className="font-mono text-xs text-muted-foreground ml-1">{order.orderId}</span></p>
-                  <p className="text-xs text-muted-foreground mt-1">{order.currentBranchName ?? "Branch"} · {order.status === "partial_pickup" ? "Partial pickup" : "Ready"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{order.branchName ?? "Branch"} · {order.status === "partial_pickup" ? "Partial pickup" : "Ready"}</p>
                 </div>
                 <Button variant="ghost" size="sm" asChild><Link to={`/orders/${order.id}`}><Eye className="h-3.5 w-3.5 mr-1" />Details</Link></Button>
               </div>
