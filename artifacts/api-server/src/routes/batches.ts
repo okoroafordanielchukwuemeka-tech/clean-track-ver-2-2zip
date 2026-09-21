@@ -188,8 +188,6 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
         if (batchRows.some(o => o.status !== "processing")) {
           throw new Error("BATCH_ORDER_STATE");
         }
-          throw new Error("BATCH_LOCATION_CHANGED");
-        }
 
         await tx.update(orders).set({ status: "ready", updatedAt: new Date() })
           .where(and(...conditions, eq(orders.status, "processing")));
