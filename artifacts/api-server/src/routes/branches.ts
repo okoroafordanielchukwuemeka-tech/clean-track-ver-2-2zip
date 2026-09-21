@@ -46,10 +46,6 @@ branchesRouter.post("/", requireOwner, requireOperational, requirePlanLimit("bra
         laundryId,
         name: data.name,
         address: data.address ?? null,
-        // Keep the legacy column normalized while the database migration
-        // retires the old capability values.
-        type: "HYBRID",
-        processingDestinationBranchId: null,
       })
       .returning();
 
@@ -80,8 +76,6 @@ branchesRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
       .set({
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.address !== undefined ? { address: data.address } : {}),
-        type: "HYBRID",
-        processingDestinationBranchId: null,
       })
       .where(and(eq(branches.id, id), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)))
       .returning();
@@ -168,15 +162,11 @@ branchesRouter.get("/network-summary", requireOwner, async (req: AuthRequest, re
         name: branch.name,
         // Legacy response fields are retained for old clients but no longer
         // drive any operational behavior.
-        type: "HYBRID",
-        processingDestinationBranchId: null,
         counts: {
           active: current.length,
-          incoming: 0,
-          local: current.length,
+          pending: current.filter(o => o.status === "pending").length,
           processing: current.filter(o => o.status === "processing").length,
           ready: current.filter(o => o.status === "ready").length,
-          awaitingTransfer: 0,
         },
       };
     }));

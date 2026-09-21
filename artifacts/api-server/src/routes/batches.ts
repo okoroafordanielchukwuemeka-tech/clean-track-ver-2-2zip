@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { batches, orders, workers, branches } from "@workspace/db/schema";
-import { eq, desc, and, inArray, isNotNull, isNull } from "drizzle-orm";
+import { batches, orders, workers } from "@workspace/db/schema";
+import { eq, desc, and, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
 import { checkPermission } from "../middleware/permissions.js";
@@ -46,7 +46,7 @@ async function getVisibleBatchIds(laundryId: number, workerBranchId: number | un
     .where(
       and(
         eq(orders.laundryId, laundryId),
-        eq(orders.currentBranchId, workerBranchId),
+        eq(orders.branchId, workerBranchId),
         isNotNull(orders.batchId)
       )
     );
@@ -100,7 +100,7 @@ batchesRouter.get("/:id", checkPermission("view:orders"), async (req: AuthReques
 
     // Workers: only include orders from their branch in the batch detail
     const orderConditions: any[] = [eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) orderConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
     const batchOrders = await db.select().from(orders).where(and(...orderConditions));
 
     res.json({ ...batch, orders: batchOrders });
@@ -123,15 +123,9 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     }
     const batch = await db.transaction(async (tx) => {
       const conditions:any[]=[inArray(orders.id,data.orderIds),eq(orders.laundryId,laundryId)];
-      if(workerBranchId) conditions.push(eq(orders.currentBranchId,workerBranchId));
-      const targets=await tx.select({ id: orders.id, status: orders.status, batchId: orders.batchId, processingBranchId: orders.processingBranchId, currentBranchId: orders.currentBranchId, isVerified: orders.isVerified }).from(orders).where(and(...conditions)).for("update");
+      if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
       if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
       if(targets.some(o => !o.isVerified)) throw new Error("BATCH_ORDER_NOT_VERIFIED");
-      if(targets.some(o => o.processingBranchId == null || o.currentBranchId !== o.processingBranchId)) throw new Error("BATCH_NOT_AT_PROCESSING_BRANCH");
-      const processingBranchIds = [...new Set(targets.map(o => o.processingBranchId!).filter(Boolean))];
-      if(processingBranchIds.length !== 1) throw new Error("BATCH_MIXED_PROCESSING_BRANCHES");
-      const [processingBranch] = await tx.select({ id: branches.id, type: branches.type }).from(branches).where(and(eq(branches.id, processingBranchIds[0]), eq(branches.laundryId, laundryId), isNull(branches.deletedAt)));
-      if(!processingBranch || !["PROCESSING", "HYBRID"].includes(processingBranch.type)) throw new Error("BATCH_PROCESSING_CAPABILITY");
       if(targets.some(o=>o.status==="cancelled"||o.status==="completed"||o.batchId!==null)) throw new Error("BATCH_ORDER_STATE");
       const placeholder=`GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const [inserted]=await tx.insert(batches).values({batchCode:placeholder,laundryId,orderCount:data.orderIds.length}).returning();
@@ -146,9 +140,6 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });
     if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });
     if (err instanceof Error && err.message === "BATCH_ORDER_NOT_VERIFIED") return res.status(409).json({ error: "Every order must be verified before it can enter a processing batch", code: "ORDER_NOT_VERIFIED" });
-    if (err instanceof Error && err.message === "BATCH_NOT_AT_PROCESSING_BRANCH") return res.status(409).json({ error: "One or more orders are not currently at their assigned processing branch" });
-    if (err instanceof Error && err.message === "BATCH_MIXED_PROCESSING_BRANCHES") return res.status(400).json({ error: "A batch cannot combine orders assigned to different processing branches" });
-    if (err instanceof Error && err.message === "BATCH_PROCESSING_CAPABILITY") return res.status(400).json({ error: "The processing branch cannot process orders" });
     res.status(500).json({ error: "Failed to create batch" });
   }
 });
@@ -179,13 +170,11 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
 
       if (data.status === "completed") {
         const conditions: any[] = [eq(orders.batchId, current.id), eq(orders.laundryId, laundryId)];
-        if (workerBranchId) conditions.push(eq(orders.currentBranchId, workerBranchId));
+        if (workerBranchId) conditions.push(eq(orders.branchId, workerBranchId));
 
         const batchRows = await tx.select({
           id: orders.id,
           status: orders.status,
-          currentBranchId: orders.currentBranchId,
-          processingBranchId: orders.processingBranchId,
         }).from(orders).where(and(...conditions)).for("update");
 
         // A worker must complete the whole visible batch, not silently leave
@@ -199,7 +188,6 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
         if (batchRows.some(o => o.status !== "processing")) {
           throw new Error("BATCH_ORDER_STATE");
         }
-        if (batchRows.some(o => o.processingBranchId == null || o.currentBranchId !== o.processingBranchId)) {
           throw new Error("BATCH_LOCATION_CHANGED");
         }
 
