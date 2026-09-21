@@ -4,10 +4,10 @@ import { api } from "@/lib/api";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useBranch } from "@/context/branch-context";
-import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard, Users, ArrowRight, WashingMachine } from "lucide-react";
+import { CheckCircle, Eye, AlertTriangle, Clock, Zap, ChevronDown, ChevronUp, Plus, ShieldOff, CreditCard } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PaymentStatusBadge } from "@/lib/order-status";
 import { toast } from "sonner";
@@ -20,182 +20,107 @@ import { enqueueOrderStatusUpdate } from "@/lib/queue-service";
 import { getIsOnline } from "@/lib/network-state";
 import type { WorkerPermissions } from "@/context/auth-context";
 
-type OrderWithUrgency = ReturnType<typeof useQuery<any[]>>["data"] extends Array<infer T> ? T & { _urgency: UrgencyInfo } : never;
+function NoPermissionsScreen({ name }: { name: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
+      <div className="rounded-full bg-muted p-6 mb-6"><ShieldOff className="h-12 w-12 text-muted-foreground" /></div>
+      <h1 className="text-2xl font-bold mb-2">No Permissions Assigned</h1>
+      <p className="text-muted-foreground mb-1 font-medium">Welcome, {name}</p>
+      <p className="text-muted-foreground max-w-sm mt-3">
+        Your account is active but your owner has not assigned any work permissions yet.
+      </p>
+    </div>
+  );
+}
 
-function UrgencySection({
+function OrderSection({
   title,
   orders,
   icon: Icon,
-  iconClass,
   headerClass,
-  onClaim,
-  onReceive,
-  onVerify,
-  onMarkReady,
-  onSendToProcessing,
-  onSendBack,
-  sla,
+  iconClass,
   userId,
+  onClaim,
+  onVerify,
+  onReady,
+  onOpenVerify,
+  sla,
   isPending,
-  defaultOpen = true,
 }: {
   title: string;
   orders: any[];
   icon: any;
-  iconClass: string;
   headerClass: string;
-  onClaim?: (id: number) => void;
-  onReceive?: (id: number) => void;
-  onVerify?: (id: number, o: any) => void;
-  onMarkReady?: (id: number) => void;
-  onSendToProcessing?: (id: number) => void;
-  onSendBack?: (id: number) => void;
-  sla: any;
+  iconClass: string;
   userId?: number;
+  onClaim: (id: number) => void;
+  onVerify: (order: any) => void;
+  onReady: (id: number) => void;
+  onOpenVerify: (order: any) => void;
+  sla: any;
   isPending: boolean;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (orders.length === 0) return null;
+  const [open, setOpen] = useState(true);
+  if (!orders.length) return null;
 
   return (
     <div className="rounded-xl border overflow-hidden">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className={cn("w-full flex items-center justify-between px-4 py-3 font-semibold text-sm transition-colors", headerClass)}
-      >
-        <div className="flex items-center gap-2">
-          <Icon className={cn("h-4 w-4", iconClass)} />
-          <span>{title}</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-black/10 text-xs font-bold">{orders.length}</span>
-        </div>
+      <button onClick={() => setOpen(v => !v)} className={cn("w-full flex items-center justify-between px-4 py-3 font-semibold text-sm", headerClass)}>
+        <span className="flex items-center gap-2"><Icon className={cn("h-4 w-4", iconClass)} />{title}<span className="px-1.5 py-0.5 rounded-full bg-black/10 text-xs">{orders.length}</span></span>
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </button>
 
       {open && (
         <div className="divide-y">
-          {orders.map((order) => {
+          {orders.map(order => {
             const urg = order._urgency as UrgencyInfo;
+            const assignedToMe = order.assignedWorkerId === userId;
+            const unassigned = !order.assignedWorkerId;
+            const canVerify = assignedToMe && !order.isVerified && ["pending", "processing"].includes(order.status);
+            const canReady = assignedToMe && order.status === "processing" && order.isVerified;
+
             return (
               <div key={order.id} className={cn("p-4 flex flex-col sm:flex-row sm:items-center gap-3", urg.rowClass)}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{order.customerName}</span>
                     <span className="font-mono text-xs text-muted-foreground">{order.orderId}</span>
-                    <Badge variant={order.serviceType === "express" ? "warning" : order.serviceType === "premium" ? "info" : "outline"} className="text-xs capitalize">
-                      {order.serviceType}
-                    </Badge>
-                    {order.paymentStatus && order.paymentStatus !== "paid" && (
-                      <PaymentStatusBadge status={order.paymentStatus} />
-                    )}
-                    {order.isVerified && (
-                      <Badge variant="success" className="text-xs">Verified</Badge>
-                    )}
+                    <Badge variant={order.serviceType === "express" ? "warning" : order.serviceType === "premium" ? "info" : "outline"} className="text-xs capitalize">{order.serviceType}</Badge>
+                    {order.paymentStatus && order.paymentStatus !== "paid" && <PaymentStatusBadge status={order.paymentStatus} />}
+                    {order.isVerified && <Badge variant="success" className="text-xs">Verified</Badge>}
+                    {order.assignedWorkerId && !assignedToMe && <Badge variant="outline" className="text-xs">Assigned</Badge>}
                   </div>
+
                   <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="text-sm text-muted-foreground">
                       {(order.itemCount ?? 0) > 0
-                        ? order.itemSummary
-                          ? order.itemSummary
-                          : `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
+                        ? order.itemSummary ?? `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
                         : `${order.shirts}S / ${order.trousers}T`}
                     </span>
-                    <CountdownTimer
-                      createdAt={order.createdAt}
-                      serviceType={order.serviceType}
-                      processingDueAt={order.processingDueAt}
-                      status={order.status}
-                      slaSettings={sla}
-                    />
+                    {order.currentBranchName && <span className="text-xs text-muted-foreground">· {order.currentBranchName}</span>}
+                    <CountdownTimer createdAt={order.createdAt} serviceType={order.serviceType} processingDueAt={order.processingDueAt} status={order.status} slaSettings={sla} />
                   </div>
-                  {order.additionalNotes && (
-                    <p className="text-xs text-muted-foreground mt-1 italic">"{order.additionalNotes}"</p>
-                  )}
 
-                  <div className="mt-2 rounded-lg border bg-background/70 px-3 py-2 text-xs space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-semibold text-foreground">Route:</span>
-                      <span>{order.collectionBranchName ?? "Collection branch"}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>{order.processingBranchName ?? "Processing branch"}</span>
-                      {order.returnBranchName && order.returnBranchName !== order.processingBranchName && (
-                        <>
-                          <span className="text-muted-foreground">→</span>
-                          <span>{order.returnBranchName}</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
-                      <span><strong className="text-foreground">Currently at:</strong> {order.currentBranchName ?? "this branch"}</span>
-                      {order.currentBranchId === order.processingBranchId &&
-                        order.collectionBranchId !== order.processingBranchId &&
-                        order.collectionBranchName && (
-                          <span className="text-blue-600 dark:text-blue-400">
-                            <strong>Incoming from:</strong> {order.collectionBranchName}
-                          </span>
-                        )}
-                      {order.currentBranchId === order.returnBranchId &&
-                        order.returnBranchId !== order.processingBranchId &&
-                        order.status === "ready" &&
-                        order.processingBranchName && (
-                          <span className="text-green-600 dark:text-green-400">
-                            <strong>Returned from:</strong> {order.processingBranchName}
-                          </span>
-                        )}
-                      {order.currentBranchId === order.collectionBranchId &&
-                        order.collectionBranchId !== order.processingBranchId &&
-                        order.processingBranchName && (
-                          <span className="text-amber-600 dark:text-amber-400">
-                            <strong>Next:</strong> Send to {order.processingBranchName}
-                          </span>
-                        )}
-                    </div>
-                  </div>
+                  {order.additionalNotes && <p className="text-xs text-muted-foreground mt-1 italic">"{order.additionalNotes}"</p>}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                   <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5" asChild>
-                    <Link to={`/orders/${order.id}`}>
-                      <Eye className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline text-xs">Open</span>
-                    </Link>
+                    <Link to={`/orders/${order.id}`}><Eye className="h-3.5 w-3.5" /><span className="hidden sm:inline text-xs">Details</span></Link>
                   </Button>
-                  {order.status === "pending" && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && onReceive && !order.assignedWorkerId && (
-                    <Button size="sm" variant="outline" onClick={() => onReceive(order.id)} disabled={isPending}>
-                      Receive
+
+                  {unassigned && ["pending", "processing"].includes(order.status) && (
+                    <Button size="sm" variant="outline" onClick={() => onClaim(order.id)} disabled={isPending}>Claim</Button>
+                  )}
+
+                  {canVerify && (
+                    <Button size="sm" variant="outline" onClick={() => onOpenVerify(order)} disabled={isPending}>
+                      <CheckCircle className="h-3.5 w-3.5 mr-1" />Verify
                     </Button>
                   )}
-                  {["pending", "processing"].includes(order.status) && onClaim && order.currentBranchId === order.processingBranchId && !order.assignedWorkerId && (
-                    <Button size="sm" variant="outline" onClick={() => onClaim(order.id)} disabled={isPending}>
-                      Receive
-                    </Button>
-                  )}
-                  {["pending", "processing"].includes(order.status) &&
-                    !order.isVerified &&
-                    onVerify &&
-                    order.currentBranchId === order.processingBranchId &&
-                    order.assignedWorkerId === userId && (
-                    <Button size="sm" variant="outline" onClick={() => onVerify(order.id, order)} disabled={isPending}>
-                      <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                      {order.collectionBranchId !== order.processingBranchId ? "Verify & Accept" : "Verify"}
-                    </Button>
-                  )}
-                  {order.status === "processing" && order.isVerified && onMarkReady && order.currentBranchId === order.processingBranchId && (
-                    <Button size="sm" onClick={() => onMarkReady(order.id)} disabled={isPending}>
-                      Mark Ready
-                    </Button>
-                  )}
-                  {["pending", "processing"].includes(order.status) && onSendToProcessing && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && order.assignedWorkerId === userId && (
-                    <Button size="sm" onClick={() => onSendToProcessing(order.id)} disabled={isPending}>
-                      <ArrowRight className="h-3.5 w-3.5 mr-1" />
-                      Send to {order.processingBranchName ?? "Processing"}
-                    </Button>
-                  )}
-                  {order.status === "ready" && onSendBack && order.currentBranchId === order.processingBranchId && order.returnBranchId !== order.processingBranchId && (
-                    <Button size="sm" onClick={() => onSendBack(order.id)} disabled={isPending}>
-                      <ArrowRight className="h-3.5 w-3.5 mr-1" />
-                      Send Back
-                    </Button>
+
+                  {canReady && (
+                    <Button size="sm" onClick={() => onReady(order.id)} disabled={isPending}>Mark Ready</Button>
                   )}
                 </div>
               </div>
@@ -203,24 +128,6 @@ function UrgencySection({
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function NoPermissionsScreen({ name }: { name: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
-      <div className="rounded-full bg-muted p-6 mb-6">
-        <ShieldOff className="h-12 w-12 text-muted-foreground" />
-      </div>
-      <h1 className="text-2xl font-bold mb-2">No Permissions Assigned</h1>
-      <p className="text-muted-foreground mb-1 font-medium">Welcome, {name}</p>
-      <p className="text-muted-foreground max-w-sm mt-3">
-        Your account is active but your manager has not assigned any work permissions yet.
-      </p>
-      <p className="text-muted-foreground max-w-sm mt-2 text-sm">
-        Please contact your laundry owner to have your permissions configured before you can access the Worker Station.
-      </p>
     </div>
   );
 }
@@ -234,15 +141,9 @@ export default function WorkerStation() {
   const [showCreate, setShowCreate] = useState(false);
   const [verificationOrder, setVerificationOrder] = useState<any | null>(null);
 
-  // Show onboarding screen if worker has no permissions assigned
   const hasAnyPermission =
     user?.type === "owner" ||
-    (user?.permissions != null &&
-      Object.values(user.permissions as WorkerPermissions).some(Boolean));
-
-  if (user?.type === "worker" && !hasAnyPermission) {
-    return <NoPermissionsScreen name={user.name} />;
-  }
+    (user?.permissions != null && Object.values(user.permissions as WorkerPermissions).some(Boolean));
 
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 60_000);
@@ -250,8 +151,8 @@ export default function WorkerStation() {
   }, []);
 
   const { data: rawOrders = [] } = useQuery({
-    queryKey: ["orders", activeBranchId],
-    queryFn: () => api.orders.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
+    queryKey: ["orders"],
+    queryFn: () => api.orders.list(),
     refetchInterval: 30_000,
   });
 
@@ -266,122 +167,57 @@ export default function WorkerStation() {
       qc.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Order updated");
     },
-    onError: (e: Error) => toast.error("Could not update order — " + (e.message || "please try again.")),
+    onError: (e: Error) => toast.error("Could not update order — " + e.message),
   });
 
-  const moveMutation = useMutation({
-    mutationFn: ({ id, movementType }: { id: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" }) =>
-      api.orders.move(id, { movementType }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Branch handoff recorded");
-    },
-    onError: (e: Error) => toast.error("Could not complete branch handoff — " + (e.message || "please try again.")),
-  });
+  const orders = rawOrders.map(o => ({
+    ...o,
+    _urgency: getUrgency(computeDueAt(o.createdAt, o.serviceType, sla, o.processingDueAt)),
+  }));
 
-  const orders = rawOrders.map(o => {
-    const dueAt = computeDueAt(o.createdAt, o.serviceType, sla, o.processingDueAt);
-    return { ...o, _urgency: getUrgency(dueAt) };
-  });
-
-  const activeOrders = orders.filter(o => !["completed", "ready"].includes(o.status));
-
+  const activeOrders = orders.filter(o => ["pending", "processing"].includes(o.status));
   const myOrders = activeOrders.filter(o => o.assignedWorkerId === user?.id);
-  // Orders physically at a processing-capable branch are deliberately
-  // separated into two workstreams:
-  // 1) incoming orders whose collection happened at another branch;
-  // 2) local orders collected and processed at the same Hybrid branch.
-  // This prevents a Hybrid branch from mixing incoming Pickup work with its
-  // own local laundry workload.
-  const incomingQueue = orders.filter(o =>
-    ["pending", "processing"].includes(o.status) &&
-    !o.assignedWorkerId &&
-    o.currentBranchId === o.processingBranchId &&
-    o.collectionBranchId !== o.processingBranchId
-  );
-  const localProcessingQueue = orders.filter(o =>
-    ["pending", "processing"].includes(o.status) &&
-    !o.assignedWorkerId &&
-    o.currentBranchId === o.processingBranchId &&
-    o.collectionBranchId === o.processingBranchId
-  );
-  const sharedQueue = [...incomingQueue, ...localProcessingQueue];
-  const handoffQueue = orders.filter(o =>
-    ["pending", "processing"].includes(o.status) &&
-    o.currentBranchId === o.collectionBranchId &&
-    o.collectionBranchId !== o.processingBranchId
-  );
-  const readyOrders = orders.filter(o => o.status === "ready");
+  const availableOrders = activeOrders.filter(o => !o.assignedWorkerId);
+  const readyOrders = orders.filter(o => ["ready", "partial_pickup"].includes(o.status));
 
-  const sortByUrgency = (arr: typeof orders) =>
-    [...arr].sort((a, b) => a._urgency.hoursRemaining - b._urgency.hoursRemaining);
-
-  const partialPickupOrders = orders.filter(o => o.status === "partial_pickup");
-  const pickupOrders = sortByUrgency([...readyOrders, ...partialPickupOrders]);
+  const sortByUrgency = (items: any[]) =>
+    [...items].sort((a, b) => a._urgency.hoursRemaining - b._urgency.hoursRemaining);
 
   const myOverdue = sortByUrgency(myOrders.filter(o => o._urgency.level === "overdue"));
   const myUrgent = sortByUrgency(myOrders.filter(o => o._urgency.level === "urgent"));
-  const myAttention = sortByUrgency(myOrders.filter(o => o._urgency.level === "attention"));
-  const mySafe = sortByUrgency(myOrders.filter(o => o._urgency.level === "safe"));
+  const myNormal = sortByUrgency(myOrders.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
 
-  const incomingOverdue = sortByUrgency(incomingQueue.filter(o => o._urgency.level === "overdue"));
-  const incomingUrgent = sortByUrgency(incomingQueue.filter(o => o._urgency.level === "urgent"));
-  const incomingNormal = sortByUrgency(incomingQueue.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
-
-  const localQueueOverdue = sortByUrgency(localProcessingQueue.filter(o => o._urgency.level === "overdue"));
-  const localQueueUrgent = sortByUrgency(localProcessingQueue.filter(o => o._urgency.level === "urgent"));
-  const localQueueNormal = sortByUrgency(localProcessingQueue.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
+  const availableOverdue = sortByUrgency(availableOrders.filter(o => o._urgency.level === "overdue"));
+  const availableUrgent = sortByUrgency(availableOrders.filter(o => o._urgency.level === "urgent"));
+  const availableNormal = sortByUrgency(availableOrders.filter(o => !["overdue", "urgent"].includes(o._urgency.level)));
 
   const applyOrderUpdate = async (id: number, changes: Record<string, unknown>) => {
     if (getIsOnline()) {
       updateMutation.mutate({ id, data: changes });
-    } else {
-      try {
-        await enqueueOrderStatusUpdate(`srv-${id}`, id, changes);
-        qc.setQueryData(
-          ["orders", activeBranchId],
-          (old: any[]) => old?.map(o => o.id === id ? { ...o, ...changes } : o) ?? []
-        );
-        toast.info("Saved offline — will sync when reconnected");
-      } catch (err) {
-        toast.error("Failed to save offline");
-        console.error("[Worker] enqueueOrderStatusUpdate failed:", err);
-      }
-    }
-  };
-
-  const claimOrder = (id: number) => {
-    const order = orders.find(o => o.id === id);
-    if (!order) return;
-
-    // Receiving custody and starting processing are separate steps.
-    // At a processing branch, the worker first claims/receives the physical
-    // order; verification is what moves it into the processing state.
-    applyOrderUpdate(id, { assignedWorkerId: user?.id });
-  };
-
-  const moveOrder = (id: number, movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER") => {
-    if (!getIsOnline()) {
-      toast.error("Branch handoffs require a connection. Reconnect before sending this order.");
       return;
     }
-    moveMutation.mutate({ id, movementType });
+    try {
+      await enqueueOrderStatusUpdate(`srv-${id}`, id, changes);
+      qc.setQueryData(["orders"], (old: any[]) => old?.map(o => o.id === id ? { ...o, ...changes } : o) ?? []);
+      toast.info("Saved offline — will sync when reconnected");
+    } catch {
+      toast.error("Failed to save offline");
+    }
   };
 
-  const markVerified = (id: number, o: any) => {
-    setVerificationOrder(o);
-  };
+  const claimOrder = (id: number) => applyOrderUpdate(id, { assignedWorkerId: user?.id });
 
-  const markReady = (id: number) =>
-    applyOrderUpdate(id, { status: "ready" });
+  const markReady = (id: number) => applyOrderUpdate(id, { status: "ready" });
 
-  const overdueTotal = orders.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
-  const urgentTotal = orders.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;
-  const unpaidActiveTotal = orders.filter(o =>
-    (o.paymentStatus === "unpaid" || o.paymentStatus === "partial") && !["completed"].includes(o.status)
-  ).length;
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayCount = orders.filter(o => new Date(o.createdAt) >= todayStart).length;
+  const overdueTotal = orders.filter(o => o._urgency.level === "overdue" && !["completed"].includes(o.status)).length;
+  const urgentTotal = orders.filter(o => o._urgency.level === "urgent" && !["completed"].includes(o.status)).length;
+  const unpaidTotal = orders.filter(o => ["unpaid", "partial"].includes(o.paymentStatus) && !["completed"].includes(o.status)).length;
+
+  if (user?.type === "worker" && !hasAnyPermission) {
+    return <NoPermissionsScreen name={user.name} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -389,367 +225,71 @@ export default function WorkerStation() {
         <div>
           <h1 className="text-2xl font-bold">Worker Station</h1>
           <p className="text-sm text-muted-foreground">
-            {todayCount > 0 && <span>{todayCount} order{todayCount !== 1 ? "s" : ""} today · </span>}
-            <strong>{user?.name}</strong>
-            {user?.role && <span className="ml-1 capitalize">({user.role})</span>}
+            {todayCount} order{todayCount !== 1 ? "s" : ""} today · <strong>{user?.name}</strong>
+            {user?.permissions?.canViewAllBranches && <span className="ml-1">· Cross-branch access enabled</span>}
           </p>
         </div>
         {(user?.type === "owner" || user?.permissions?.canRecordPickups) && (
-          <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0">
-            <Plus className="h-4 w-4" />
-            New Order
-          </Button>
+          <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0"><Plus className="h-4 w-4" />New Order</Button>
         )}
       </div>
 
-      {/* 6-tile workload overview */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-        <Card className={cn(overdueTotal > 0 ? "border-red-300 dark:border-red-900" : "")}>
-          <CardContent className="p-3 text-center">
-            <p className={cn("text-xl font-bold", overdueTotal > 0 ? "text-red-600" : "text-muted-foreground")}>{overdueTotal}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
-              {overdueTotal > 0 && <AlertTriangle className="h-3 w-3 text-red-500" />}
-              Overdue
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={cn(urgentTotal > 0 ? "border-orange-200 dark:border-orange-900" : "")}>
-          <CardContent className="p-3 text-center">
-            <p className={cn("text-xl font-bold", urgentTotal > 0 ? "text-orange-500" : "text-muted-foreground")}>{urgentTotal}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
-              {urgentTotal > 0 && <Zap className="h-3 w-3 text-orange-400" />}
-              Urgent
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className={cn("text-xl font-bold", sharedQueue.length > 0 ? "text-blue-600" : "text-muted-foreground")}>{sharedQueue.length}</p>
-            <p className="text-xs text-muted-foreground">Processing Queue</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className={cn("text-xl font-bold", handoffQueue.length > 0 ? "text-amber-600" : "text-muted-foreground")}>{handoffQueue.length}</p>
-            <p className="text-xs text-muted-foreground">To Send</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xl font-bold text-green-600">{readyOrders.length}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
-              <CheckCircle className="h-3 w-3 text-green-500" />
-              Ready
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={cn(partialPickupOrders.length > 0 ? "border-orange-200 dark:border-orange-900" : "")}>
-          <CardContent className="p-3 text-center">
-            <p className={cn("text-xl font-bold", partialPickupOrders.length > 0 ? "text-orange-500" : "text-muted-foreground")}>{partialPickupOrders.length}</p>
-            <p className="text-xs text-muted-foreground">Partial</p>
-          </CardContent>
-        </Card>
-        <Card className={cn(unpaidActiveTotal > 0 ? "border-red-200 dark:border-red-900" : "")}>
-          <CardContent className="p-3 text-center">
-            <p className={cn("text-xl font-bold", unpaidActiveTotal > 0 ? "text-red-600" : "text-muted-foreground")}>{unpaidActiveTotal}</p>
-            <p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5">
-              {unpaidActiveTotal > 0 && <CreditCard className="h-3 w-3 text-red-500" />}
-              Unpaid
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <Card><CardContent className="p-3 text-center"><p className={cn("text-xl font-bold", overdueTotal ? "text-red-600" : "text-muted-foreground")}>{overdueTotal}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-1"><AlertTriangle className="h-3 w-3" />Overdue</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className={cn("text-xl font-bold", urgentTotal ? "text-orange-500" : "text-muted-foreground")}>{urgentTotal}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-1"><Zap className="h-3 w-3" />Urgent</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xl font-bold">{myOrders.length}</p><p className="text-xs text-muted-foreground">My Active</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xl font-bold">{readyOrders.length}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-1"><CheckCircle className="h-3 w-3" />Ready</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className={cn("text-xl font-bold", unpaidTotal ? "text-red-600" : "text-muted-foreground")}>{unpaidTotal}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-1"><CreditCard className="h-3 w-3" />Unpaid</p></CardContent></Card>
       </div>
 
-      {overdueTotal > 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-xl border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/20">
-          <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-red-800 dark:text-red-400 text-sm">
-              {overdueTotal} order{overdueTotal > 1 ? "s" : ""} past deadline
-            </p>
-            <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">
-              These orders have exceeded the operational SLA. Prioritise them immediately.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        <h2 className="font-semibold text-base flex items-center gap-2">
-          <Clock className="h-4 w-4 text-primary" />
-          My Orders ({myOrders.length})
-        </h2>
-
-        {myOrders.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground text-sm">
-              No orders assigned to you. Use the branch queues below to receive, verify, process, and hand off orders.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            <UrgencySection
-              title="Overdue"
-              orders={myOverdue}
-              icon={AlertTriangle}
-              iconClass="text-red-700"
-              headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
-              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
-              sla={sla}
-              userId={user?.id}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-            />
-            <UrgencySection
-              title="Urgent — act now"
-              orders={myUrgent}
-              icon={Zap}
-              iconClass="text-red-500"
-              headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
-              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
-              sla={sla}
-              userId={user?.id}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-            />
-            <UrgencySection
-              title="Attention"
-              orders={myAttention}
-              icon={AlertTriangle}
-              iconClass="text-amber-500"
-              headerClass="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50"
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
-              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
-              sla={sla}
-              userId={user?.id}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-            />
-            <UrgencySection
-              title="On Track"
-              orders={mySafe}
-              icon={CheckCircle}
-              iconClass="text-green-600"
-              headerClass="bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/30"
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              sla={sla}
-              userId={user?.id}
-              isPending={updateMutation.isPending}
-              defaultOpen={myOverdue.length + myUrgent.length + myAttention.length === 0}
-            />
-          </div>
-        )}
+      <div className="space-y-3">
+        <h2 className="font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />My Orders ({myOrders.length})</h2>
+        <OrderSection title="Overdue" orders={myOverdue} icon={AlertTriangle} iconClass="text-red-700" headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400" userId={user?.id} onClaim={claimOrder} onVerify={() => {}} onReady={markReady} onOpenVerify={setVerificationOrder} sla={sla} isPending={updateMutation.isPending} />
+        <OrderSection title="Urgent" orders={myUrgent} icon={Zap} iconClass="text-red-500" headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" userId={user?.id} onClaim={claimOrder} onVerify={() => {}} onReady={markReady} onOpenVerify={setVerificationOrder} sla={sla} isPending={updateMutation.isPending} />
+        <OrderSection title="On Track" orders={myNormal} icon={CheckCircle} iconClass="text-green-600" headerClass="bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400" userId={user?.id} onClaim={claimOrder} onVerify={() => {}} onReady={markReady} onOpenVerify={setVerificationOrder} sla={sla} isPending={updateMutation.isPending} />
+        {myOrders.length === 0 && <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No orders assigned to you yet.</CardContent></Card>}
       </div>
 
-      {handoffQueue.length > 0 && (
+      {availableOrders.length > 0 && (
         <div className="space-y-3">
-          <h2 className="font-semibold text-base flex items-center gap-2">
-            <ArrowRight className="h-4 w-4 text-amber-600" />
-            Branch Handoffs ({handoffQueue.length})
-          </h2>
-          <div className="space-y-2">
-            <UrgencySection
-              title="Waiting to be sent"
-              orders={sortByUrgency(handoffQueue)}
-              icon={ArrowRight}
-              iconClass="text-amber-600"
-              headerClass="bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50"
-              onReceive={(id) => applyOrderUpdate(id, { assignedWorkerId: user?.id })}
-              onVerify={markVerified}
-              onSendToProcessing={(id) => moveOrder(id, "PROCESSING_TRANSFER")}
-              sla={sla}
-              userId={user?.id}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-            />
-          </div>
-        </div>
-      )}
-
-      {incomingQueue.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold text-base flex items-center gap-2">
-            <ArrowRight className="h-4 w-4 text-blue-600" />
-            Incoming from Other Branches ({incomingQueue.length})
-          </h2>
+          <h2 className="font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Available Orders ({availableOrders.length})</h2>
           <p className="text-xs text-muted-foreground">
-            These clothes were collected at another branch. Receive them here, verify the physical count, then they enter this branch's processing work.
+            These are unassigned orders you are allowed to work on. There is no processing-branch or handoff queue — claim an order and work it through its normal status flow.
           </p>
-          <div className="space-y-2">
-            <UrgencySection
-              title="Overdue — receive immediately"
-              orders={incomingOverdue}
-              icon={AlertTriangle}
-              iconClass="text-red-700"
-              headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
-              onClaim={claimOrder}
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
-              sla={sla}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-              userId={user?.id}
-            />
-            <UrgencySection
-              title="Urgent"
-              orders={incomingUrgent}
-              icon={Zap}
-              iconClass="text-red-500"
-              headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
-              onClaim={claimOrder}
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
-              sla={sla}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-              userId={user?.id}
-            />
-            <UrgencySection
-              title="Waiting to be received"
-              orders={incomingNormal}
-              icon={Clock}
-              iconClass="text-blue-600"
-              headerClass="bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/30"
-              onClaim={claimOrder}
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              onSendBack={(id) => moveOrder(id, "RETURN_TRANSFER")}
-              sla={sla}
-              isPending={updateMutation.isPending || moveMutation.isPending}
-              userId={user?.id}
-            />
-          </div>
+          <OrderSection title="Overdue" orders={availableOverdue} icon={AlertTriangle} iconClass="text-red-700" headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400" userId={user?.id} onClaim={claimOrder} onVerify={() => {}} onReady={markReady} onOpenVerify={setVerificationOrder} sla={sla} isPending={updateMutation.isPending} />
+          <OrderSection title="Urgent" orders={availableUrgent} icon={Zap} iconClass="text-red-500" headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" userId={user?.id} onClaim={claimOrder} onVerify={() => {}} onReady={markReady} onOpenVerify={setVerificationOrder} sla={sla} isPending={updateMutation.isPending} />
+          <OrderSection title="Queue" orders={availableNormal} icon={Clock} iconClass="text-muted-foreground" headerClass="bg-muted/50 text-foreground" userId={user?.id} onClaim={claimOrder} onVerify={() => {}} onReady={markReady} onOpenVerify={setVerificationOrder} sla={sla} isPending={updateMutation.isPending} />
         </div>
       )}
 
-      {localProcessingQueue.length > 0 && (
+      {readyOrders.length > 0 && (
         <div className="space-y-3">
-          <h2 className="font-semibold text-base flex items-center gap-2">
-            <WashingMachine className="h-4 w-4 text-primary" />
-            Local Processing Queue ({localProcessingQueue.length})
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            These orders were collected at this Hybrid branch and are not incoming from another branch.
-          </p>
-          <div className="space-y-2">
-            <UrgencySection
-              title="Overdue — claim immediately"
-              orders={localQueueOverdue}
-              icon={AlertTriangle}
-              iconClass="text-red-700"
-              headerClass="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-950/60"
-              onClaim={claimOrder}
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              sla={sla}
-              isPending={updateMutation.isPending}
-            />
-            <UrgencySection
-              title="Urgent"
-              orders={localQueueUrgent}
-              icon={Zap}
-              iconClass="text-red-500"
-              headerClass="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50"
-              onClaim={claimOrder}
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              sla={sla}
-              isPending={updateMutation.isPending}
-            />
-            <UrgencySection
-              title="Queue"
-              orders={localQueueNormal}
-              icon={Clock}
-              iconClass="text-muted-foreground"
-              headerClass="bg-muted/50 hover:bg-muted/80 text-foreground"
-              onClaim={claimOrder}
-              onVerify={markVerified}
-              onMarkReady={markReady}
-              sla={sla}
-              isPending={updateMutation.isPending}
-            />
+          <h2 className="font-semibold flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-600" />For Pickup ({readyOrders.length})</h2>
+          <div className="rounded-xl border divide-y">
+            {readyOrders.map(order => (
+              <div key={order.id} className="p-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm">{order.customerName} <span className="font-mono text-xs text-muted-foreground ml-1">{order.orderId}</span></p>
+                  <p className="text-xs text-muted-foreground mt-1">{order.currentBranchName ?? "Branch"} · {order.status === "partial_pickup" ? "Partial pickup" : "Ready"}</p>
+                </div>
+                <Button variant="ghost" size="sm" asChild><Link to={`/orders/${order.id}`}><Eye className="h-3.5 w-3.5 mr-1" />Details</Link></Button>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {pickupOrders.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold text-base flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            For Pickup ({pickupOrders.length})
-            {partialPickupOrders.length > 0 && (
-              <span className="text-xs font-normal text-muted-foreground">
-                · {readyOrders.length} ready, {partialPickupOrders.length} partial
-              </span>
-            )}
-          </h2>
-          <div className="rounded-xl border overflow-hidden">
-            <div className="divide-y">
-              {pickupOrders.map(order => {
-                const isPaid = order.paymentStatus === "paid";
-                const isUnpaid = order.paymentStatus === "unpaid";
-                const isPartialPickup = order.status === "partial_pickup";
-                return (
-                  <div key={order.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm">{order.customerName}</span>
-                        <span className="font-mono text-xs text-muted-foreground">{order.orderId}</span>
-                        {isPartialPickup
-                          ? <Badge variant="warning" className="text-xs">Partial Pickup</Badge>
-                          : <Badge variant="success" className="text-xs">Ready</Badge>}
-                        {isPaid
-                          ? <Badge variant="success" className="text-xs">Paid</Badge>
-                          : isUnpaid
-                          ? <Badge variant="destructive" className="text-xs">Unpaid</Badge>
-                          : <Badge variant="warning" className="text-xs">Partial Pay</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {(order.itemCount ?? 0) > 0
-                          ? `${order.itemCount} item${order.itemCount !== 1 ? "s" : ""}`
-                          : `${order.shirts}S / ${order.trousers}T`} · {order.serviceType}
-                        {!isPaid && order.amountPaid != null && order.price != null && (
-                          <span className="ml-1 text-red-500 font-medium">
-                            · ₦{Math.max(0, Number(order.price) - Number(order.amountPaid)).toLocaleString()} outstanding
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5 shrink-0" asChild>
-                      <Link to={`/orders/${order.id}`}>
-                        <Eye className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline text-xs">Open</span>
-                      </Link>
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {myOrders.length === 0 && sharedQueue.length === 0 && pickupOrders.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">All clear</p>
-            <p className="text-sm mt-1">No active orders in queue</p>
-          </CardContent>
-        </Card>
+      {orders.length === 0 && (
+        <Card><CardContent className="py-12 text-center text-muted-foreground"><CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" /><p className="font-medium">No orders available</p><p className="text-sm mt-1">Orders you are allowed to access will appear here.</p></CardContent></Card>
       )}
 
       <CreateOrderDialog open={showCreate} onOpenChange={setShowCreate} />
+
       <VerifyOrderDialog
         order={verificationOrder}
         open={!!verificationOrder}
-        onOpenChange={(open) => { if (!open) setVerificationOrder(null); }}
-        onConfirm={(data) => {
+        onOpenChange={open => { if (!open) setVerificationOrder(null); }}
+        onConfirm={data => {
           const next = { ...data, ...(verificationOrder?.status === "pending" ? { status: "processing" } : {}) };
           applyOrderUpdate(verificationOrder.id, next);
           setVerificationOrder(null);

@@ -7,6 +7,10 @@ import { computeOrderPricing } from "../lib/order-financials.js";
 
 export const receiptsRouter = Router();
 
+function canViewAllBranches(req: AuthRequest): boolean {
+  return req.auth?.type === "owner" || req.auth?.permissions?.canViewAllBranches === true;
+}
+
 // Owner-only: full receipt list with financial totals.
 // Workers are blocked here; they access receipts via GET /customers/:id/receipts or GET /orders/:id/receipt.
 receiptsRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
@@ -128,7 +132,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     if (!payment) return res.status(404).json({ error: "Receipt not found" });
 
     const orderConditions: any[] = [eq(orders.id, payment.orderId)];
-    if (workerBranchId) orderConditions.push(eq(orders.currentBranchId, workerBranchId));
+    if (workerBranchId && !canViewAllBranches(req)) orderConditions.push(eq(orders.branchId, workerBranchId));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 
 export interface WorkerPermissions {
   canViewOrders: boolean;
+  canViewAllBranches: boolean;
   canProcessOrders: boolean;
   canRecordPayments: boolean;
   canRecordPickups: boolean;

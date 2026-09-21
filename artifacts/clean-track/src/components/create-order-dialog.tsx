@@ -7,6 +7,7 @@ import { localDb, type LocalOrder, type LocalOrderItem } from "@/lib/local-db";
 import { enqueueOrderCreate } from "@/lib/queue-service";
 import { getIsOnline } from "@/lib/network-state";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +41,8 @@ function getUnitPrice(svc: Service, serviceType: "standard" | "express" | "premi
 export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrderDialogProps) {
   const qc = useQueryClient();
   const { activeBranchId } = useBranch();
-  const { laundryId } = useAuth();
+  const { laundryId, isOwner, user } = useAuth();
+  const [orderBranchId, setOrderBranchId] = useState<number | null>(activeBranchId);
   const [step, setStep] = useState(0);
 
   // ── Customer step state ────────────────────────────────────────────────────
@@ -87,10 +89,21 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   });
 
   const { data: services = [] } = useQuery({
-    queryKey: ["services", activeBranchId],
-    queryFn: () => api.services.list(activeBranchId ? { branchId: String(activeBranchId) } : undefined),
+    queryKey: ["services"],
+    queryFn: () => api.services.list(),
     enabled: open,
   });
+
+  const { data: branchList = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: () => api.branches.list(),
+    enabled: open && isOwner,
+  });
+
+  useEffect(() => {
+    if (activeBranchId != null) setOrderBranchId(activeBranchId);
+    else if (isOwner && branchList.length > 0 && !orderBranchId) setOrderBranchId(branchList[0].id);
+  }, [activeBranchId, isOwner, branchList, orderBranchId]);
 
   const { data: sla } = useQuery({
     queryKey: ["settings", "sla"],
@@ -217,6 +230,14 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   // ── Mutation ───────────────────────────────────────────────────────────────
   const createMutation = useMutation<Order | null, Error, void>({
     mutationFn: async () => {
+      const requestedBranchId = user?.type === "worker"
+        ? undefined
+        : (orderBranchId ?? activeBranchId ?? branchList[0]?.id);
+
+      if (isOwner && !requestedBranchId) {
+        throw new Error("Create a branch first, then select where this order was collected.");
+      }
+
       const itemsArray = Array.from(selectedItems.entries())
         .filter(([, qty]) => qty > 0)
         .map(([serviceId, quantity]) => ({ serviceId, quantity }));
@@ -270,7 +291,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
           localId,
           serverId: null,
           laundryId: laundryId,
-          branchId: activeBranchId,
+          branchId: requestedBranchId ?? null,
           customerLocalId: resolvedCustomerLocalId,
           customerId: selectedCustomer?.id ?? null,
           orderId: `OFL-${localId.slice(0, 8).toUpperCase()}`,
@@ -307,7 +328,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
             discountReason: effectiveDiscount > 0 ? discountReason : null,
             extraCharge: extraCharge > 0 ? extraCharge : null,
             extraChargeReason: extraCharge > 0 ? extraChargeReason : null,
-            branchId: activeBranchId,
+            branchId: requestedBranchId,
             laundryId,
           },
           dependsOn
@@ -329,7 +350,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
         discountReason: effectiveDiscount > 0 ? discountReason : undefined,
         extraCharge: extraCharge > 0 ? extraCharge : undefined,
         extraChargeReason: extraCharge > 0 ? extraChargeReason : undefined,
-        branchId: activeBranchId ?? undefined,
+        branchId: requestedBranchId,
       });
     },
     onSuccess: (result) => {
@@ -403,6 +424,19 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
       <DialogContent className="max-w-xl max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle>New Order</DialogTitle>
+          {isOwner && branchList.length > 0 && (
+            <div className="mt-3 flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground shrink-0">Branch</Label>
+              <Select value={orderBranchId ? String(orderBranchId) : ""} onValueChange={v => setOrderBranchId(Number(v))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choose branch" /></SelectTrigger>
+                <SelectContent>
+                  {branchList.map(branch => (
+                    <SelectItem key={branch.id} value={String(branch.id)}>{branch.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Step indicator */}
           <div className="flex items-center gap-1 mt-3">

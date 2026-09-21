@@ -139,8 +139,6 @@ export const api = {
     networkSummary: () => request<Array<{
       id: number;
       name: string;
-      type: import("@/context/branch-context").BranchType;
-      processingDestinationBranchId?: number | null;
       counts: {
         active: number;
         incoming: number;
@@ -150,9 +148,9 @@ export const api = {
         awaitingTransfer: number;
       };
     }>>("GET", "/branches/network-summary"),
-    create: (data: { name: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
+    create: (data: { name: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("POST", "/branches", data),
-    update: (id: number, data: { name?: string; address?: string; type?: import("@/context/branch-context").BranchType; processingDestinationBranchId?: number | null }) =>
+    update: (id: number, data: { name?: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("PATCH", `/branches/${id}`, data),
     delete: (id: number) => request<void>("DELETE", `/branches/${id}`),
   },
@@ -178,18 +176,16 @@ export const api = {
     priceAdjustments: (id: number) => request<PriceAdjustment[]>("GET", `/orders/${id}/price-adjustments`),
     addPriceAdjustment: (id: number, data: PriceAdjustmentInput) => request<PriceAdjustment>("POST", `/orders/${id}/price-adjustments`, data),
     auditLog: (id: number) => request<AuditLogEntry[]>("GET", `/orders/${id}/audit-log`),
+    movements: (id: number) => request<OrderMovement[]>("GET", `/orders/${id}/movements`),
     sendNotification: (id: number, type: "ready" | "reminder") =>
       request<{ queued: boolean; message: string }>("POST", `/orders/${id}/send-notification`, { type }),
     getMessages: (id: number) =>
       request<{ messages: OrderMessage[]; total: number }>("GET", `/orders/${id}/messages`),
     retryMessage: (id: number, msgId: number) =>
       request<{ success: boolean; status: string; error?: string }>("POST", `/orders/${id}/messages/${msgId}/retry`),
-    move: (id: number, data: { toBranchId?: number; movementType: "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER"; reason?: string }) =>
-      request<{ order: Order; movement: OrderMovement }>("POST", `/orders/${id}/move`, data),
-    movements: (id: number) => request<OrderMovement[]>("GET", `/orders/${id}/movements`),
   },
   discountApprovals: {
-    list: (status?: "pending" | "approved" | "rejected") => {
+list: (status?: "pending" | "approved" | "rejected") => {
       const qs = status ? `?status=${status}` : "";
       return request<DiscountApproval[]>("GET", `/discount-approvals${qs}`);
     },
@@ -1320,6 +1316,7 @@ export interface WorkerPermission {
   canRecordPayments: boolean;
   canRecordPickups: boolean;
   canViewOrders: boolean;
+  canViewAllBranches: boolean;
   canProcessOrders: boolean;
   canAssignOrders: boolean;
   canViewWhatsApp: boolean;

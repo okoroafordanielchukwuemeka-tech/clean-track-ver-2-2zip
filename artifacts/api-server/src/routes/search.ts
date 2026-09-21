@@ -71,7 +71,7 @@ searchRouter.get("/", async (req: AuthRequest, res) => {
       ilike(orders.customerName, pattern)
     );
     if (orderTextMatch) orderConds.push(orderTextMatch);
-    if (effectiveBranchId) orderConds.push(eq(orders.currentBranchId, effectiveBranchId));
+    if (effectiveBranchId) orderConds.push(eq(orders.branchId, effectiveBranchId));
 
     const orderRows = await db
       .select({

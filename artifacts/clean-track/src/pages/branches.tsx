@@ -5,210 +5,210 @@ import { usePageTitle } from "@/hooks/use-page-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { GitBranch, MapPin, Pencil, Plus, Trash2, Users, Calendar } from "lucide-react";
 import { toast } from "sonner";
-import { GitBranch, Plus, Pencil, Trash2, MapPin, Users, Calendar, Link2 } from "lucide-react";
-import type { BranchType } from "@/context/branch-context";
-
-const BRANCH_TYPES: Array<{ value: BranchType; label: string; description: string }> = [
-  { value: "HYBRID", label: "Hybrid", description: "Collect, process, and return clothes" },
-  { value: "PROCESSING", label: "Processing", description: "Receive and process clothes; no customer handoff" },
-  { value: "PICKUP", label: "Pickup", description: "Collect and return clothes; no processing" },
-];
-
-const typeBadgeClass: Record<BranchType, string> = {
-  HYBRID: "text-emerald-700 border-emerald-300",
-  PROCESSING: "text-blue-700 border-blue-300",
-  PICKUP: "text-amber-700 border-amber-300",
-};
 
 export default function BranchesPage() {
   usePageTitle("Branches");
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<{ id: number } | null>(null);
-  const [form, setForm] = useState<{ name: string; address: string; type: BranchType; processingDestinationBranchId: number | null }>({ name: "", address: "", type: "HYBRID", processingDestinationBranchId: null });
+  const [form, setForm] = useState({ name: "", address: "" });
 
-  const { data: branches = [], isLoading } = useQuery({ queryKey: ["branches"], queryFn: () => api.branches.list() });
-  const { data: workers = [] } = useQuery({ queryKey: ["workers"], queryFn: () => api.workers.list() });
+  const { data: branches = [], isLoading } = useQuery({
+    queryKey: ["branches"],
+    queryFn: () => api.branches.list(),
+  });
+  const { data: workers = [] } = useQuery({
+    queryKey: ["workers"],
+    queryFn: () => api.workers.list(),
+  });
 
-  const workerCountByBranch = workers.reduce<Record<number, number>>((acc, w) => {
-    if (w.branchId != null) acc[w.branchId] = (acc[w.branchId] ?? 0) + 1;
+  const workerCountByBranch = workers.reduce<Record<number, number>>((acc, worker) => {
+    if (worker.branchId != null) acc[worker.branchId] = (acc[worker.branchId] ?? 0) + 1;
     return acc;
   }, {});
-  const activeWorkerCountByBranch = workers.reduce<Record<number, number>>((acc, w) => {
-    if (w.branchId != null && w.isActive) acc[w.branchId] = (acc[w.branchId] ?? 0) + 1;
-    return acc;
-  }, {});
-  const branchToDelete = branches.find(b => b.id === deleteId);
 
-  const createMut = useMutation({
-    mutationFn: (data: { name: string; address?: string; type: BranchType; processingDestinationBranchId?: number | null }) => api.branches.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); toast.success("Branch created successfully"); setDialogOpen(false); },
-    onError: (e: Error) => toast.error("Could not create branch — " + (e.message || "please try again.")),
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; address?: string }) => api.branches.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      toast.success("Branch created");
+      closeDialog();
+    },
+    onError: (e: Error) => toast.error("Could not create branch — " + e.message),
   });
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { name: string; address?: string; type: BranchType; processingDestinationBranchId?: number | null } }) => api.branches.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); toast.success("Branch details updated"); setEditing(null); setDialogOpen(false); },
-    onError: (e: Error) => toast.error("Could not update branch — " + (e.message || "please try again.")),
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; address?: string } }) => api.branches.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      toast.success("Branch updated");
+      closeDialog();
+    },
+    onError: (e: Error) => toast.error("Could not update branch — " + e.message),
   });
-  const deleteMut = useMutation({
+
+  const deleteMutation = useMutation({
     mutationFn: (id: number) => api.branches.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["branches"] }); toast.success("Branch deleted"); setDeleteId(null); },
-    onError: (e: Error) => toast.error("Could not delete branch — " + (e.message || "please try again.")),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branches"] });
+      toast.success("Branch deleted");
+      setDeleteId(null);
+    },
+    onError: (e: Error) => toast.error("Could not delete branch — " + e.message),
   });
 
-  const handleOpen = (branch?: typeof branches[0]) => {
-    if (branch) {
-      setEditing({ id: branch.id });
-      setForm({ name: branch.name, address: branch.address ?? "", type: branch.type ?? "HYBRID", processingDestinationBranchId: branch.processingDestinationBranchId ?? null });
-    } else {
-      setEditing(null);
-      setForm({ name: "", address: "", type: "HYBRID", processingDestinationBranchId: null });
-    }
-    setDialogOpen(true);
-  };
+  function closeDialog() {
+    setDialogOpen(false);
+    setEditingId(null);
+    setForm({ name: "", address: "" });
+  }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  function openCreate() {
+    setEditingId(null);
+    setForm({ name: "", address: "" });
+    setDialogOpen(true);
+  }
+
+  function openEdit(branch: any) {
+    setEditingId(branch.id);
+    setForm({ name: branch.name, address: branch.address ?? "" });
+    setDialogOpen(true);
+  }
+
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    const data = {
-      name: form.name.trim(),
-      address: form.address.trim() || undefined,
-      type: form.type,
-      processingDestinationBranchId: form.type === "PICKUP" ? form.processingDestinationBranchId : null,
-    };
-    if (form.type === "PICKUP" && form.processingDestinationBranchId == null) {
-      toast.error("Choose where this Pickup branch sends clothes for processing.");
+    const name = form.name.trim();
+    if (!name) {
+      toast.error("Branch name is required");
       return;
     }
-    if (!data.name) return;
-    if (editing) updateMut.mutate({ id: editing.id, data });
-    else createMut.mutate(data);
-  };
+    const data = { name, address: form.address.trim() || undefined };
+    if (editingId != null) updateMutation.mutate({ id: editingId, data });
+    else createMutation.mutate(data);
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Branches</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{branches.length} branch{branches.length !== 1 ? "es" : ""} · Manage your laundry locations and capabilities</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {branches.length} branch{branches.length !== 1 ? "es" : ""} · Organise orders and workers by location
+          </p>
         </div>
-        <Button onClick={() => handleOpen()}><Plus className="h-4 w-4 mr-2" />Add Branch</Button>
+        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Branch</Button>
       </div>
 
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 text-sm">
+          <p className="font-semibold">Branches are locations, not workflow types.</p>
+          <p className="text-muted-foreground mt-1">
+            Every branch can create and process orders. Orders stay associated with the branch where they were created.
+            If a worker needs to work on orders from another branch, the owner can enable
+            <strong className="text-foreground"> View orders from all branches</strong> in Worker Permissions.
+          </p>
+        </CardContent>
+      </Card>
+
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <div key={i} className="border rounded-lg p-5 bg-card h-32 animate-pulse bg-muted" />)}</div>
-      ) : branches.length === 0 ? (
-        <div className="border rounded-lg p-8 text-center text-muted-foreground">
-          <GitBranch className="h-8 w-8 mx-auto mb-2 opacity-40" /><p className="font-medium">No branches yet</p><p className="text-sm mt-1">Create your first branch to start organising by location.</p>
-          <Button className="mt-4" onClick={() => handleOpen()}><Plus className="h-4 w-4 mr-2" />Add Branch</Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map(i => <div key={i} className="h-36 rounded-xl border bg-muted/30 animate-pulse" />)}
         </div>
+      ) : branches.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <GitBranch className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">No branches yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Create your first location.</p>
+            <Button className="mt-4" onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Add Branch</Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {branches.map(branch => {
-            const total = workerCountByBranch[branch.id] ?? 0;
-            const active = activeWorkerCountByBranch[branch.id] ?? 0;
-            const type = branch.type ?? "HYBRID";
-            const typeInfo = BRANCH_TYPES.find(t => t.value === type)!;
-            const processingDestination = branch.processingDestinationBranchId != null
-              ? branches.find(b => b.id === branch.processingDestinationBranchId)
-              : null;
-            return (
-              <div key={branch.id} className="border rounded-xl p-5 bg-card space-y-4 hover:shadow-sm transition-shadow">
-                <div className="flex items-start justify-between gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {branches.map(branch => (
+            <Card key={branch.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"><GitBranch className="h-5 w-5 text-primary" /></div>
-                    <div className="min-w-0"><p className="font-semibold truncate">{branch.name}</p>{branch.address ? <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{branch.address}</span></div> : <p className="text-xs text-muted-foreground mt-0.5">No address set</p>}</div>
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <GitBranch className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base truncate">{branch.name}</CardTitle>
+                      {branch.address
+                        ? <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1"><MapPin className="h-3 w-3" /><span className="truncate">{branch.address}</span></div>
+                        : <p className="text-xs text-muted-foreground mt-1">No address set</p>}
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpen(branch)}><Pencil className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(branch.id)}><Trash2 className="h-3.5 w-3.5" /></Button></div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(branch)} aria-label="Edit branch"><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(branch.id)} aria-label="Delete branch"><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
                 </div>
-                <div><Badge variant="outline" className={typeBadgeClass[type]}>{typeInfo.label} branch</Badge><p className="text-xs text-muted-foreground mt-1">{typeInfo.description}</p>{type === "PICKUP" && <p className="text-xs mt-1"><span className="text-muted-foreground">Processes at:</span> <span className="font-medium">{processingDestination?.name ?? "Not configured"}</span></p>}</div>
+              </CardHeader>
+              <CardContent className="pt-0">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-muted/50 rounded-lg p-2.5 text-center"><p className="text-lg font-bold">{total}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5"><Users className="h-3 w-3" /> Workers</p>{total > 0 && active < total && <p className="text-xs text-amber-600 mt-0.5">{active} active</p>}{total > 0 && active === total && <p className="text-xs text-green-600 mt-0.5">All active</p>}</div>
-                  <div className="bg-muted/50 rounded-lg p-2.5 text-center"><p className="text-lg font-bold text-muted-foreground">{new Date(branch.createdAt).toLocaleDateString("en-NG", { month: "short", year: "numeric" })}</p><p className="text-xs text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5"><Calendar className="h-3 w-3" /> Opened</p></div>
+                  <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                    <p className="text-lg font-bold">{workerCountByBranch[branch.id] ?? 0}</p>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1"><Users className="h-3 w-3" />Workers</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                    <p className="text-sm font-semibold">{new Date(branch.createdAt).toLocaleDateString("en-NG", { month: "short", year: "numeric" })}</p>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-0.5"><Calendar className="h-3 w-3" />Opened</p>
+                  </div>
                 </div>
-                {total === 0 && <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">No workers assigned</Badge>}
-              </div>
-            );
-          })}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={open => open ? setDialogOpen(true) : closeDialog()}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? "Edit Branch" : "Add Branch"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5"><Label htmlFor="name">Branch Name *</Label><Input id="name" placeholder="e.g. Ikeja Location" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></div>
-            <div className="space-y-1.5"><Label htmlFor="address">Address <span className="text-muted-foreground text-xs">(optional)</span></Label><Input id="address" placeholder="e.g. 12 Allen Avenue, Ikeja" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Branch Type *</Label><Select value={form.type} onValueChange={value => setForm(f => ({ ...f, type: value as BranchType, processingDestinationBranchId: value === "PICKUP" ? f.processingDestinationBranchId : null }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{BRANCH_TYPES.map(t => <SelectItem key={t.value} value={t.value}><div><div>{t.label}</div><div className="text-xs text-muted-foreground">{t.description}</div></div></SelectItem>)}</SelectContent></Select></div>
-            {form.type === "PICKUP" && (() => {
-              const processingBranches = branches.filter(
-                b => b.id !== editing?.id && (b.type === "HYBRID" || b.type === "PROCESSING")
-              );
-              return (
-                <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <Link2 className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Link this Pickup branch</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Choose the branch that will receive and process clothes from this location.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Send clothes to *</Label>
-                    <Select
-                      value={form.processingDestinationBranchId != null ? String(form.processingDestinationBranchId) : ""}
-                      onValueChange={value => setForm(f => ({ ...f, processingDestinationBranchId: Number(value) }))}
-                    >
-                      <SelectTrigger className="bg-background">
-                        <SelectValue placeholder="Select a Hybrid or Processing branch" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {processingBranches.map(b => (
-                          <SelectItem key={b.id} value={String(b.id)}>
-                            <div className="py-0.5">
-                              <div className="font-medium">{b.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {b.type === "HYBRID"
-                                  ? "Hybrid — receives, processes & returns clothes"
-                                  : "Processing — receives & processes clothes"}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {processingBranches.length === 0 ? (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-                        <strong>No processing destination available yet.</strong> Create a Hybrid or Processing branch first, then come back and link this Pickup branch to it.
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        You can link each Pickup branch to a different Hybrid or Processing branch. CleanTrack will use this link automatically for every order collected here.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-            <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground"><strong className="text-foreground">Routing:</strong> Hybrid branches process their own orders. Pickup branches send orders to the processing destination you choose above, then receive the finished clothes back. Processing branches only receive work from other branches.</div>
-            <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={createMut.isPending || updateMut.isPending}>{editing ? "Save Changes" : "Create Branch"}</Button></DialogFooter>
+          <form onSubmit={submit}>
+            <DialogHeader><DialogTitle>{editingId != null ? "Edit Branch" : "Add Branch"}</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="branch-name">Branch Name *</Label>
+                <Input id="branch-name" placeholder="e.g. Ikeja Branch" value={form.name} onChange={e => setForm(v => ({ ...v, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="branch-address">Address</Label>
+                <Input id="branch-address" placeholder="Optional location" value={form.address} onChange={e => setForm(v => ({ ...v, address: e.target.value }))} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                {createMutation.isPending || updateMutation.isPending ? "Saving…" : editingId != null ? "Save Changes" : "Create Branch"}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Branch?</AlertDialogTitle><AlertDialogDescription>This will remove <strong>{branchToDelete?.name}</strong>. Completed history remains intact. Active orders must be moved or completed first, and active workers must be reassigned before the branch can be removed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteId !== null && deleteMut.mutate(deleteId)}>Delete Branch</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+      <AlertDialog open={deleteId !== null} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Branch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes <strong>{branches.find(b => b.id === deleteId)?.name}</strong>.
+              Active orders and workers must be completed/reassigned first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteId !== null && deleteMutation.mutate(deleteId)} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? "Deleting…" : "Delete Branch"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
     </div>
   );

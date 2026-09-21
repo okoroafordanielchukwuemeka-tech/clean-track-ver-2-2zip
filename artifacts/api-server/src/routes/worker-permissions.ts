@@ -14,6 +14,7 @@ const permissionsSchema = z.object({
   canRecordPayments: z.boolean(),
   canRecordPickups: z.boolean(),
   canViewOrders: z.boolean(),
+  canViewAllBranches: z.boolean(),
   canProcessOrders: z.boolean(),
   canAssignOrders: z.boolean(),
 });
