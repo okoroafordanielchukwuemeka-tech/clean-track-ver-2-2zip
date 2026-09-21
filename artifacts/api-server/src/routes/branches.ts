@@ -124,6 +124,27 @@ branchesRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
     // this physical location is capable of doing today. We block unsafe capability
     // changes while active orders still depend on the old capability.
     if (data.type && data.type !== existing.type) {
+      // A Processing/Hybrid branch may be the configured processing destination
+      // for Pickup branches. Do not let an owner change it into a Pickup branch
+      // while those routes still depend on its processing capability.
+      const nextTypeCanProcess = data.type === "PROCESSING" || data.type === "HYBRID";
+      if (!nextTypeCanProcess) {
+        const [dependentPickups] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(branches)
+          .where(and(
+            eq(branches.laundryId, laundryId),
+            eq(branches.processingDestinationBranchId, id),
+            eq(branches.type, "PICKUP"),
+            isNull(branches.deletedAt),
+          ));
+        if (Number(dependentPickups?.count ?? 0) > 0) {
+          return res.status(409).json({
+            error: "Cannot remove processing capability while Pickup branches still route clothes here. Reconfigure those Pickup branches first.",
+          });
+        }
+      }
+
       const [usage] = await db
         .select({
           collection: sql<number>`count(*) filter (where collection_branch_id = ${id} and status not in ('completed','cancelled'))`,
