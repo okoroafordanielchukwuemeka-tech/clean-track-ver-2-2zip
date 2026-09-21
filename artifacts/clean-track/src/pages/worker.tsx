@@ -394,10 +394,12 @@ export default function WorkerStation() {
             {user?.role && <span className="ml-1 capitalize">({user.role})</span>}
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0">
-          <Plus className="h-4 w-4" />
-          New Order
-        </Button>
+        {(user?.type === "owner" || user?.permissions?.canRecordPickups) && (
+          <Button onClick={() => setShowCreate(true)} className="gap-2 shrink-0">
+            <Plus className="h-4 w-4" />
+            New Order
+          </Button>
+        )}
       </div>
 
       {/* 6-tile workload overview */}
