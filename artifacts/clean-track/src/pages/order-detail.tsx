@@ -761,7 +761,6 @@ export default function OrderDetail() {
             order.currentBranchId === order.collectionBranchId &&
             order.collectionBranchId !== order.processingBranchId &&
             !!order.processingBranchId &&
-            order.isVerified === true &&
             ["pending", "processing"].includes(order.status);
 
           const canSendBack =

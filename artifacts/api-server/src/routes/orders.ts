@@ -665,7 +665,9 @@ ordersRouter.post("/:id/move", async (req: AuthRequest, res) => {
         if (!["PROCESSING", "HYBRID"].includes(target.type)) return { badCapability: "processing" } as const;
         if (order.currentBranchId !== order.collectionBranchId) return { badSource: "processing" } as const;
         if (!["pending", "processing"].includes(order.status)) return { badStatus: "processing" } as const;
-        if (!order.isVerified) return { notVerified: true } as const;
+        // Collection verification belongs to the receiving processing branch.
+        // The Pickup branch records the customer's intake count when the order is
+        // created; it must not be blocked from handing the physical order off.
 
         // Owners may repair a legacy/broken processing route while moving the
         // order. Workers never choose destinations. A route repair is only

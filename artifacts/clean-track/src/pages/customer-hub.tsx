@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { UpgradeRequired } from "@/components/upgrade-required";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -918,7 +919,9 @@ export default function CustomerHubPage() {
   usePageTitle("Customer Hub");
   const qc = useQueryClient();
   const { isOwner } = useAuth();
-  const [tab, setTab] = useState(() => isOwner ? "overview" : "inbox");
+  const [searchParams] = useSearchParams();
+  const initialConversationId = Number(searchParams.get("conversationId")) || null;
+  const [tab, setTab] = useState(() => initialConversationId ? "inbox" : (isOwner ? "overview" : "inbox"));
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<NotifTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<NotifTemplate | null>(null);
@@ -1061,7 +1064,7 @@ export default function CustomerHubPage() {
 
         {/* Inbox — all users with canViewWhatsApp */}
         <TabsContent value="inbox" className="mt-4">
-          <InboxTab />
+          <InboxTab initialConversationId={initialConversationId} />
         </TabsContent>
 
         {/* Templates */}

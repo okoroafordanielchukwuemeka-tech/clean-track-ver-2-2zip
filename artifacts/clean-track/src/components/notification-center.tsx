@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Notification } from "@/lib/api";
 import { Bell, Check, CheckCheck, Trash2, AlertTriangle, Info, Zap, CheckCircle2 } from "lucide-react";
@@ -37,10 +38,12 @@ function NotificationItem({
   n,
   onRead,
   onDelete,
+  onOpen,
 }: {
   n: Notification;
   onRead: (id: number) => void;
   onDelete: (id: number) => void;
+  onOpen: (notification: Notification) => void;
 }) {
   const cfg = SEVERITY_CONFIG[n.severity];
   const Icon = cfg.icon;
@@ -49,9 +52,17 @@ function NotificationItem({
       className={cn(
         "flex gap-3 p-3 rounded-lg border text-sm transition-colors",
         n.isRead ? "bg-background border-border opacity-70" : cn(cfg.bg, "border"),
-        !n.isRead && "cursor-pointer"
+        "cursor-pointer hover:bg-muted/30"
       )}
-      onClick={() => !n.isRead && onRead(n.id)}
+      onClick={() => onOpen(n)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(n);
+        }
+      }}
     >
       <div className={cn("mt-0.5 h-4 w-4 shrink-0", cfg.iconClass)}>
         <Icon className="h-4 w-4" />
@@ -82,6 +93,7 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: countData } = useQuery({
     queryKey: ["notifications", "count"],
@@ -129,6 +141,19 @@ export function NotificationCenter() {
     if (open) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
+
+  const handleOpen = (notification: Notification) => {
+    if (!notification.isRead) markRead.mutate(notification.id);
+    if (notification.relatedOrderId) {
+      setOpen(false);
+      navigate(`/orders/${notification.relatedOrderId}`);
+      return;
+    }
+    if (notification.relatedConversationId) {
+      setOpen(false);
+      navigate(`/customer-hub?conversationId=${notification.relatedConversationId}`);
+    }
+  };
 
   const unreadCount = countData?.count ?? 0;
   const unread = notifications.filter(n => !n.isRead);
@@ -191,6 +216,7 @@ export function NotificationCenter() {
                         n={n}
                         onRead={id => markRead.mutate(id)}
                         onDelete={id => deleteNotif.mutate(id)}
+                        onOpen={handleOpen}
                       />
                     ))}
                   </>

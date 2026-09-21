@@ -1043,7 +1043,7 @@ function MessagesPanel({
 
 // ── Main InboxTab ─────────────────────────────────────────────────────────────
 
-export function InboxTab() {
+export function InboxTab({ initialConversationId }: { initialConversationId?: number | null } = {}) {
   const { isOwner, hasPermission } = useAuth();
   const canView   = isOwner || hasPermission("canViewWhatsApp");
   const canReply  = isOwner || hasPermission("canReplyWhatsApp");
@@ -1113,6 +1113,14 @@ export function InboxTab() {
     if (selectedId) qc.invalidateQueries({ queryKey: ["conversation-detail", selectedId] });
     setIsFetchingRefresh(false);
   };
+
+  // Notifications can deep-link directly to a conversation. Wait for the list
+  // to load, select the requested conversation, and open the message panel on mobile.
+  useEffect(() => {
+    if (!initialConversationId || !allConversations.some(c => c.id === initialConversationId)) return;
+    setSelectedId(initialConversationId);
+    setMobilePanel("messages");
+  }, [initialConversationId, allConversations]);
 
   // Auto-select first conversation on desktop (initial load)
   useEffect(() => {

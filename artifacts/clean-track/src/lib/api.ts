@@ -1182,6 +1182,7 @@ export interface Notification {
   severity: NotificationSeverity;
   isRead: boolean;
   relatedOrderId?: number | null;
+  relatedConversationId?: number | null;
   createdAt: string;
 }
 

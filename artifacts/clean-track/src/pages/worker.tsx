@@ -172,18 +172,11 @@ function UrgencySection({
                   {["pending", "processing"].includes(order.status) &&
                     !order.isVerified &&
                     onVerify &&
-                    (
-                      order.currentBranchId === order.collectionBranchId ||
-                      (
-                        order.currentBranchId === order.processingBranchId &&
-                        order.assignedWorkerId === userId
-                      )
-                    ) && (
+                    order.currentBranchId === order.processingBranchId &&
+                    order.assignedWorkerId === userId && (
                     <Button size="sm" variant="outline" onClick={() => onVerify(order.id, order)} disabled={isPending}>
                       <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                      {order.currentBranchId === order.processingBranchId && order.collectionBranchId !== order.processingBranchId
-                        ? "Verify & Accept"
-                        : "Verify"}
+                      {order.collectionBranchId !== order.processingBranchId ? "Verify & Accept" : "Verify"}
                     </Button>
                   )}
                   {order.status === "processing" && order.isVerified && onMarkReady && order.currentBranchId === order.processingBranchId && (
@@ -191,7 +184,7 @@ function UrgencySection({
                       Mark Ready
                     </Button>
                   )}
-                  {["pending", "processing"].includes(order.status) && order.isVerified && onSendToProcessing && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && order.assignedWorkerId === userId && (
+                  {["pending", "processing"].includes(order.status) && onSendToProcessing && order.currentBranchId === order.collectionBranchId && order.collectionBranchId !== order.processingBranchId && order.assignedWorkerId === userId && (
                     <Button size="sm" onClick={() => onSendToProcessing(order.id)} disabled={isPending}>
                       <ArrowRight className="h-3.5 w-3.5 mr-1" />
                       Send to {order.processingBranchName ?? "Processing"}
