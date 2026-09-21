@@ -71,8 +71,7 @@ pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (r
     const [items, allPayments, orderBranch, processedByWorker] = await Promise.all([
       db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
       db.select().from(paymentRecords).where(eq(paymentRecords.orderId, order.id)),
-      // Pickup receipts must identify the branch physically handling the
-      // pickup, not the legacy collection-only order.branchId.
+      // Pickup receipts identify the branch responsible for the order.
       order.branchId
         ? db.select().from(branches).where(eq(branches.id, order.branchId)).then(r => r[0] ?? null)
         : Promise.resolve(null),
@@ -167,7 +166,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
      * always based on the true current state.
      */
     const txResult = await db.transaction(async (tx) => {
-      const branchClause = workerBranchId && !false
+      const branchClause = workerBranchId
         ? sql` AND branch_id = ${workerBranchId}`
         : sql``;
 
@@ -332,7 +331,6 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
 
     // Handle validation error signals returned from inside the transaction
     if ("notFound" in txResult) return res.status(404).json({ error: "Order not found" });
-    if ("invalidReturnBranch" in txResult) return res.status(409).json({ error: "Order is not currently at a pickup-capable return branch" });
     if ("badStatus" in txResult) return res.status(400).json({ error: "Order must be ready or partially picked up" });
     if ("itemTrackingRequired" in txResult) return res.status(400).json({ error: "This order uses item-based tracking. Provide items[] to record pickup." });
     if ("itemNotFound" in txResult) return res.status(400).json({ error: `Order item ${txResult.itemNotFound} not found on this order` });
