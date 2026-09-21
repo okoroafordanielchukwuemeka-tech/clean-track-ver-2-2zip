@@ -139,14 +139,7 @@ export const api = {
     networkSummary: () => request<Array<{
       id: number;
       name: string;
-      counts: {
-        active: number;
-        incoming: number;
-        local: number;
-        processing: number;
-        ready: number;
-        awaitingTransfer: number;
-      };
+      counts: { active: number; pending: number; processing: number; ready: number };
     }>>("GET", "/branches/network-summary"),
     create: (data: { name: string; address?: string }) =>
       request<import("@/context/branch-context").Branch>("POST", "/branches", data),
@@ -176,7 +169,7 @@ export const api = {
     priceAdjustments: (id: number) => request<PriceAdjustment[]>("GET", `/orders/${id}/price-adjustments`),
     addPriceAdjustment: (id: number, data: PriceAdjustmentInput) => request<PriceAdjustment>("POST", `/orders/${id}/price-adjustments`, data),
     auditLog: (id: number) => request<AuditLogEntry[]>("GET", `/orders/${id}/audit-log`),
-    movements: (id: number) => request<OrderMovement[]>("GET", `/orders/${id}/movements`),
+
     sendNotification: (id: number, type: "ready" | "reminder") =>
       request<{ queued: boolean; message: string }>("POST", `/orders/${id}/send-notification`, { type }),
     getMessages: (id: number) =>
@@ -706,33 +699,8 @@ export interface Order {
   items?: OrderItem[];
   priceAdjustments?: PriceAdjustment[];
   branchId?: number | null;
-  collectionBranchId?: number | null;
-  processingBranchId?: number | null;
-  returnBranchId?: number | null;
-  currentBranchId?: number | null;
-  collectionBranchName?: string | null;
-  collectionBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-  processingBranchName?: string | null;
-  processingBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-  returnBranchName?: string | null;
-  returnBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-  currentBranchName?: string | null;
-  currentBranchType?: "PICKUP" | "HYBRID" | "PROCESSING" | null;
-}
-
-export interface OrderMovement {
-  id: number;
-  orderId: number;
-  laundryId: number;
-  fromBranchId?: number | null;
-  fromBranchName?: string | null;
-  toBranchId: number;
-  toBranchName?: string | null;
-  movementType: "COLLECTION" | "PROCESSING_TRANSFER" | "RETURN_TRANSFER" | "MANUAL_TRANSFER";
-  reason?: string | null;
-  movedByType?: string | null;
-  movedByName?: string | null;
-  createdAt: string;
+  branchName?: string | null;
+  branchAddress?: string | null;
 }
 
 export interface OrderInput {
@@ -751,9 +719,6 @@ export interface OrderInput {
   discount?: number;
   discountReason?: string;
   branchId?: number;
-  collectionBranchId?: number;
-  processingBranchId?: number;
-  returnBranchId?: number;
 }
 
 export interface OrderUpdate {
@@ -1316,7 +1281,6 @@ export interface WorkerPermission {
   canRecordPayments: boolean;
   canRecordPickups: boolean;
   canViewOrders: boolean;
-  canViewAllBranches: boolean;
   canProcessOrders: boolean;
   canAssignOrders: boolean;
   canViewWhatsApp: boolean;
