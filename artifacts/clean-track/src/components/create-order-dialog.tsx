@@ -94,6 +94,17 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
     enabled: open,
   });
 
+  const { data: branchList = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: () => api.branches.list(),
+    enabled: open && isOwner,
+  });
+
+  useEffect(() => {
+    if (activeBranchId != null) setOrderBranchId(activeBranchId);
+    else if (isOwner && branchList.length > 0 && !orderBranchId) setOrderBranchId(branchList[0].id);
+  }, [activeBranchId, isOwner, branchList, orderBranchId]);
+
   const { data: sla } = useQuery({
     queryKey: ["settings", "sla"],
     queryFn: () => api.settings.getSla(),
