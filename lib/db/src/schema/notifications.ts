@@ -8,7 +8,7 @@ export const notifications = pgTable("notifications", {
   targetWorkerId: integer("target_worker_id"),
   eventType: text("event_type", {
     enum: [
-      "new_order", "order_assigned", "branch_handoff", "due_soon", "overdue",
+      "new_order", "order_assigned", "due_soon", "overdue",
       "payment_received", "unpaid_balance", "order_ready",
       "partial_pickup", "pickup_completed", "high_expense", "low_profit_warning",
       "whatsapp_message",
