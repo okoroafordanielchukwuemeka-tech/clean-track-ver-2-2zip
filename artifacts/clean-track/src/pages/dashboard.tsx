@@ -17,7 +17,7 @@ import {
   DollarSign, ShoppingCart, Users, AlertTriangle, TrendingUp,
   TrendingDown, Clock, CheckCircle, ShoppingBag, Package,
   Crown, RefreshCw, ArrowUpRight, ArrowDownRight, Minus,
-  Activity, UserCheck, Zap, Receipt, Settings, Percent, GitBranch,
+  Activity, UserCheck, Zap, Receipt, Settings, Percent,
   FlaskConical, XCircle, AlertCircle, Hourglass,
 } from "lucide-react";
 import { type SubscriptionStatus } from "@/lib/api";
@@ -242,12 +242,6 @@ export default function Dashboard() {
     queryFn: () => api.orders.recent(activeBranchId),
   });
 
-  const { data: branchNetwork = [] } = useQuery({
-    queryKey: ["branches", "network-summary"],
-    queryFn: () => api.branches.networkSummary(),
-    refetchInterval: 30_000,
-  });
-
   const { data: slaData } = useQuery({
     queryKey: ["analytics", "sla"],
     queryFn: () => api.settings.getSlaAnalytics(),
@@ -322,67 +316,6 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* ── Branch network ─────────────────────────────────── */}
-          {branchNetwork.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
-                    Branch Network
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Where every active order is physically located right now.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/branches"><GitBranch className="h-3.5 w-3.5 mr-1.5" />Manage branches</Link>
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {branchNetwork.map(branch => (
-                  <Card key={branch.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-sm">{branch.name}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{branch.type.toLowerCase()} branch</p>
-                        </div>
-                        <Badge variant="outline">{branch.counts.active} active</Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-                        {branch.counts.incoming > 0 && (
-                          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 px-3 py-2">
-                            <p className="text-muted-foreground">Incoming</p>
-                            <p className="font-bold text-blue-700 dark:text-blue-400">{branch.counts.incoming}</p>
-                          </div>
-                        )}
-                        <div className="rounded-lg bg-muted/50 px-3 py-2">
-                          <p className="text-muted-foreground">Processing</p>
-                          <p className="font-bold">{branch.counts.processing}</p>
-                        </div>
-                        <div className="rounded-lg bg-muted/50 px-3 py-2">
-                          <p className="text-muted-foreground">Ready</p>
-                          <p className="font-bold">{branch.counts.ready}</p>
-                        </div>
-                        {branch.counts.awaitingTransfer > 0 && (
-                          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
-                            <p className="text-muted-foreground">Awaiting transfer</p>
-                            <p className="font-bold text-amber-700 dark:text-amber-400">{branch.counts.awaitingTransfer}</p>
-                          </div>
-                        )}
-                      </div>
-                      {branch.type === "HYBRID" && branch.counts.local > 0 && (
-                        <p className="text-xs text-muted-foreground mt-3">
-                          {branch.counts.local} local order{branch.counts.local !== 1 ? "s" : ""} — collected and processed here.
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* ── Financial summary ─────────────────────────────── */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-3">
