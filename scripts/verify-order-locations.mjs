@@ -262,7 +262,11 @@ try {
     migrationHashes: migrations.map(m => ({ id: m.id, hash: m.hash, created_at: m.created_at })),
   }));
   for (const row of anomalies) {
-    console.log("[order-location-verification] INCONSISTENT_ORDER", JSON.stringify(row));
+    console.error("[order-location-verification] INCONSISTENT_ORDER", JSON.stringify(row));
+  }
+  if (anomalies.length > 0) {
+    console.error("[order-location-verification] AUDIT_FOUND_INCONSISTENCIES", JSON.stringify(anomalies));
+    process.exit(2);
   }
   console.log("[order-location-verification] Verification complete. No data was changed.");
 } catch (err) {
