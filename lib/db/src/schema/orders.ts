@@ -8,11 +8,9 @@ import { branches } from "./branches.js";
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   laundryId: integer("laundry_id").references(() => laundries.id, { onDelete: "cascade" }),
-  // Legacy operational branch. Kept during the multi-location migration; do not remove
-  // until all order workflows have moved to the explicit location fields below.
+  // Simple branch model: every order is owned by exactly one branch.
+  // Runtime authorization uses this field for branch scoping.
   branchId: integer("branch_id").references(() => branches.id, { onDelete: "set null" }),
-  // Explicit order lifecycle locations. Nullable during migration so legacy/unassigned
-  // orders remain readable while routes are migrated in a later phase.
   customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
   orderId: text("order_id").notNull().unique(),
   customerName: text("customer_name").notNull(),
