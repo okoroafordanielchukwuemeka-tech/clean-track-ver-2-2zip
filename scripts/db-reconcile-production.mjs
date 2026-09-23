@@ -10,10 +10,11 @@
  * - If __drizzle_migrations already exists, it does nothing.
  * - It never runs 0000-0002 against the existing production database.
  * - It verifies the baseline before marking 0000-0002 as applied.
- * - For 0003-0005 it checks concrete schema signatures and executes the
- *   checked-in migration SQL only when that signature is missing.
+ * - Historical branch-routing migrations 0003-0006 are never replayed by
+ *   reconciliation. They remain in the repository only as migration history.
+ * - The current runtime baseline is the simple branch model.
  *
- * After success, normal drizzle-kit migrate owns future changes.
+ * After success, normal schema migrations own future changes.
  */
 import pg from "pg";
 import fs from "node:fs";
@@ -149,55 +150,15 @@ try {
       }
     }
 
-    const byTag = new Map(entries.map((entry) => [entry.tag, entry]));
-
-    // 0003: branch operational type.
-    {
-      const entry = byTag.get("0003_branch_operational_types");
-      if (!entry) throw new Error("Journal entry missing: 0003_branch_operational_types");
-      if (!(await columnExists(client, "branches", "type"))) {
-        console.log("[db-reconcile] applying 0003_branch_operational_types.sql");
-        await client.query(fs.readFileSync(migrationFile(entry.tag), "utf8"));
-      }
-      if (!(await columnExists(client, "branches", "type"))) {
-        throw new Error("0003 did not create branches.type");
-      }
-      await recordMigration(client, entry);
-    }
-
-    // 0004: explicit order locations.
-    {
-      const entry = byTag.get("0004_order_explicit_locations");
-      if (!entry) throw new Error("Journal entry missing: 0004_order_explicit_locations");
-      const columns = ["collection_branch_id", "processing_branch_id", "return_branch_id", "current_branch_id"];
-      let complete = true;
-      for (const column of columns) complete = complete && await columnExists(client, "orders", column);
-      if (!complete) {
-        console.log("[db-reconcile] applying 0004_order_explicit_locations.sql");
-        await client.query(fs.readFileSync(migrationFile(entry.tag), "utf8"));
-      }
-      for (const column of columns) {
-        if (!(await columnExists(client, "orders", column))) {
-          throw new Error("0004 did not create orders." + column);
-        }
-      }
-      await recordMigration(client, entry);
-    }
-
-    // 0005: order movement history.
-    {
-      const entry = byTag.get("0005_order_movements");
-      if (!entry) throw new Error("Journal entry missing: 0005_order_movements");
-      if (!(await tableExists(client, "order_movements"))) {
-        console.log("[db-reconcile] applying 0005_order_movements.sql");
-        await client.query(fs.readFileSync(migrationFile(entry.tag), "utf8"));
-      }
-      if (!(await tableExists(client, "order_movements"))) {
-        throw new Error("0005 did not create order_movements");
-      }
-      await recordMigration(client, entry);
-    }
-
+    // Do not replay retired branch-routing migrations (0003-0006).
+    // They are historical schema records only. The current production
+    // architecture uses orders.branch_id and workers.branch_id.
+    //
+    // Intentionally no schema-changing work is performed here for the
+    // retired branch-routing objects. Destructive cleanup is handled only
+    // by a separately reviewed production cleanup procedure after backup
+    // and read-only dependency verification.
+    
     await client.query("COMMIT");
     console.log("[db-reconcile] production schema reconciliation completed successfully.");
   } catch (error) {
