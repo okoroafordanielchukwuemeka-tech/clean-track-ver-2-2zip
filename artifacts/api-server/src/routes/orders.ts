@@ -761,11 +761,13 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
      * that a rolled-back payment does not consume a counter slot.
      */
     const txResult = await db.transaction(async (tx) => {
+      // Branch authorization follows the simple branch model:
+      // owners are scoped by laundry; workers are additionally scoped by orders.branch_id.
       const branchClause = workerBranchId
-        ? sql` AND current_branch_id = ${workerBranchId}`
+        ? sql` AND branch_id = ${workerBranchId}`
         : sql``;
       const lockResult = await tx.execute(
-        sql`SELECT id, order_id, customer_name, branch_id, current_branch_id, price, extra_charge,
+        sql`SELECT id, order_id, customer_name, branch_id, price, extra_charge,
                    discount, amount_paid, payment_status, status,
                    shirts, trousers, shirts_picked_up, trousers_picked_up
             FROM orders
