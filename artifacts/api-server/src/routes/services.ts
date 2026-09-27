@@ -5,6 +5,7 @@ import { services, orderItems, orders, serviceBranches, branches } from "@worksp
 import { eq, and, ne, sql, asc, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds } from "../lib/worker-branch-access.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
 import { getStorageDriver, MAX_UPLOAD_BYTES, ALLOWED_MIME_TYPES } from "../lib/storage.js";
 
@@ -151,8 +152,9 @@ servicesRouter.get("/", async (req: AuthRequest, res) => {
       loadUsageStats(laundryId),
     ]);
 
-    // Workers are auto-scoped to their own branch; owners may pass ?branchId explicitly.
-    const effectiveBranchId = req.auth!.branchId ?? (branchId ? parseInt(branchId) : null);
+    const effectiveBranchIds = req.auth!.type === "worker"
+      ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId)
+      : (branchId ? [parseInt(branchId)] : null);
 
     let filtered = enrichServices(all, branchMap, usageMap).filter(s => {
       if (filter === "active") return s.isActive === true;
@@ -168,9 +170,9 @@ servicesRouter.get("/", async (req: AuthRequest, res) => {
       const q = search.trim().toLowerCase();
       return s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q);
     }).filter(s => {
-      if (!effectiveBranchId) return true;
+      if (effectiveBranchIds === null) return true;
       // null branchIds = available everywhere
-      return s.branchIds === null || s.branchIds.includes(effectiveBranchId);
+      return s.branchIds === null || effectiveBranchIds.some(id => s.branchIds!.includes(id));
     });
 
     if (sort === "alpha") filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
