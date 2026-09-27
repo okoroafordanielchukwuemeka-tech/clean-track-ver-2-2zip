@@ -254,9 +254,13 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
     const { branchId: branchParam } = req.query;
         const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
-      : (req.auth!.branchId ?? null);
+      : null;
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      conditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+    }
     const recentOrders = await db.select().from(orders)
       .where(and(...conditions))
       .orderBy(desc(orders.createdAt))
