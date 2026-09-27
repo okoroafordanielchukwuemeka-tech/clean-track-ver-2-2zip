@@ -1,0 +1,29 @@
+name: Verify multi-branch worker access
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/multi-branch-worker-access]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check database migrations
+        run: pnpm run db:migrate:check
+      - name: Build API and frontend
+        run: pnpm run build
