@@ -190,11 +190,12 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
 
-        const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : null;
+    const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : null;
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
     if (req.auth!.type === "worker") {
       const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
-      conditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+      const selected = branchParam ? parseInt(branchParam as string, 10) : null;
+      conditions.push(workerBranchSql(orders.branchId, selected != null && allowedBranchIds.includes(selected) ? [selected] : selected == null ? allowedBranchIds : []));
     }
 
     const [orderRows, [{ total }]] = await Promise.all([
@@ -216,14 +217,15 @@ ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthReq
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
-        const effectiveBranchId = req.auth!.type === "owner"
+    const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
-      : (req.auth!.branchId ?? null);
+      : null;
     const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
     if (req.auth!.type === "worker") {
       const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
-      summaryConditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+      const selected = branchParam ? parseInt(branchParam as string, 10) : null;
+      summaryConditions.push(workerBranchSql(orders.branchId, selected != null && allowedBranchIds.includes(selected) ? [selected] : selected == null ? allowedBranchIds : []));
     }
     const result = await db.select().from(orders).where(and(...summaryConditions));
     res.json({
@@ -252,14 +254,15 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
-        const effectiveBranchId = req.auth!.type === "owner"
+    const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
       : null;
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
     if (req.auth!.type === "worker") {
       const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
-      conditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+      const selected = branchParam ? parseInt(branchParam as string, 10) : null;
+      conditions.push(workerBranchSql(orders.branchId, selected != null && allowedBranchIds.includes(selected) ? [selected] : selected == null ? allowedBranchIds : []));
     }
     const recentOrders = await db.select().from(orders)
       .where(and(...conditions))
