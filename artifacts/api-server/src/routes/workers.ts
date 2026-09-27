@@ -23,6 +23,19 @@ const workerInputSchema = z.object({
   isActive: z.boolean().default(true),
   branchId: z.number().int().nullable().optional(),
   additionalBranchIds: z.array(z.number().int()).default([]),
+  permissions: z.object({
+    canViewCustomers: z.boolean().optional(),
+    canCreateCustomers: z.boolean().optional(),
+    canViewCustomerBalances: z.boolean().optional(),
+    canRecordPayments: z.boolean().optional(),
+    canRecordPickups: z.boolean().optional(),
+    canViewOrders: z.boolean().optional(),
+    canProcessOrders: z.boolean().optional(),
+    canAssignOrders: z.boolean().optional(),
+    canViewWhatsApp: z.boolean().optional(),
+    canReplyWhatsApp: z.boolean().optional(),
+    canManageWhatsApp: z.boolean().optional(),
+  }).partial().optional(),
 });
 
 const workerUpdateSchema = z.object({
@@ -33,6 +46,19 @@ const workerUpdateSchema = z.object({
   isActive: z.boolean().optional(),
   branchId: z.number().int().nullable().optional(),
   additionalBranchIds: z.array(z.number().int()).optional(),
+  permissions: z.object({
+    canViewCustomers: z.boolean().optional(),
+    canCreateCustomers: z.boolean().optional(),
+    canViewCustomerBalances: z.boolean().optional(),
+    canRecordPayments: z.boolean().optional(),
+    canRecordPickups: z.boolean().optional(),
+    canViewOrders: z.boolean().optional(),
+    canProcessOrders: z.boolean().optional(),
+    canAssignOrders: z.boolean().optional(),
+    canViewWhatsApp: z.boolean().optional(),
+    canReplyWhatsApp: z.boolean().optional(),
+    canManageWhatsApp: z.boolean().optional(),
+  }).partial().optional(),
 });
 
 workersRouter.get("/", async (req: AuthRequest, res) => {
@@ -129,7 +155,8 @@ workersRouter.post("/", requireOwner, requireOperational, requirePlanLimit("work
       }).returning();
 
       const defaults = data.role === "admin" ? ADMIN_DEFAULT_PERMISSIONS : WORKER_DEFAULT_PERMISSIONS;
-      await tx.insert(workerPermissions).values({ workerId: createdWorker.id, laundryId, ...defaults });
+      const selectedPermissions = { ...defaults, ...(data.permissions ?? {}) };
+      await tx.insert(workerPermissions).values({ workerId: createdWorker.id, laundryId, ...selectedPermissions });
 
       if (additionalBranchIds.length > 0) {
         await tx.insert(workerBranchAccess).values(
@@ -140,8 +167,9 @@ workersRouter.post("/", requireOwner, requireOperational, requirePlanLimit("work
     });
 
     const { pin: _pin, ...safeWorker } = worker;
+    const permissionRows = await db.select().from(workerPermissions).where(eq(workerPermissions.workerId, worker.id));
     trackActivationEvent(laundryId, "worker_created");
-    res.status(201).json({ ...safeWorker, additionalBranchIds: access });
+    res.status(201).json({ ...safeWorker, additionalBranchIds: access, permissions: permissionRows[0] ?? null });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to create worker" });
@@ -177,6 +205,7 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
     const additionalBranchIds = uniqueDesiredIds.filter(branchId => branchId !== (data.branchId ?? undefined));
     const updatePayload: any = { ...data };
     delete updatePayload.additionalBranchIds;
+    delete updatePayload.permissions;
     if (data.pin) {
       updatePayload.pin = await bcrypt.hash(data.pin, 12);
       updatePayload.pinChangedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
@@ -203,8 +232,27 @@ workersRouter.patch("/:id", requireOwner, async (req: AuthRequest, res) => {
     });
 
     if (!worker) return res.status(404).json({ error: "Worker not found" });
+    if (data.permissions !== undefined) {
+      const existingPermission = await db.select({ id: workerPermissions.id })
+        .from(workerPermissions)
+        .where(eq(workerPermissions.workerId, id));
+      if (existingPermission.length > 0) {
+        await db.update(workerPermissions)
+          .set({ ...data.permissions, updatedAt: new Date() })
+          .where(eq(workerPermissions.workerId, id));
+      } else {
+        const defaults = worker.role === "admin" ? ADMIN_DEFAULT_PERMISSIONS : WORKER_DEFAULT_PERMISSIONS;
+        await db.insert(workerPermissions).values({
+          workerId: id,
+          laundryId,
+          ...defaults,
+          ...data.permissions,
+        });
+      }
+    }
     const { pin: _pin, ...safeWorker } = worker;
-    res.json({ ...safeWorker, additionalBranchIds });
+    const permissionRows = await db.select().from(workerPermissions).where(eq(workerPermissions.workerId, id));
+    res.json({ ...safeWorker, additionalBranchIds, permissions: permissionRows[0] ?? null });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     res.status(500).json({ error: "Failed to update worker" });
