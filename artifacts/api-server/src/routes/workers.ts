@@ -51,7 +51,22 @@ workersRouter.get("/", async (req: AuthRequest, res) => {
     }).from(workers)
       .where(and(eq(workers.laundryId, laundryId), isNull(workers.deletedAt)))
       .orderBy(desc(workers.createdAt));
-    res.json(result);
+    const workerIds = result.map(worker => worker.id);
+    const accessRows = workerIds.length > 0
+      ? await db.select({ workerId: workerBranchAccess.workerId, branchId: workerBranchAccess.branchId })
+          .from(workerBranchAccess)
+          .where(inArray(workerBranchAccess.workerId, workerIds))
+      : [];
+    const accessByWorker = new Map<number, number[]>();
+    for (const row of accessRows) {
+      const list = accessByWorker.get(row.workerId) ?? [];
+      list.push(row.branchId);
+      accessByWorker.set(row.workerId, list);
+    }
+    res.json(result.map(worker => ({
+      ...worker,
+      additionalBranchIds: (accessByWorker.get(worker.id) ?? []).filter(branchId => branchId !== worker.branchId),
+    })));
   } catch {
     res.status(500).json({ error: "Failed to list workers" });
   }
