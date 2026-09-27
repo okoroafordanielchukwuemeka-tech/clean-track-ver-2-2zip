@@ -1118,7 +1118,9 @@ export interface Worker {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-}
+
+  additionalBranchIds?: number[];
+  permissions?: WorkerPermission | null;}
 
 export interface WorkerInput {
   name: string;
