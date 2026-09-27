@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { orders, batches, workers, customers, pickupRecords, expenditures, laundries, services, orderItems } from "@workspace/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds } from "../lib/worker-branch-access.js";
 import { requireEntitlement } from "../middleware/subscription.js";
 
 export const analyticsRouter = Router();
@@ -38,21 +39,23 @@ function orderTotalDue(o: any) {
   return parseFloat(o.price || "0") + parseFloat(o.extraCharge || "0") - parseFloat(o.discount || "0");
 }
 
-/** Returns the effective branchId for filtering: worker's branch, or owner's ?branchId param, or null for all */
-function getEffectiveBranchId(req: AuthRequest): number | null {
-  if (req.auth!.branchId) return req.auth!.branchId;
+/** Returns the effective branch scope: authorized worker branches, selected owner branch, or null for all tenant branches. */
+async function getEffectiveBranchIds(req: AuthRequest): Promise<number[] | null> {
+  if (req.auth!.type === "worker") {
+    return getWorkerAllowedBranchIds(req.auth!.workerId!, req.auth!.laundryId);
+  }
   const param = (req.query as any).branchId;
-  return param ? parseInt(param as string) : null;
+  return param ? [parseInt(param as string, 10)] : null;
 }
 
 analyticsRouter.get("/overview", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
 
     const batchConditions: any[] = [eq(batches.laundryId, laundryId)];
 
@@ -127,9 +130,9 @@ analyticsRouter.get("/daily", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
 
     const allOrders = await db.select().from(orders).where(and(...orderConditions));
     const dailyMap: Record<string, { count: number; revenue: number }> = {};
@@ -164,13 +167,13 @@ analyticsRouter.get("/full", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
     const period = (req.query.period as string) || "7d";
     const since = periodToDate(period);
     const prevSince = new Date(since.getTime() - (Date.now() - since.getTime()));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
     const allOrders = await db.select().from(orders).where(and(...orderConditions));
 
     const periodOrders = allOrders.filter(o => new Date(o.createdAt) >= since);
@@ -320,13 +323,13 @@ analyticsRouter.get("/customers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), 
   }
   try {
     const laundryId = req.auth!.laundryId;
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
 
     const custConditions: any[] = [eq(customers.laundryId, laundryId)];
-    if (effectiveBranchId) custConditions.push(eq(customers.branchId, effectiveBranchId));
+    if (effectiveBranchIds) custConditions.push(inArray(customers.branchId, effectiveBranchIds));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
 
     const [allCustomers, allOrders] = await Promise.all([
       db.select().from(customers).where(and(...custConditions)),
@@ -391,13 +394,13 @@ analyticsRouter.get("/customers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), 
 analyticsRouter.get("/workers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
 
     const workerConditions: any[] = [eq(workers.laundryId, laundryId)];
-    if (effectiveBranchId) workerConditions.push(eq(workers.branchId, effectiveBranchId));
+    if (effectiveBranchIds) workerConditions.push(inArray(workers.branchId, effectiveBranchIds));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
 
     const [allWorkers, allOrders, allPickups] = await Promise.all([
       db.select().from(workers).where(and(...workerConditions)),
@@ -441,7 +444,7 @@ analyticsRouter.get("/workers", requireEntitlement("HAS_ADVANCED_ANALYTICS"), as
 analyticsRouter.get("/sla", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
 
     const [laundry] = await db
       .select({
@@ -453,7 +456,7 @@ analyticsRouter.get("/sla", requireEntitlement("HAS_ADVANCED_ANALYTICS"), async 
       .where(eq(laundries.id, laundryId));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
     const allOrders = await db.select().from(orders).where(and(...orderConditions));
     const now = new Date();
 
@@ -539,12 +542,12 @@ analyticsRouter.get("/services", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIds = await getEffectiveBranchIds(req);
 
     const allServices = await db.select().from(services).where(eq(services.laundryId, laundryId));
 
     const orderConditions: any[] = [eq(orders.laundryId, laundryId)];
-    if (effectiveBranchId) orderConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConditions.push(inArray(orders.branchId, effectiveBranchIds));
 
     const rows = await db
       .select({
