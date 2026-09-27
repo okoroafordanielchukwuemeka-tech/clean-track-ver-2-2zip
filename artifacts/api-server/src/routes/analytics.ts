@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { orders, batches, workers, customers, pickupRecords, expenditures, laundries, services, orderItems } from "@workspace/db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, inArray } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
 import { getWorkerAllowedBranchIds } from "../lib/worker-branch-access.js";
 import { requireEntitlement } from "../middleware/subscription.js";
