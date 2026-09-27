@@ -355,7 +355,8 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
 customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];\n    const customerId = parseInt(req.params.id);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
+    const customerId = parseInt(req.params.id);
     const custReceiptConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
     if (req.auth!.type === "worker") custReceiptConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.select({ id: customers.id })
@@ -392,7 +393,8 @@ customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), 
 customersRouter.get("/:id/statement", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];\n    const customerId = parseInt(req.params.id);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
+    const customerId = parseInt(req.params.id);
     const { from, to } = req.query as { from?: string; to?: string };
 
     // ── Customer lookup ────────────────────────────────────────────────────
