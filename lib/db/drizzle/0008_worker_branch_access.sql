@@ -10,11 +10,10 @@ CREATE TABLE IF NOT EXISTS "worker_branch_access" (
   CONSTRAINT "worker_branch_access_worker_id_workers_id_fk"
     FOREIGN KEY ("worker_id") REFERENCES "public"."workers"("id") ON DELETE cascade,
   CONSTRAINT "worker_branch_access_branch_id_branches_id_fk"
-    FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE cascade
+    FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE cascade,
+  CONSTRAINT "worker_branch_access_worker_branch_uq"
+    UNIQUE ("worker_id", "branch_id")
 );
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "worker_branch_access_worker_branch_uq"
-  ON "worker_branch_access" USING btree ("worker_id", "branch_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "worker_branch_access_worker_id_idx"
   ON "worker_branch_access" USING btree ("worker_id");
