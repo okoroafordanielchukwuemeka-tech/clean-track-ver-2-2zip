@@ -19,8 +19,7 @@ const customerInputSchema = z.object({
   phone: z.string().min(1),
   address: z.string().optional(),
   notes: z.string().optional(),
-  // Owners pass branchId to assign a customer to a specific branch.
-  // Workers always use their own branchId from the JWT (branchId ignored even if sent).
+  // Owners and workers may select a branch; workers are restricted server-side to authorized branches.
   branchId: z.number().int().optional(),
 });
 
@@ -289,9 +288,14 @@ customersRouter.post("/", checkPermission("create:customers"), requireOperationa
       .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, data.phone)));
     if (existing) return res.status(409).json({ error: "A customer with this phone number already exists" });
 
-    // Workers: branchId comes from JWT (live DB value — always current).
-    // Owners: use the branchId from the request body if provided.
-    const effectiveBranchId = req.auth!.branchId ?? data.branchId ?? undefined;
+    const requestedBranchId = data.branchId ?? null;
+    let effectiveBranchId = requestedBranchId;
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      if (effectiveBranchId == null || !allowedBranchIds.includes(effectiveBranchId)) {
+        return res.status(403).json({ error: "You do not have access to the selected branch" });
+      }
+    }
     const { branchId: _ignored, ...customerData } = data;
 
     const [customer] = await db.insert(customers).values({
@@ -311,8 +315,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
-    const workerBranchId = req.auth!.branchId;
-    const parsed = customerUpdateSchema.parse(req.body);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];\n    const parsed = customerUpdateSchema.parse(req.body);
 
     if (parsed.phone) {
       const [conflict] = await db.select().from(customers)
@@ -330,7 +333,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
     }
 
     const custPatchConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId) custPatchConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custPatchConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.update(customers).set(data)
       .where(and(...custPatchConditions))
       .returning();
@@ -350,10 +353,9 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
 customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
-    const customerId = parseInt(req.params.id);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];\n    const customerId = parseInt(req.params.id);
     const custReceiptConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId) custReceiptConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custReceiptConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.select({ id: customers.id })
       .from(customers)
       .where(and(...custReceiptConditions));
@@ -388,13 +390,12 @@ customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), 
 customersRouter.get("/:id/statement", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
-    const customerId = parseInt(req.params.id);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];\n    const customerId = parseInt(req.params.id);
     const { from, to } = req.query as { from?: string; to?: string };
 
     // ── Customer lookup ────────────────────────────────────────────────────
     const custStmtConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId) custStmtConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custStmtConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.select().from(customers).where(and(...custStmtConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
