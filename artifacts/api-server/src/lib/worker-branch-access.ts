@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { branches, workerBranchAccess, workers } from "@workspace/db/schema";
 
@@ -34,4 +35,9 @@ export async function workerCanAccessBranch(
 ): Promise<boolean> {
   const allowed = await getWorkerAllowedBranchIds(workerId, laundryId);
   return allowed.includes(branchId);
+}
+
+export function workerBranchSql(column: SQL, branchIds: number[]): SQL {
+  if (branchIds.length === 0) return sql`FALSE`;
+  return sql`${column} IN (${sql.join(branchIds.map(id => sql`${id}`), sql`, `)})`;
 }
