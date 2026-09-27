@@ -171,9 +171,9 @@ conversationsRouter.get("/unread-count", requireAuth, checkPermission("view:what
       eq(conversations.status, "open"),
     ];
     // Branch isolation: workers only count unread for their branch
-    const workerBranchId = req.auth!.branchId;
-    if (workerBranchId) {
-      unreadConditions.push(eq(conversations.branchId, workerBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      unreadConditions.push(workerBranchSql(conversations.branchId, allowedBranchIds));
     }
     const [{ totalUnread }] = await db
       .select({ totalUnread: sql<number>`coalesce(sum(unread_count),0)::int` })
