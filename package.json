@@ -16,7 +16,8 @@
     "db:migrate:baseline": "node scripts/db-baseline.mjs",
     "db:backup": "bash scripts/backup.sh ./backups",
     "db:verify-backup": "bash scripts/verify-backup.sh",
-    "db:restore": "bash scripts/restore.sh"
+    "db:restore": "bash scripts/restore.sh",
+    "test:gate1:worker-branch-access": "tsx scripts/test-worker-branch-access.ts"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
