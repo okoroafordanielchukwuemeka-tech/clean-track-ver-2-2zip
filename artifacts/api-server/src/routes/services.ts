@@ -153,7 +153,12 @@ servicesRouter.get("/", async (req: AuthRequest, res) => {
     ]);
 
     const effectiveBranchIds = req.auth!.type === "worker"
-      ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId)
+      ? (() => {
+          const selected = branchId ? parseInt(branchId, 10) : null;
+          return getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId).then(allowed =>
+            selected != null && allowed.includes(selected) ? [selected] : selected == null ? allowed : []
+          );
+        })()
       : (branchId ? [parseInt(branchId)] : null);
 
     let filtered = enrichServices(all, branchMap, usageMap).filter(s => {
