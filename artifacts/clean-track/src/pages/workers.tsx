@@ -27,6 +27,7 @@ const emptyForm: Partial<WorkerInput> = {
   role: "worker",
   isActive: true,
   branchId: null,
+  additionalBranchIds: [],
 };
 
 export default function Workers() {
@@ -84,7 +85,7 @@ export default function Workers() {
 
   const openEdit = (w: any) => {
     setEditId(w.id);
-    setForm({ name: w.name, phone: w.phone || "", role: w.role, pin: w.pin || "", isActive: w.isActive, branchId: w.branchId ?? null });
+    setForm({ name: w.name, phone: w.phone || "", role: w.role, pin: "", isActive: w.isActive, branchId: w.branchId ?? null, additionalBranchIds: w.additionalBranchIds ?? [] });
     setShowDialog(true);
   };
 
@@ -99,6 +100,7 @@ export default function Workers() {
       pin: form.pin || "",
       isActive: form.isActive ?? true,
       branchId: form.branchId ?? null,
+      additionalBranchIds: (form.additionalBranchIds ?? []).filter(id => id !== (form.branchId ?? null)),
     };
     if (editId) updateMutation.mutate({ id: editId, data });
     else createMutation.mutate(data);
@@ -243,6 +245,35 @@ export default function Workers() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Additional Branch Access</Label>
+              <p className="text-xs text-muted-foreground">Allow this worker to operate in branches in addition to their primary branch.</p>
+              <div className="rounded-md border p-3 space-y-2 max-h-36 overflow-y-auto">
+                {branches.filter(b => b.id !== form.branchId).map(b => {
+                  const selected = (form.additionalBranchIds ?? []).includes(b.id);
+                  return (
+                    <label key={b.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(e) => {
+                          const current = form.additionalBranchIds ?? [];
+                          setForm({
+                            ...form,
+                            additionalBranchIds: e.target.checked
+                              ? [...new Set([...current, b.id])]
+                              : current.filter(id => id !== b.id),
+                          });
+                        }}
+                      />
+                      <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{b.name}</span>
+                    </label>
+                  );
+                })}
+                {branches.length <= 1 && <span className="text-xs text-muted-foreground">Create another branch to grant additional access.</span>}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
