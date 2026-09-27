@@ -141,6 +141,13 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
       if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
       const batchBranchIds = new Set(targets.map(o => (o as any).branchId));
       if (batchBranchIds.size > 1) throw new Error("BATCH_MULTI_BRANCH");
+      if (data.assignedWorkerId !== undefined) {
+        const targetAccess = await getWorkerAllowedBranchIds(data.assignedWorkerId, laundryId);
+        const batchBranchId = [...batchBranchIds][0] as number | undefined;
+        if (batchBranchId == null || !targetAccess.includes(batchBranchId)) {
+          throw new Error("BATCH_TARGET_WORKER_SCOPE");
+        }
+      }
       if(targets.some(o => !o.isVerified)) throw new Error("BATCH_ORDER_NOT_VERIFIED");
       if(targets.some(o=>o.status==="cancelled"||o.status==="completed"||o.batchId!==null)) throw new Error("BATCH_ORDER_STATE");
       const placeholder=`GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -156,6 +163,7 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });
     if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });
     if (err instanceof Error && err.message === "BATCH_MULTI_BRANCH") return res.status(409).json({ error: "A batch can contain orders from only one branch" });
+    if (err instanceof Error && err.message === "BATCH_TARGET_WORKER_SCOPE") return res.status(403).json({ error: "Assigned worker does not have access to the batch branch" });
     if (err instanceof Error && err.message === "BATCH_ORDER_NOT_VERIFIED") return res.status(409).json({ error: "Every order must be verified before it can enter a processing batch", code: "ORDER_NOT_VERIFIED" });
     res.status(500).json({ error: "Failed to create batch" });
   }
