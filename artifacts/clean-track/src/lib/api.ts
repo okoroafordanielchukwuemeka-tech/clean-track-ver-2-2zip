@@ -1127,6 +1127,7 @@ export interface WorkerInput {
   pin: string;
   isActive?: boolean;
   branchId?: number | null;
+  additionalBranchIds?: number[];
 }
 
 export type NotificationEventType =
