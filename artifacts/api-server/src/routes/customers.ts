@@ -166,6 +166,7 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
     const { search, tag, branchId: branchParam, sort, archived } = req.query;
 
     const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
+    const selectedWorkerBranchId = req.auth!.type === "worker" && branchParam ? parseInt(branchParam as string, 10) : null;
     const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : null;
 
     const showArchived = archived === "true";
@@ -176,7 +177,7 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
       baseConditions.push(isNull(customers.deletedAt));
     }
     if (effectiveBranchId) baseConditions.push(eq(customers.branchId, effectiveBranchId));
-    if (req.auth!.type === "worker") baseConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
+    if (req.auth!.type === "worker") baseConditions.push(workerBranchSql(customers.branchId, selectedWorkerBranchId != null && workerBranchIds.includes(selectedWorkerBranchId) ? [selectedWorkerBranchId] : selectedWorkerBranchId == null ? workerBranchIds : []));
 
     let query = db.select().from(customers).where(and(...baseConditions)).$dynamic();
 
