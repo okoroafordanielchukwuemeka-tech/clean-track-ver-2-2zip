@@ -178,8 +178,8 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
     const data = batchUpdateSchema.parse(req.body);
 
     // Workers: verify they can access this batch
-    if (workerBranchId) {
-      const visibleIds = await getVisibleBatchIds(laundryId, workerBranchId);
+    if (workerBranchIds !== null) {
+      const visibleIds = await getVisibleBatchIds(laundryId, workerBranchIds);
       if (!visibleIds || !visibleIds.includes(batchId)) {
         return res.status(404).json({ error: "Batch not found" });
       }
