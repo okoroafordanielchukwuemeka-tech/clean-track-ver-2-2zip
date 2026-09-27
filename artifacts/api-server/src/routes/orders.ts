@@ -6,6 +6,7 @@ import { eq, desc, and, count, sql, isNull } from "drizzle-orm";
 import { computeOrderPricing } from "../lib/order-financials.js";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction, actorName } from "../lib/audit.js";
@@ -189,8 +190,13 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
 
-        const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : (req.auth!.branchId ?? null);
+    const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : null;
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      const selected = branchParam ? parseInt(branchParam as string, 10) : null;
+      conditions.push(workerBranchSql(orders.branchId, selected != null && allowedBranchIds.includes(selected) ? [selected] : selected == null ? allowedBranchIds : []));
+    }
 
     const [orderRows, [{ total }]] = await Promise.all([
       db.select({ order: orders, branchName: branches.name, branchAddress: branches.address })
@@ -211,11 +217,16 @@ ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthReq
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
-        const effectiveBranchId = req.auth!.type === "owner"
+    const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
-      : (req.auth!.branchId ?? null);
+      : null;
     const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      const selected = branchParam ? parseInt(branchParam as string, 10) : null;
+      summaryConditions.push(workerBranchSql(orders.branchId, selected != null && allowedBranchIds.includes(selected) ? [selected] : selected == null ? allowedBranchIds : []));
+    }
     const result = await db.select().from(orders).where(and(...summaryConditions));
     res.json({
       total: result.length,
@@ -243,11 +254,16 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
   try {
     const laundryId = req.auth!.laundryId;
     const { branchId: branchParam } = req.query;
-        const effectiveBranchId = req.auth!.type === "owner"
+    const effectiveBranchId = req.auth!.type === "owner"
       ? (branchParam ? parseInt(branchParam as string) : null)
-      : (req.auth!.branchId ?? null);
+      : null;
     const conditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      const selected = branchParam ? parseInt(branchParam as string, 10) : null;
+      conditions.push(workerBranchSql(orders.branchId, selected != null && allowedBranchIds.includes(selected) ? [selected] : selected == null ? allowedBranchIds : []));
+    }
     const recentOrders = await db.select().from(orders)
       .where(and(...conditions))
       .orderBy(desc(orders.createdAt))
@@ -261,9 +277,12 @@ ordersRouter.get("/recent", checkPermission("view:orders"), async (req: AuthRequ
 ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
         const idConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) idConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      idConditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+    }
     const [orderRow] = await db.select({ order: orders, branchName: branches.name, branchAddress: branches.address })
       .from(orders).leftJoin(branches, eq(branches.id, orders.branchId)).where(and(...idConditions));
     if (!orderRow) return res.status(404).json({ error: "Order not found" });
@@ -299,13 +318,15 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       discountReason: undefined,
     };
 
-    const requestedBranchId = data.branchId
-    const workerBranchId = req.auth!.branchId ?? null;
-    const branchId = workerBranchId ?? requestedBranchId ?? null;
-
-    if (workerBranchId && requestedBranchId !== undefined && requestedBranchId !== workerBranchId) {
-      return res.status(403).json({ error: "Workers can only create orders at their assigned branch" });
+    const requestedBranchId = data.branchId;
+    let branchId = requestedBranchId ?? null;
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      if (branchId == null || !allowedBranchIds.includes(branchId)) {
+        return res.status(403).json({ error: "You do not have access to the selected branch" });
+      }
     }
+
     if (branchId == null) {
       return res.status(400).json({ error: "Select a branch before creating an order" });
     }
@@ -437,7 +458,7 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     
     // Workers cannot touch any pricing fields — check before Zod strips them
     if (!isOwner) {
@@ -489,7 +510,7 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
     }
 
     const patchConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) patchConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") patchConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
 
     const [beforeOrder] = await db.select().from(orders).where(and(...patchConditions));
     if (!beforeOrder) return res.status(404).json({ error: "Order not found" });
@@ -548,8 +569,11 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
 
       const [targetWorker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
       if (!targetWorker || targetWorker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
-      if (workerBranchId && targetWorker.branchId !== workerBranchId) {
-        return res.status(403).json({ error: "Workers can only assign orders to workers in their branch" });
+      if (!isOwner) {
+        const targetAccess = await getWorkerAllowedBranchIds(targetWorker.id, laundryId);
+        if (!targetAccess.includes(beforeOrder.branchId ?? -1)) {
+          return res.status(403).json({ error: "Target worker does not have access to this order's branch" });
+        }
       }
     }
 
@@ -633,10 +657,10 @@ ordersRouter.patch("/:id", idempotencyMiddleware, async (req: AuthRequest, res) 
 ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
         const orderId = parseInt(req.params.id);
     const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) conditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") conditions.push(workerBranchSql(orders.branchId, workerBranchIds));
 
     const [existing] = await db.select().from(orders).where(and(...conditions));
     if (!existing) return res.status(404).json({ error: "Order not found" });
@@ -671,9 +695,9 @@ ordersRouter.delete("/:id", checkPermission("delete:orders"), async (req: AuthRe
 ordersRouter.get("/:id/payments", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const pmtConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) pmtConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") pmtConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...pmtConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const payments = await db.select().from(paymentRecords)
@@ -688,7 +712,7 @@ ordersRouter.get("/:id/payments", checkPermission("view:orders"), async (req: Au
 ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const paymentSchema = z.object({
       amount: z.number().min(0.01),
       method: z.enum(["cash", "transfer", "pos"]).default("cash"),
@@ -763,8 +787,8 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
     const txResult = await db.transaction(async (tx) => {
       // Branch authorization follows the simple branch model:
       // owners are scoped by laundry; workers are additionally scoped by orders.branch_id.
-      const branchClause = workerBranchId
-        ? sql` AND branch_id = ${workerBranchId}`
+      const branchClause = req.auth!.type === "worker"
+        ? sql` AND ${workerBranchSql(orders.branchId, await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId))}`
         : sql``;
       const lockResult = await tx.execute(
         sql`SELECT id, order_id, customer_name, branch_id, price, extra_charge,
@@ -925,7 +949,7 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
 ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const orderId = parseInt(req.params.id, 10);
     const paymentId = parseInt(req.params.paymentId, 10);
     if (!Number.isInteger(orderId) || !Number.isInteger(paymentId)) {
@@ -934,7 +958,7 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
 
     const txResult = await db.transaction(async (tx) => {
       const conditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-      if (workerBranchId) conditions.push(eq(orders.branchId, workerBranchId));
+      if (req.auth!.type === "worker") conditions.push(workerBranchSql(orders.branchId, workerBranchIds));
 
       const [order] = await tx.select().from(orders).where(and(...conditions)).for("update");
       if (!order) return { notFound: true } as const;
@@ -1007,9 +1031,9 @@ ordersRouter.delete("/:id/payments/:paymentId", checkPermission("delete:payments
 ordersRouter.get("/:id/items", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const itemsGetConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) itemsGetConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") itemsGetConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...itemsGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
@@ -1022,7 +1046,7 @@ ordersRouter.get("/:id/items", checkPermission("view:orders"), async (req: AuthR
 ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const itemsSchema = z.object({
       items: z.array(z.object({
         serviceId: z.number().int().optional(),
@@ -1034,7 +1058,7 @@ ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (re
     });
     const data = itemsSchema.parse(req.body);
     const itemsPostConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) itemsPostConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") itemsPostConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...itemsPostConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -1077,9 +1101,9 @@ ordersRouter.post("/:id/items", checkPermission("modify:order-items"), async (re
 ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const receiptConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) receiptConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") receiptConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...receiptConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -1185,9 +1209,9 @@ ordersRouter.get("/:id/receipt", checkPermission("view:orders"), async (req: Aut
 ordersRouter.get("/:id/audit-log", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const auditConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) auditConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") auditConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...auditConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const entries = await db.select().from(auditLog)
@@ -1202,9 +1226,9 @@ ordersRouter.get("/:id/audit-log", checkPermission("view:orders"), async (req: A
 ordersRouter.get("/:id/price-adjustments", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const paGetConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) paGetConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") paGetConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...paGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
     const adjustments = await db.select().from(priceAdjustments)
@@ -1220,7 +1244,7 @@ ordersRouter.post("/:id/price-adjustments", checkPermission("process:orders"), a
   try {
     const laundryId = req.auth!.laundryId;
     const isOwner = req.auth!.type === "owner";
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
 
     const schema = z.object({
       type: z.enum(["discount", "extra_charge"]),
@@ -1238,7 +1262,7 @@ ordersRouter.post("/:id/price-adjustments", checkPermission("process:orders"), a
     }
 
     const paPostConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) paPostConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") paPostConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...paPostConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 

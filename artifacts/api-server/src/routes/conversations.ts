@@ -7,7 +7,7 @@
  * - All routes enforce laundryId scoping — no cross-tenant access.
  */
 
-import { Router } from "express";
+import { Router, Response, NextFunction } from "express";
 import { db } from "@workspace/db";
 import {
   conversations,
@@ -20,10 +20,35 @@ import {
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type AuthRequest, requireAuth, requireOwner } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { providerRegistry } from "../lib/providers/registry.js";
 
 export const conversationsRouter = Router();
+
+conversationsRouter.use("/:id", async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.auth?.type !== "worker") return next();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return next();
+
+  try {
+    const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth.workerId!, req.auth.laundryId);
+    const [conversation] = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.id, id),
+          eq(conversations.laundryId, req.auth.laundryId),
+          workerBranchSql(conversations.branchId, allowedBranchIds),
+        )
+      );
+    if (!conversation) return res.status(404).json({ error: "Conversation not found" });
+    next();
+  } catch {
+    return res.status(500).json({ error: "Failed to verify conversation access" });
+  }
+});
 
 
 // ── Audit log helper ──────────────────────────────────────────────────────────
@@ -68,9 +93,9 @@ conversationsRouter.get("/", requireAuth, checkPermission("view:whatsapp"), asyn
   try {
     const conditions = [eq(conversations.laundryId, laundryId)];
     // Branch isolation: workers only see conversations for their assigned branch
-    const workerBranchId = req.auth!.branchId;
-    if (workerBranchId) {
-      conditions.push(eq(conversations.branchId, workerBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      conditions.push(workerBranchSql(conversations.branchId, allowedBranchIds));
     }
     if (statusFilter && ["open", "resolved", "archived"].includes(statusFilter)) {
       conditions.push(eq(conversations.status, statusFilter as "open" | "resolved" | "archived"));
@@ -146,9 +171,9 @@ conversationsRouter.get("/unread-count", requireAuth, checkPermission("view:what
       eq(conversations.status, "open"),
     ];
     // Branch isolation: workers only count unread for their branch
-    const workerBranchId = req.auth!.branchId;
-    if (workerBranchId) {
-      unreadConditions.push(eq(conversations.branchId, workerBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      unreadConditions.push(workerBranchSql(conversations.branchId, allowedBranchIds));
     }
     const [{ totalUnread }] = await db
       .select({ totalUnread: sql<number>`coalesce(sum(unread_count),0)::int` })

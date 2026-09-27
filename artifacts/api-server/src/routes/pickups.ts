@@ -10,6 +10,7 @@ import { logAction, actorName } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
 import { fireAutomation } from "../lib/automation-service.js";
 import { computeOrderPricing } from "../lib/order-financials.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 
 export const pickupsRouter = Router({ mergeParams: true });
 
@@ -27,9 +28,9 @@ pickupsRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, 
   try {
     const laundryId = req.auth!.laundryId;
     const orderId = parseInt(req.params.orderId);
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const pickupGetConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) pickupGetConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") pickupGetConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
 
     const [order] = await db.select().from(orders).where(and(...pickupGetConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -50,12 +51,12 @@ pickupsRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, 
 pickupsRouter.get("/:pickupId/receipt", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const orderId = parseInt(req.params.orderId);
     const pickupId = parseInt(req.params.pickupId);
 
     const orderConditions: any[] = [eq(orders.id, orderId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") orderConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
@@ -148,7 +149,7 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
     const laundryId = req.auth!.laundryId;
     const orderId = parseInt(req.params.orderId);
     const workerId = req.auth!.type === "worker" ? req.auth!.workerId : undefined;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
 
     const data = pickupInputSchema.parse(req.body);
 
@@ -166,8 +167,8 @@ pickupsRouter.post("/", checkPermission("record:pickups"), idempotencyMiddleware
      * always based on the true current state.
      */
     const txResult = await db.transaction(async (tx) => {
-      const branchClause = workerBranchId
-        ? sql` AND branch_id = ${workerBranchId}`
+      const branchClause = req.auth!.type === "worker"
+        ? sql` AND ${workerBranchSql(orders.branchId, workerBranchIds)}`
         : sql``;
 
       const lockResult = await tx.execute(

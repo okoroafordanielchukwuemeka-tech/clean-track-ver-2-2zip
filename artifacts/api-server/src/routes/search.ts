@@ -8,16 +8,21 @@ import {
   services,
   branches,
 } from "@workspace/db/schema";
-import { eq, and, ilike, isNull, or, SQL } from "drizzle-orm";
+import { eq, and, ilike, isNull, or, SQL, inArray } from "drizzle-orm";
 import { AuthRequest } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds } from "../lib/worker-branch-access.js";
 
 export const searchRouter = Router();
 
-/** Returns the effective branchId: worker's own branch, owner's ?branchId param, or null = all */
-function getEffectiveBranchId(req: AuthRequest): number | null {
-  if (req.auth!.branchId) return req.auth!.branchId;
+async function getEffectiveBranchIds(req: AuthRequest): Promise<number[] | null> {
   const param = (req.query as any).branchId;
-  return param ? parseInt(param as string, 10) : null;
+  if (req.auth!.type === "worker") {
+    const allowed = await getWorkerAllowedBranchIds(req.auth!.workerId!, req.auth!.laundryId);
+    if (!param) return allowed;
+    const selected = parseInt(param as string, 10);
+    return Number.isInteger(selected) && allowed.includes(selected) ? [selected] : [];
+  }
+  return param ? [parseInt(param as string, 10)] : null;
 }
 
 searchRouter.get("/", async (req: AuthRequest, res) => {
@@ -37,7 +42,7 @@ searchRouter.get("/", async (req: AuthRequest, res) => {
       });
     }
 
-    const effectiveBranchId = getEffectiveBranchId(req);
+    const effectiveBranchIdss = await getEffectiveBranchIds(req);
     const pattern = `%${q}%`;
     const LIMIT = 5;
 
@@ -51,7 +56,7 @@ searchRouter.get("/", async (req: AuthRequest, res) => {
       ilike(customers.phone, pattern)
     );
     if (customerTextMatch) customerConds.push(customerTextMatch);
-    if (effectiveBranchId) customerConds.push(eq(customers.branchId, effectiveBranchId));
+    if (effectiveBranchIds) customerConds.push(inArray(customers.branchId, effectiveBranchIds));
 
     const customerRows = await db
       .select({
@@ -71,7 +76,7 @@ searchRouter.get("/", async (req: AuthRequest, res) => {
       ilike(orders.customerName, pattern)
     );
     if (orderTextMatch) orderConds.push(orderTextMatch);
-    if (effectiveBranchId) orderConds.push(eq(orders.branchId, effectiveBranchId));
+    if (effectiveBranchIds) orderConds.push(inArray(orders.branchId, effectiveBranchIds));
 
     const orderRows = await db
       .select({
@@ -91,8 +96,8 @@ searchRouter.get("/", async (req: AuthRequest, res) => {
     ];
     // paymentRecords.laundryId may be null for very old records — filter by
     // branchId first (always set) and fall back to laundryId when available.
-    if (effectiveBranchId) {
-      receiptConds.push(eq(paymentRecords.branchId, effectiveBranchId));
+    if (effectiveBranchIds) {
+      receiptConds.push(inArray(paymentRecords.branchId, effectiveBranchIds));
     } else {
       receiptConds.push(eq(paymentRecords.laundryId, laundryId));
     }
@@ -121,7 +126,7 @@ searchRouter.get("/", async (req: AuthRequest, res) => {
         isNull(workers.deletedAt),
         ilike(workers.name, pattern),
       ];
-      if (effectiveBranchId) workerConds.push(eq(workers.branchId, effectiveBranchId));
+      if (effectiveBranchIds) workerConds.push(inArray(workers.branchId, effectiveBranchIds));
 
       workerRows = await db
         .select({

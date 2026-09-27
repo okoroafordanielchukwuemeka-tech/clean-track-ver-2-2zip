@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { branches, orders, workers } from "@workspace/db/schema";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { AuthRequest, requireOwner, requireWorkerOrOwner } from "../middleware/auth.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { trackActivationEvent } from "../lib/activation-tracker.js";
+import { getWorkerAllowedBranchIds } from "../lib/worker-branch-access.js";
 
 export const branchesRouter = Router();
 
@@ -20,14 +21,16 @@ const branchInputSchema = z.object({
  * An order belongs to the branch where it was created. Workers operate
  * within the branch assigned to them; owners can work across their laundry.
  */
-branchesRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
+branchesRouter.get("/", requireWorkerOrOwner, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const result = await db
-      .select()
-      .from(branches)
-      .where(and(eq(branches.laundryId, laundryId), isNull(branches.deletedAt)))
-      .orderBy(desc(branches.createdAt));
+    const conditions: any[] = [eq(branches.laundryId, laundryId), isNull(branches.deletedAt)];
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      if (allowedBranchIds.length === 0) return res.json([]);
+      conditions.push(inArray(branches.id, allowedBranchIds));
+    }
+    const result = await db.select().from(branches).where(and(...conditions)).orderBy(desc(branches.createdAt));
     res.json(result);
   } catch {
     res.status(500).json({ error: "Failed to list branches" });

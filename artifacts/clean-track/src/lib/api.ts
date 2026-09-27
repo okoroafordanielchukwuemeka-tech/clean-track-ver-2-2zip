@@ -1118,6 +1118,9 @@ export interface Worker {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+
+  additionalBranchIds?: number[];
+  permissions?: WorkerPermission | null;
 }
 
 export interface WorkerInput {
@@ -1127,6 +1130,8 @@ export interface WorkerInput {
   pin: string;
   isActive?: boolean;
   branchId?: number | null;
+  additionalBranchIds?: number[];
+  permissions?: Partial<WorkerPermission>;
 }
 
 export type NotificationEventType =

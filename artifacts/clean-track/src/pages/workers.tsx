@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type WorkerInput } from "@/lib/api";
+import { api, type WorkerInput, type WorkerPermission } from "@/lib/api";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,10 +23,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Pencil, Trash2, GitBranch, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 
+const permissionLabels: Array<{ key: keyof WorkerPermission; label: string }> = [
+  { key: "canViewOrders", label: "View orders" },
+  { key: "canProcessOrders", label: "Process orders" },
+  { key: "canRecordPayments", label: "Record payments" },
+  { key: "canRecordPickups", label: "Record pickups" },
+  { key: "canViewCustomers", label: "View customers" },
+  { key: "canCreateCustomers", label: "Create customers" },
+  { key: "canViewCustomerBalances", label: "View customer balances" },
+  { key: "canAssignOrders", label: "Assign orders" },
+  { key: "canViewWhatsApp", label: "View WhatsApp" },
+  { key: "canReplyWhatsApp", label: "Reply on WhatsApp" },
+  { key: "canManageWhatsApp", label: "Manage WhatsApp" },
+];
+
+function defaultPermissions(role: "admin" | "worker"): Partial<WorkerPermission> {
+  return {
+    canViewOrders: true,
+    canProcessOrders: true,
+    canRecordPayments: true,
+    canRecordPickups: true,
+    canViewCustomers: true,
+    canCreateCustomers: true,
+    canViewCustomerBalances: true,
+    canAssignOrders: role === "admin",
+    canViewWhatsApp: false,
+    canReplyWhatsApp: false,
+    canManageWhatsApp: false,
+  };
+}
+
 const emptyForm: Partial<WorkerInput> = {
   role: "worker",
   isActive: true,
   branchId: null,
+  additionalBranchIds: [],
+  permissions: defaultPermissions("worker"),
 };
 
 export default function Workers() {
@@ -82,10 +114,25 @@ export default function Workers() {
     onError: (e: Error) => toast.error("Could not remove worker — " + (e.message || "please try again.")),
   });
 
-  const openEdit = (w: any) => {
+  const openEdit = async (w: any) => {
     setEditId(w.id);
-    setForm({ name: w.name, phone: w.phone || "", role: w.role, pin: w.pin || "", isActive: w.isActive, branchId: w.branchId ?? null });
+    setForm({
+      name: w.name,
+      phone: w.phone || "",
+      role: w.role,
+      pin: "",
+      isActive: w.isActive,
+      branchId: w.branchId ?? null,
+      additionalBranchIds: w.additionalBranchIds ?? [],
+      permissions: w.permissions ?? defaultPermissions(w.role),
+    });
     setShowDialog(true);
+    try {
+      const permissionRecord = await api.workerPermissions.get(w.id);
+      setForm(current => ({ ...current, permissions: permissionRecord }));
+    } catch {
+      // Keep the safe defaults already loaded into the form.
+    }
   };
 
   const handleSave = () => {
@@ -99,6 +146,8 @@ export default function Workers() {
       pin: form.pin || "",
       isActive: form.isActive ?? true,
       branchId: form.branchId ?? null,
+      additionalBranchIds: (form.additionalBranchIds ?? []).filter(id => id !== (form.branchId ?? null)),
+      permissions: form.permissions ?? defaultPermissions((form.role ?? "worker") as "admin" | "worker"),
     };
     if (editId) updateMutation.mutate({ id: editId, data });
     else createMutation.mutate(data);
@@ -244,13 +293,42 @@ export default function Workers() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Additional Branch Access</Label>
+              <p className="text-xs text-muted-foreground">Allow this worker to operate in branches in addition to their primary branch.</p>
+              <div className="rounded-md border p-3 space-y-2 max-h-36 overflow-y-auto">
+                {branches.filter(b => b.id !== form.branchId).map(b => {
+                  const selected = (form.additionalBranchIds ?? []).includes(b.id);
+                  return (
+                    <label key={b.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(e) => {
+                          const current = form.additionalBranchIds ?? [];
+                          setForm({
+                            ...form,
+                            additionalBranchIds: e.target.checked
+                              ? [...new Set([...current, b.id])]
+                              : current.filter(id => id !== b.id),
+                          });
+                        }}
+                      />
+                      <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{b.name}</span>
+                    </label>
+                  );
+                })}
+                {branches.length <= 1 && <span className="text-xs text-muted-foreground">Create another branch to grant additional access.</span>}
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
               <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="080..." />
             </div>
             <div className="space-y-1.5">
               <Label>Role</Label>
-              <Select value={form.role ?? "worker"} onValueChange={(v) => setForm({ ...form, role: v as any })}>
+              <Select value={form.role ?? "worker"} onValueChange={(v) => setForm({ ...form, role: v as any, permissions: form.permissions ?? defaultPermissions(v as "admin" | "worker") })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="worker">Worker</SelectItem>
@@ -267,6 +345,24 @@ export default function Workers() {
                 maxLength={4}
                 type="password"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Permissions</Label>
+              <div className="rounded-md border p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                {permissionLabels.map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.permissions?.[key])}
+                      onChange={(e) => setForm({
+                        ...form,
+                        permissions: { ...(form.permissions ?? {}), [key]: e.target.checked },
+                      })}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="worker-active" checked={form.isActive ?? true} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />

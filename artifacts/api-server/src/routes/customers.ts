@@ -5,6 +5,7 @@ import { idempotencyMiddleware } from "../lib/idempotency.js";
 import { eq, and, desc, ilike, or, gte, lte, lt, inArray, isNull, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction } from "../lib/audit.js";
@@ -18,8 +19,7 @@ const customerInputSchema = z.object({
   phone: z.string().min(1),
   address: z.string().optional(),
   notes: z.string().optional(),
-  // Owners pass branchId to assign a customer to a specific branch.
-  // Workers always use their own branchId from the JWT (branchId ignored even if sent).
+  // Owners and workers may select a branch; workers are restricted server-side to authorized branches.
   branchId: z.number().int().optional(),
 });
 
@@ -165,7 +165,9 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
     const laundryId = req.auth!.laundryId;
     const { search, tag, branchId: branchParam, sort, archived } = req.query;
 
-    const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : (false ? null : req.auth!.branchId ?? null);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
+    const selectedWorkerBranchId = req.auth!.type === "worker" && branchParam ? parseInt(branchParam as string, 10) : null;
+    const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : null;
 
     const showArchived = archived === "true";
     const baseConditions: any[] = [eq(customers.laundryId, laundryId)];
@@ -175,6 +177,7 @@ customersRouter.get("/", checkPermission("view:customers"), async (req: AuthRequ
       baseConditions.push(isNull(customers.deletedAt));
     }
     if (effectiveBranchId) baseConditions.push(eq(customers.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") baseConditions.push(workerBranchSql(customers.branchId, selectedWorkerBranchId != null && workerBranchIds.includes(selectedWorkerBranchId) ? [selectedWorkerBranchId] : selectedWorkerBranchId == null ? workerBranchIds : []));
 
     let query = db.select().from(customers).where(and(...baseConditions)).$dynamic();
 
@@ -254,15 +257,15 @@ customersRouter.get("/:id", checkPermission("view:customers"), async (req: AuthR
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
 
     const custGetConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId), isNull(customers.deletedAt)];
-    if (workerBranchId) custGetConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custGetConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.select().from(customers).where(and(...custGetConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 
     const custOrderConditions: any[] = [eq(orders.customerId, customerId), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) custOrderConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custOrderConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const customerOrders = await db.select().from(orders)
       .where(and(...custOrderConditions))
       .orderBy(desc(orders.createdAt));
@@ -286,9 +289,14 @@ customersRouter.post("/", checkPermission("create:customers"), requireOperationa
       .where(and(eq(customers.laundryId, laundryId), eq(customers.phone, data.phone)));
     if (existing) return res.status(409).json({ error: "A customer with this phone number already exists" });
 
-    // Workers: branchId comes from JWT (live DB value — always current).
-    // Owners: use the branchId from the request body if provided.
-    const effectiveBranchId = req.auth!.branchId ?? data.branchId ?? undefined;
+    const requestedBranchId = data.branchId ?? null;
+    let effectiveBranchId = requestedBranchId;
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      if (effectiveBranchId == null || !allowedBranchIds.includes(effectiveBranchId)) {
+        return res.status(403).json({ error: "You do not have access to the selected branch" });
+      }
+    }
     const { branchId: _ignored, ...customerData } = data;
 
     const [customer] = await db.insert(customers).values({
@@ -308,7 +316,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const parsed = customerUpdateSchema.parse(req.body);
 
     if (parsed.phone) {
@@ -327,7 +335,7 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
     }
 
     const custPatchConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId) custPatchConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custPatchConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.update(customers).set(data)
       .where(and(...custPatchConditions))
       .returning();
@@ -347,10 +355,10 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
 customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const customerId = parseInt(req.params.id);
     const custReceiptConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId) custReceiptConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custReceiptConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.select({ id: customers.id })
       .from(customers)
       .where(and(...custReceiptConditions));
@@ -385,13 +393,13 @@ customersRouter.get("/:id/receipts", checkPermission("view:customer-balances"), 
 customersRouter.get("/:id/statement", checkPermission("view:customer-balances"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const customerId = parseInt(req.params.id);
     const { from, to } = req.query as { from?: string; to?: string };
 
     // ── Customer lookup ────────────────────────────────────────────────────
     const custStmtConditions: any[] = [eq(customers.id, customerId), eq(customers.laundryId, laundryId)];
-    if (workerBranchId) custStmtConditions.push(eq(customers.branchId, workerBranchId));
+    if (req.auth!.type === "worker") custStmtConditions.push(workerBranchSql(customers.branchId, workerBranchIds));
     const [customer] = await db.select().from(customers).where(and(...custStmtConditions));
     if (!customer) return res.status(404).json({ error: "Customer not found" });
 

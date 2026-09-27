@@ -57,6 +57,13 @@
       "when": 1790007317291,
       "tag": "0007_simplify_branch_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790008000000,
+      "tag": "0008_worker_branch_access",
+      "breakpoints": true
     }
   ]
 }

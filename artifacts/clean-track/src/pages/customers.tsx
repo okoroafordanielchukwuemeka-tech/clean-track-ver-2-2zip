@@ -287,6 +287,8 @@ export default function Customers() {
 
   const createMutation = useMutation<CustomerWithMetrics | null, Error, CustomerInput>({
     mutationFn: async (data: CustomerInput) => {
+      const branchId = activeBranchId ?? branches[0]?.id ?? null;
+      const payload = { ...data, branchId };
       if (!getIsOnline()) {
         if (!laundryId) throw new Error("Session data is missing. Please reload and try again.");
         const localId = crypto.randomUUID();
@@ -300,11 +302,11 @@ export default function Customers() {
         await enqueueCustomerCreate(localId, record, {
           fullName: data.fullName, phone: data.phone,
           address: data.address ?? null, notes: data.notes ?? null,
-          branchId: activeBranchId, laundryId,
+          branchId, laundryId,
         });
         return null;
       }
-      return api.customers.create(data);
+      return api.customers.create(payload);
     },
     onSuccess: (result) => {
       setShowCreate(false);

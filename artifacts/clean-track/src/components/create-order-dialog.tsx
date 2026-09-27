@@ -97,13 +97,13 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   const { data: branchList = [] } = useQuery({
     queryKey: ["branches"],
     queryFn: () => api.branches.list(),
-    enabled: open && isOwner,
+    enabled: open,
   });
 
   useEffect(() => {
     if (activeBranchId != null) setOrderBranchId(activeBranchId);
-    else if (isOwner && branchList.length > 0 && !orderBranchId) setOrderBranchId(branchList[0].id);
-  }, [activeBranchId, isOwner, branchList, orderBranchId]);
+    else if (branchList.length > 0 && !orderBranchId) setOrderBranchId(branchList[0].id);
+  }, [activeBranchId, branchList, orderBranchId]);
 
   const { data: sla } = useQuery({
     queryKey: ["settings", "sla"],
@@ -230,9 +230,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
   // ── Mutation ───────────────────────────────────────────────────────────────
   const createMutation = useMutation<Order | null, Error, void>({
     mutationFn: async () => {
-      const requestedBranchId = user?.type === "worker"
-        ? undefined
-        : (orderBranchId ?? activeBranchId ?? branchList[0]?.id);
+      const requestedBranchId = orderBranchId ?? activeBranchId ?? branchList[0]?.id;
 
       if (isOwner && !requestedBranchId) {
         throw new Error("Create a branch first, then select the branch for this order.");
@@ -424,7 +422,7 @@ export function CreateOrderDialog({ open, onOpenChange, onSuccess }: CreateOrder
       <DialogContent className="max-w-xl max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle>New Order</DialogTitle>
-          {isOwner && branchList.length > 0 && (
+          {branchList.length > 0 && (
             <div className="mt-3 flex items-center gap-2">
               <Label className="text-xs text-muted-foreground shrink-0">Branch</Label>
               <Select value={orderBranchId ? String(orderBranchId) : ""} onValueChange={v => setOrderBranchId(Number(v))}>

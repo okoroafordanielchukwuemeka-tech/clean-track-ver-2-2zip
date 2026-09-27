@@ -13,13 +13,13 @@ import {
 import { GitBranch, WifiOff } from "lucide-react";
 
 export function BranchSelector() {
-  const { isOwner } = useAuth();
+  const { isOwner, isWorker } = useAuth();
   const { activeBranch, setActiveBranch, setBranches } = useBranch();
 
   const { data: branchList = [], isViewingCache } = useCachedQuery({
     queryKey: ["branches"],
     queryFn: () => api.branches.list(),
-    enabled: isOwner,
+    enabled: isOwner || isWorker,
     staleTime: 60_000,
   });
 
@@ -27,7 +27,7 @@ export function BranchSelector() {
     setBranches(branchList);
   }, [branchList, setBranches]);
 
-  if (!isOwner || branchList.length === 0) return null;
+  if ((!isOwner && !isWorker) || branchList.length === 0) return null;
 
   const value = activeBranch?.id?.toString() ?? "all";
 
@@ -60,7 +60,7 @@ export function BranchSelector() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">
-            <span className="text-xs">All Branches</span>
+            <span className="text-xs">{isOwner ? "All Branches" : "All My Branches"}</span>
           </SelectItem>
           {branchList.map(b => (
             <SelectItem key={b.id} value={b.id.toString()}>
