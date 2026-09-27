@@ -4,6 +4,7 @@ import { orders, paymentRecords, orderItems, customers, laundries, priceAdjustme
 import { eq, desc, and, count, ilike, or, gte, lte, sql } from "drizzle-orm";
 import { AuthRequest, requireOwner } from "../middleware/auth.js";
 import { computeOrderPricing } from "../lib/order-financials.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 
 export const receiptsRouter = Router();
 
@@ -113,7 +114,7 @@ receiptsRouter.get("/", requireOwner, async (req: AuthRequest, res) => {
 receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
     const { receiptNumber } = req.params;
 
     const [payment] = await db
@@ -129,7 +130,7 @@ receiptsRouter.get("/:receiptNumber", async (req: AuthRequest, res) => {
     if (!payment) return res.status(404).json({ error: "Receipt not found" });
 
     const orderConditions: any[] = [eq(orders.id, payment.orderId)];
-    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") orderConditions.push(workerBranchSql(orders.branchId, workerBranchIds));
     const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) return res.status(404).json({ error: "Order not found" });
 
