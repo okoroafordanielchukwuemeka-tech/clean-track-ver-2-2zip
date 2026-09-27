@@ -152,14 +152,14 @@ servicesRouter.get("/", async (req: AuthRequest, res) => {
       loadUsageStats(laundryId),
     ]);
 
-    const effectiveBranchIds = req.auth!.type === "worker"
-      ? (() => {
-          const selected = branchId ? parseInt(branchId, 10) : null;
-          return getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId).then(allowed =>
-            selected != null && allowed.includes(selected) ? [selected] : selected == null ? allowed : []
-          );
-        })()
-      : (branchId ? [parseInt(branchId)] : null);
+    let effectiveBranchIds: number[] | null;
+    if (req.auth!.type === "worker") {
+      const allowed = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      const selected = branchId ? parseInt(branchId, 10) : null;
+      effectiveBranchIds = selected != null && allowed.includes(selected) ? [selected] : selected == null ? allowed : [];
+    } else {
+      effectiveBranchIds = branchId ? [parseInt(branchId)] : null;
+    }
 
     let filtered = enrichServices(all, branchMap, usageMap).filter(s => {
       if (filter === "active") return s.isActive === true;
