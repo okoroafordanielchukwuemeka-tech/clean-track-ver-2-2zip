@@ -9,6 +9,7 @@ export * from "./services.js";
 export * from "./service-branches.js";
 export * from "./batches.js";
 export * from "./workers.js";
+export * from "./worker-branch-access.js";
 export * from "./worker-permissions.js";
 export * from "./notifications.js";
 export * from "./expenditures.js";
