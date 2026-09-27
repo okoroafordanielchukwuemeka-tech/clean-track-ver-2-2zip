@@ -6,6 +6,7 @@ import { eq, desc, and, count, sql, isNull } from "drizzle-orm";
 import { computeOrderPricing } from "../lib/order-financials.js";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { requireOperational, requirePlanLimit } from "../middleware/subscription.js";
 import { logAction, actorName } from "../lib/audit.js";
@@ -189,8 +190,12 @@ ordersRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, r
     if (status) conditions.push(eq(orders.status, status as string));
     if (paymentStatus) conditions.push(eq(orders.paymentStatus, paymentStatus as string));
 
-        const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : (req.auth!.branchId ?? null);
+        const effectiveBranchId = req.auth!.type === "owner" ? (branchParam ? parseInt(branchParam as string) : null) : null;
     if (effectiveBranchId) conditions.push(eq(orders.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      conditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+    }
 
     const [orderRows, [{ total }]] = await Promise.all([
       db.select({ order: orders, branchName: branches.name, branchAddress: branches.address })
@@ -216,6 +221,10 @@ ordersRouter.get("/summary", checkPermission("view:orders"), async (req: AuthReq
       : (req.auth!.branchId ?? null);
     const summaryConditions: any[] = [eq(orders.laundryId, laundryId)];
     if (effectiveBranchId) summaryConditions.push(eq(orders.branchId, effectiveBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      summaryConditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+    }
     const result = await db.select().from(orders).where(and(...summaryConditions));
     res.json({
       total: result.length,
@@ -263,7 +272,10 @@ ordersRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest
     const laundryId = req.auth!.laundryId;
     const workerBranchId = req.auth!.branchId;
         const idConditions: any[] = [eq(orders.id, parseInt(req.params.id)), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) idConditions.push(eq(orders.branchId, workerBranchId));
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      idConditions.push(workerBranchSql(orders.branchId, allowedBranchIds));
+    }
     const [orderRow] = await db.select({ order: orders, branchName: branches.name, branchAddress: branches.address })
       .from(orders).leftJoin(branches, eq(branches.id, orders.branchId)).where(and(...idConditions));
     if (!orderRow) return res.status(404).json({ error: "Order not found" });
@@ -299,9 +311,14 @@ ordersRouter.post("/", requireOperational, requirePlanLimit("orders"), checkPerm
       discountReason: undefined,
     };
 
-    const requestedBranchId = data.branchId
-    const workerBranchId = req.auth!.branchId ?? null;
-    const branchId = workerBranchId ?? requestedBranchId ?? null;
+    const requestedBranchId = data.branchId;
+    let branchId = requestedBranchId ?? null;
+    if (req.auth!.type === "worker") {
+      const allowedBranchIds = await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId);
+      if (branchId == null || !allowedBranchIds.includes(branchId)) {
+        return res.status(403).json({ error: "You do not have access to the selected branch" });
+      }
+    }
 
     if (workerBranchId && requestedBranchId !== undefined && requestedBranchId !== workerBranchId) {
       return res.status(403).json({ error: "Workers can only create orders at their assigned branch" });
@@ -763,8 +780,8 @@ ordersRouter.post("/:id/payments", checkPermission("record:payments"), idempoten
     const txResult = await db.transaction(async (tx) => {
       // Branch authorization follows the simple branch model:
       // owners are scoped by laundry; workers are additionally scoped by orders.branch_id.
-      const branchClause = workerBranchId
-        ? sql` AND branch_id = ${workerBranchId}`
+      const branchClause = req.auth!.type === "worker"
+        ? sql` AND ${workerBranchSql(orders.branchId, await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId))}`
         : sql``;
       const lockResult = await tx.execute(
         sql`SELECT id, order_id, customer_name, branch_id, price, extra_charge,
