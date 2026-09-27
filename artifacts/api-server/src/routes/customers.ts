@@ -316,7 +316,8 @@ customersRouter.patch("/:id", checkPermission("edit:customer-identity"), async (
   try {
     const laundryId = req.auth!.laundryId;
     const customerId = parseInt(req.params.id);
-    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];\n    const parsed = customerUpdateSchema.parse(req.body);
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : [];
+    const parsed = customerUpdateSchema.parse(req.body);
 
     if (parsed.phone) {
       const [conflict] = await db.select().from(customers)
