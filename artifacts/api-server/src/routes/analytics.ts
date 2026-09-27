@@ -41,10 +41,13 @@ function orderTotalDue(o: any) {
 
 /** Returns the effective branch scope: authorized worker branches, selected owner branch, or null for all tenant branches. */
 async function getEffectiveBranchIds(req: AuthRequest): Promise<number[] | null> {
-  if (req.auth!.type === "worker") {
-    return getWorkerAllowedBranchIds(req.auth!.workerId!, req.auth!.laundryId);
-  }
   const param = (req.query as any).branchId;
+  if (req.auth!.type === "worker") {
+    const allowed = await getWorkerAllowedBranchIds(req.auth!.workerId!, req.auth!.laundryId);
+    if (!param) return allowed;
+    const selected = parseInt(param as string, 10);
+    return Number.isInteger(selected) && allowed.includes(selected) ? [selected] : [];
+  }
   return param ? [parseInt(param as string, 10)] : null;
 }
 
