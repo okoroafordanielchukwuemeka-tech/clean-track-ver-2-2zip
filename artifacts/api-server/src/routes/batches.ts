@@ -4,6 +4,7 @@ import { batches, orders, workers } from "@workspace/db/schema";
 import { eq, desc, and, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds } from "../lib/worker-branch-access.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { idempotencyMiddleware } from "../lib/idempotency.js";
 
@@ -37,8 +38,8 @@ const batchUpdateSchema = z.object({
  * Workers (branchId set) only see batches that contain at least one
  * order from their assigned branch.  Owners see all batches.
  */
-async function getVisibleBatchIds(laundryId: number, workerBranchId: number | undefined): Promise<number[] | null> {
-  if (!workerBranchId) return null; // owner — no restriction
+async function getVisibleBatchIds(laundryId: number, workerBranchIds: number[] | null): Promise<number[] | null> {
+  if (workerBranchIds === null) return null; // owner — no restriction
 
   const rows = await db
     .selectDistinct({ batchId: orders.batchId })
@@ -46,7 +47,7 @@ async function getVisibleBatchIds(laundryId: number, workerBranchId: number | un
     .where(
       and(
         eq(orders.laundryId, laundryId),
-        eq(orders.branchId, workerBranchId),
+        inArray(orders.branchId, workerBranchIds!),
         isNotNull(orders.batchId)
       )
     );
@@ -57,9 +58,9 @@ async function getVisibleBatchIds(laundryId: number, workerBranchId: number | un
 batchesRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : null;
 
-    const visibleIds = await getVisibleBatchIds(laundryId, workerBranchId);
+    const visibleIds = await getVisibleBatchIds(laundryId, workerBranchIds);
     if (visibleIds !== null && visibleIds.length === 0) {
       return res.json([]);
     }
@@ -82,14 +83,14 @@ batchesRouter.get("/", checkPermission("view:orders"), async (req: AuthRequest, 
 batchesRouter.get("/:id", checkPermission("view:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : null;
     const batchId = parseInt(req.params.id);
 
     const conditions: any[] = [eq(batches.id, batchId), eq(batches.laundryId, laundryId)];
 
     // Workers: verify they can see this batch (it has orders in their branch)
-    if (workerBranchId) {
-      const visibleIds = await getVisibleBatchIds(laundryId, workerBranchId);
+    if (workerBranchIds !== null) {
+      const visibleIds = await getVisibleBatchIds(laundryId, workerBranchIds);
       if (!visibleIds || !visibleIds.includes(batchId)) {
         return res.status(404).json({ error: "Batch not found" });
       }
@@ -100,7 +101,7 @@ batchesRouter.get("/:id", checkPermission("view:orders"), async (req: AuthReques
 
     // Workers: only include orders from their branch in the batch detail
     const orderConditions: any[] = [eq(orders.batchId, batch.id), eq(orders.laundryId, laundryId)];
-    if (workerBranchId) orderConditions.push(eq(orders.branchId, workerBranchId));
+    if (workerBranchIds !== null) orderConditions.push(inArray(orders.branchId, workerBranchIds));
     const batchOrders = await db.select().from(orders).where(and(...orderConditions));
 
     res.json({ ...batch, orders: batchOrders });
@@ -113,24 +114,33 @@ batchesRouter.get("/:id", checkPermission("view:orders"), async (req: AuthReques
 batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware, async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : null;
     const data = batchInputSchema.parse(req.body);
 
     if (data.assignedWorkerId !== undefined) {
       const [worker] = await db.select({ id: workers.id, laundryId: workers.laundryId, branchId: workers.branchId }).from(workers).where(eq(workers.id, data.assignedWorkerId));
       if (!worker || worker.laundryId !== laundryId) return res.status(403).json({ error: "Assigned worker does not belong to this laundry" });
-      if (workerBranchId && worker.branchId !== workerBranchId) return res.status(403).json({ error: "Workers can only assign batches to workers in their branch" });
+      if (workerBranchIds !== null) {
+        const targetAccess = await getWorkerAllowedBranchIds(worker.id, laundryId);
+        const targetBranchIds = targetAccess;
+        // The target worker must be able to operate every branch represented by the batch.
+        // The exact batch branch is enforced after the target orders are loaded below.
+        if (targetBranchIds.length === 0) return res.status(403).json({ error: "Assigned worker has no branch access" });
+      }
     }
     const batch = await db.transaction(async (tx) => {
       const conditions:any[]=[inArray(orders.id,data.orderIds),eq(orders.laundryId,laundryId)];
-      if(workerBranchId) conditions.push(eq(orders.branchId,workerBranchId));
+      if(workerBranchIds !== null) conditions.push(inArray(orders.branchId,workerBranchIds));
       const targets = await tx.select({
         id: orders.id,
         status: orders.status,
         batchId: orders.batchId,
+        branchId: orders.branchId,
         isVerified: orders.isVerified,
       }).from(orders).where(and(...conditions)).for("update");
       if(targets.length!==data.orderIds.length) throw new Error("BATCH_ORDER_SCOPE");
+      const batchBranchIds = new Set(targets.map(o => (o as any).branchId));
+      if (batchBranchIds.size > 1) throw new Error("BATCH_MULTI_BRANCH");
       if(targets.some(o => !o.isVerified)) throw new Error("BATCH_ORDER_NOT_VERIFIED");
       if(targets.some(o=>o.status==="cancelled"||o.status==="completed"||o.batchId!==null)) throw new Error("BATCH_ORDER_STATE");
       const placeholder=`GEN-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -145,6 +155,7 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
     if (err instanceof Error && err.message === "BATCH_ORDER_SCOPE") return res.status(403).json({ error: "One or more orders do not belong to this laundry or branch" });
     if (err instanceof Error && err.message === "BATCH_ORDER_STATE") return res.status(409).json({ error: "One or more orders are already batched, completed, or cancelled" });
+    if (err instanceof Error && err.message === "BATCH_MULTI_BRANCH") return res.status(409).json({ error: "A batch can contain orders from only one branch" });
     if (err instanceof Error && err.message === "BATCH_ORDER_NOT_VERIFIED") return res.status(409).json({ error: "Every order must be verified before it can enter a processing batch", code: "ORDER_NOT_VERIFIED" });
     res.status(500).json({ error: "Failed to create batch" });
   }
@@ -154,7 +165,7 @@ batchesRouter.post("/", checkPermission("process:orders"), idempotencyMiddleware
 batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : null;
     const batchId = parseInt(req.params.id);
     const data = batchUpdateSchema.parse(req.body);
 
@@ -176,7 +187,7 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
 
       if (data.status === "completed") {
         const conditions: any[] = [eq(orders.batchId, current.id), eq(orders.laundryId, laundryId)];
-        if (workerBranchId) conditions.push(eq(orders.branchId, workerBranchId));
+        if (workerBranchIds !== null) conditions.push(inArray(orders.branchId, workerBranchIds));
 
         const batchRows = await tx.select({
           id: orders.id,
@@ -185,7 +196,7 @@ batchesRouter.patch("/:id", checkPermission("process:orders"), async (req: AuthR
 
         // A worker must complete the whole visible batch, not silently leave
         // some orders behind because they moved or became terminal meanwhile.
-        if (workerBranchId && batchRows.length !== current.orderCount) {
+        if (workerBranchIds !== null && batchRows.length !== current.orderCount) {
           throw new Error("BATCH_SCOPE_CHANGED");
         }
         if (batchRows.length !== current.orderCount) {
