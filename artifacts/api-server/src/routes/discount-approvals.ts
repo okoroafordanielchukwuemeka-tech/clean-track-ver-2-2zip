@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { discountApprovals, priceAdjustments, orders, laundries } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { AuthRequest, requireAuth } from "../middleware/auth.js";
+import { getWorkerAllowedBranchIds, workerBranchSql } from "../lib/worker-branch-access.js";
 import { checkPermission } from "../middleware/permissions.js";
 import { logAction } from "../lib/audit.js";
 import { emitEvent } from "../lib/events.js";
@@ -16,7 +17,7 @@ discountApprovalsRouter.get("/", async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
     const { status } = req.query;
-    const workerBranchId = req.auth!.branchId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : null;
 
     const baseConditions: any[] = [eq(discountApprovals.laundryId, laundryId)];
     if (status) baseConditions.push(eq(discountApprovals.status, status as "pending" | "approved" | "rejected"));
@@ -26,10 +27,10 @@ discountApprovalsRouter.get("/", async (req: AuthRequest, res) => {
       .orderBy(desc(discountApprovals.createdAt));
 
     // If worker, filter to only their branch's orders
-    if (workerBranchId) {
+    if (workerBranchIds !== null) {
       const branchOrders = await db.select({ id: orders.id })
         .from(orders)
-        .where(and(eq(orders.laundryId, laundryId), eq(orders.branchId, workerBranchId)));
+        .where(and(eq(orders.laundryId, laundryId), inArray(orders.branchId, workerBranchIds)));
       const branchOrderIds = new Set(branchOrders.map(o => o.id));
       results = results.filter(r => branchOrderIds.has(r.orderId));
     }
@@ -43,11 +44,18 @@ discountApprovalsRouter.get("/", async (req: AuthRequest, res) => {
 discountApprovalsRouter.get("/pending-count", checkPermission("approve:discount"), async (req: AuthRequest, res) => {
   try {
     const laundryId = req.auth!.laundryId;
+    const workerBranchIds = req.auth!.type === "worker" ? await getWorkerAllowedBranchIds(req.auth!.workerId!, laundryId) : null;
     const results = await db.select().from(discountApprovals)
       .where(and(
         eq(discountApprovals.laundryId, laundryId),
         eq(discountApprovals.status, "pending"),
       ));
+    if (workerBranchIds !== null) {
+      const orderIds = await db.select({ id: orders.id }).from(orders)
+        .where(and(eq(orders.laundryId, laundryId), inArray(orders.branchId, workerBranchIds)));
+      const visible = new Set(orderIds.map(o => o.id));
+      return res.json({ count: results.filter(r => visible.has(r.orderId)).length });
+    }
     res.json({ count: results.length });
   } catch {
     res.status(500).json({ error: "Failed to count pending approvals" });
@@ -73,8 +81,9 @@ discountApprovalsRouter.patch("/:id", checkPermission("approve:discount"), async
       return res.status(404).json({ error: "Pending approval not found" });
     }
 
-    const [order] = await db.select().from(orders)
-      .where(and(eq(orders.id, approval.orderId), eq(orders.laundryId, laundryId)));
+    const orderConditions: any[] = [eq(orders.id, approval.orderId), eq(orders.laundryId, laundryId)];
+    if (workerBranchIds !== null) orderConditions.push(inArray(orders.branchId, workerBranchIds));
+    const [order] = await db.select().from(orders).where(and(...orderConditions));
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
     }
